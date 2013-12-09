@@ -1,0 +1,48 @@
+
+Use:
+	onionmail [-q] [-f <config file>] [-v] [-p <password>] [-ndk] 
+		[-pf <global_slat_keyfile>] [-d] [--reboot]
+		
+	onionmail [-q] --gen-passwd 
+	onionmail [-q] --gen-servers [-sp] -f <config file>
+	onionmail [-q] --stop -f <config file>
+	onionmail [-q] --gen-keyfile <file> <bits>
+	onionmail [-q] --gen-keyfile <file> <bits> --show-passwd
+	onionmail [-q] [-d] --reboot 
+	
+	Options:      
+
+        -f	<par>	Set config file and directory 
+			(Must be in `dir/config.conf` format).
+	-v		Enable verbose.
+	-p	<par>	Use a password by command line for all KeyBlock files.
+	-ndk		Do not delete any KeyBlock and sysop file.
+	-sp		Choose passwords manually for all KeyBlock files.
+	-q		Disable copyright message (must be first parameter).
+	-d		Daemonize: Redirect stdout to onionstart.log file.
+	-pf	<file>	Calculate password from global salt keyfile.   
+			The password is calculated form the filename and 
+			contents of file or previous -pf and/or -sp password.
+			You can combine -pf and/or -p 
+		Eg.:
+			-p passw1 -pf file1 -p pass2 -pf file2
+			
+			The password Will calculate via:
+			Der2048(
+				Der2048( 
+					Der2048(passw1, file2) , 
+					pass2), 
+				file2)
+			
+	Special commands:
+
+	--gen-password	Require an input line and generate an encrypted 
+			password.
+			
+	--gen-servers	Generate new servers and exit.
+	--stop		Stop onionmail.
+	--del-keys	Delete all KeyBlock and sysop files.
+	--gen-keyfile	Generate new global salt Keyfile.
+	--show-passwd	Show current password generated.
+	--reboot	Reboot server via remote network seed/push keys.
+	

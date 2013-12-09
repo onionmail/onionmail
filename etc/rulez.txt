@@ -1,0 +1,277 @@
+Subject: Onion Mail Server Rulez
+Content-Type: text/plain; charset=UTF-8
+
+
+                                                          `                         
+                                                         ,                          
+                                                        .`                          
+                                                        +     `'                    
+                                                       +`    ''                     
+                                                      +;    ''                      
+                                                     .+.  `'';                      
+                                                     +;  ,''+                       
+                                                    ++' .'''                        
+                                                    ++  '''+                        
+                                                `  ++' +''+                         
+                                                +  ++;+''+:                         
+                                  `,:;;''++'';;:+.,+; +''+                          
+                           `:@#+@#''''''''''''''+'++'+''+`                          
+                       :#@'##@''''''''''''''''''+'++'+''+'@#;                       
+                    +@+'##++''''''@@@@@@@@@@@@@@+;++'+'+++#+'+@+`                   
+                 +##''#+++'''''@@@@@@@@@@@@@@@@@+++;++'+''+++#''+##`                
+              .##+''#++#''''@@@@@@@@@@@@@@@@@@@@+++'+++'''''#++@'''##,              
+            :++'''@+++'''''@@@@@@@@@@@@@@@@@@@@@+++'+++@@'''''+++@'''#++            
+          `#++''++++@''''@@@@@@@@@@''''''''''''';++'++#@@@'''''@++#''''++:          
+         #+#'''@+++@''''@@@@@@@@@''''+++++++++'''++'++@@@@@'''''#+++#'''#+#         
+       ,++#'''#+++@''''@@@@@@@@'''++++++'''++++++++'++@@@@@@'''''#+++@'''+++:       
+      @++''''++++#''''@@@@@@@'''+++'''''''''''''+++'+'@@@@@@@'''''@+++@''''++@      
+     @++''''+++++''''@@@@@@@''+++''+++++++++++++'+''+''@@@@@@@'''''++++@''''++#     
+    @++''''@+++++'''@@@@@@@''++''+++@@@@@@@@''+@''''++''@@@@@@''''''++++#''''++#    
+   #+++'''+++++@''''@@@@@@''++''++@@@@@@@@@@@@@@@@@@@++''@@@@@@'''''@++++'''''++@   
+  `++@''''+++++''''@@@@@@''++''+@@@@@@@@@@@@@@@@@@@@@'++''@@@@@''''''+++++''''@++,  
+  +++''''@++++#''''@@@@@@'++''+@@@@@@@@@@@@@@@@@@@@@@'++''@@@@@@'''''@+++++''''+++  
+ ;++@''''++++++'''@@@@@@''++'+@@@@@@@@@@@@@@@@@@@@@@@''++'@@@@@@''''''++++#''''#++# 
+ +++'''''+++++''''@@@@@@''+'++@@@@@@@@'++++'@@@@@@@@++'++''@@@@@''''''+++++'''''+++ 
+ +++''''@+++++''''@@@@@@'++'+@@@@@@@'+'++++''@@@@@@@++'++''@@@@@''''''#+++++''''#++ 
+ ++#''''+++++#''''@@@@@@'++'+@@@@@@@+++---++''@@@@@@'+'++''@@@@@''''''@++++@''''@++;
+'++@''''+++++@'''@@@@@@''+''+@@@@@@'''| @ |++'@@@@@@'+'++''@@@@@''''''@++++#''''#++@
++++@''''+++++@'''@@@@@@''+''+@@@@@@''+|  @|++'@@@@@@'+'++'@@@@@@''''''#++++#''''#++@
+.++@''''+++++@''''@@@@@''+''+@@@@@@'++|@@@|+''@@@@@@++'+''@@@@@@''''''@++++#''''@+++
+ +++''''#+++++''''@@@@@@'++'+@@@@@@''++---+++@@@@@@'+'++'@@@@@@'''''''@++++@''''@++`
+ +++''''@+++++''''@@@@@@'++'+@@@@@@@++++++++'@@@@@@+'++''@@@@@@'''''''++++++''''+++ 
+ @+++''''+++++''''@@@@@@''+'+@@@@@@@'++++++'@@@@@@@'++''@@@@@@''''''''+++++'''''++# 
+  +++''''+++++@'''@@@@@@''++'+@@@@@@@@'''@@@@@@@@@@++''@@@@@@''''''''#++++#''''#++  
+  @+++'''#+++++''''@@@@@@''+''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@''''''''+++++'''''++@  
+   +++''''+++++#'''@@@@@@@'++''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'''''''''++++@''''+++   
+    ++#''''+++++''''@@@@@@''++''+@@@@@@@@@@@@@+@@@@@@@@@@@''''''''''+++++''''@++    
+     ++@'''#++++@'''@@@@@@@''+++'+@@@@@@@@@@''''@@@@@@@@'''''''''''#+++++'''#++`    
+      ++@'''@+++++'''@@@@@@@'''++'''++@@@+++++++'''@++'''''''''''''++++#'''#++      
+       #+#'''@++++''''@@@@@@@@'''+++''''''''''''++++''''''''''''''++++@'''@++       
+        ;++'''@++++''''@@@@@@@@''''++++++++++++++'''''@@@''''''''+++++'''#+#        
+          #+#''++++++'''@@@@@@@@@@'''''''''''''''''@@@@@@'''''''+++++''++#          
+           .#++''#+++#''''@@@@@@@@@@@@@'''''''@@@@@@@@@@@@''''++++#''+##,           
+              ++''++++@''''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'''@+++'''#+`             
+               `@##'#+++#''''@@@@@@@@@@@@@@@@@@@@@@@@@@@'''#++++'+#@`               
+                  ,##++#++#'''''@@@@@@@@@@@@@@@@@@@@@''''+#+#+'##:                  
+                     `'@+#++#'''''''@@@@@@@@@@@@@''''''#+##+@'.                     
+                          @@@++#''''''''''''''''''''#+##@@                          
+                               `:@#@#''''''''''#@@@;`                               
+                     @@                                           @@             
+      @@@                                        @    @                 @@@@        
+     @@ @@  @@@@@   @@@     @@@@  @@@@@          @@  @@   @@@@   @@@      @@        
+     @@ @@  @@@@@@  @@@    @@  @@ @@@@@@         @@@@@@      @@  @@@      @@        
+     @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@   @@@@@   @@      @@        
+     @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@  @@  @@   @@      @@        
+      @@@   @@  @@  @@@@    @@@@  @@  @@         @@  @@  @@@@@@  @@@@@  @@@@@@      
+
+                              < Guida di Onion Mail >
+                              
+ [1.0]	Cos'è Onion Mail
+ [1.1]	Perchè usare Onion Mail
+ [2.0]	Regole per i messaggi di posta
+ [2.1]	Indirizzi speciali
+ [3.0]	Comunicare con il server
+ [3.1]	La Spam List (Bloccare gli indirizzi)
+ [4.0]  Cosa fare se ricevi da internet messaggi sgraditi con header X-Notice.
+ 
+--------------------------------------------------------------------------------
+ [1.0]	Cos'è Onion Mail:
+ 
+ Onion Mail è un server di posta che funziona tramite la rete Tor, garantendo
+ al livello di trasporto dati e di conservazione dei dati, una maggiore 
+ sicurezza per la privacy e l'anonimato.
+ Il servizio prevede un server di posta SMTP per l'invio dei messaggi ed un 
+ server POP3 per la ricezione.
+
+-------------------------------------------------------------------------------- 
+ [1.1] Perchè usare Onion Mail:
+ 
+ Innanzitutto perchè consente di portare ai servizi di posta le stesse 
+ caratteristiche di privacy, anonimato e sicurezza intrinseche nella rete Tor.
+ Questo programma impedisce l'accesso non autorizzato ai dati ed ai metadati 
+ dal più grande numero di sistemi di intercettazione dei "paesi canaglia".
+ Anche i dati contenuti all'interno del server sono crittati e le password le
+ possidei solo tu. In questo modo anche se il server venisse compromesso con 
+ un accesso fisico al disco, non sarebbe possibile leggere il contenuto dei
+ tuoi messaggi senza la tua chiave.
+ 
+ Questo programma può essere usato da chi non ha nulla da far vedere in caso
+ delle solite dinamiche propagandistiche dello spionaggio domestico.
+
+--------------------------------------------------------------------------------
+ [2.0] Regole per i messaggi di posta:
+ (1) I messaggi di posta si salvano solo sul server del destinatario e
+ crittandoli con chiavi multiple ed assimmetriche.
+     
+ (2) L'uso di PGP/GPG è incoraggiato, in alcuni server o mailing list può essere
+ richiesto obbligatoriamente.
+ 
+ (3) I messaggi, letti o non letti, sono cancellati automaticamente dal server
+ dopo qualche giorno che sono stati ricevuti.
+ 
+ (4) Un indirizzo non utilizzato per leggere i messaggi, abbandonato o segnalato
+ come spammer, può essere cancellato.
+ 
+ (5) I messaggi che passano di server in server, sono inoltrati durante la
+ stessa sessione.
+ 
+ (6) Solo i messaggi delle mailing list possono essere salvati temporaneamente
+ durante l'invio. Dopodichè saranno cancellati.
+ 
+ (7) Alcuni indirizzi sono riservati e non possono essere assegnati agli utenti.
+ (Vedere sezione 2.1).
+ 
+ (8) In ongi momento puoi chiedere al server di eseguire delle operazioni
+ contattandolo via messaggio. (Vedere sezione 3.0).
+ 
+ (9) Puoi segnalare un indirizzo, oppure un'intera onion come spam. Questo
+ comporterà l'impossibilità di ricevere alcun messaggio dal mittente segnalato
+ come spam. Dopo un certo numero di segnalazioni, sarà allertato il sysop del
+ server che contiene il mittente malevolo.
+ 
+ (10) Le troppe segnalazioni di spam a vuoto, gli accessi errati e/o i tentativi
+ di compromissione comportano la segnalazione come spam.
+ Quindi le segnalazioni vanno usate con cautela.
+
+-------------------------------------------------------------------------------- 
+ [2.1] Indirizzi speciali:
+ 
+ Questi indirizzi hanno una funzione particolare e non possono essere assegnati 
+ agli utenti.
+ La lista cita gli indirizzi senza l'indirizzo del server, * si riferisce a
+ qualunque parola.
+ 
+ sysop@		Gestore del server
+ server@	Questo è il server, un BOT a cui puoi chiedere delle operazioni.
+ 		(Vedere sezione 3.0).
+
+ *.onion@	Questi indirizzi sono usati per gli enter/exit node.
+ *.list@	Questi indirizzi sono usati per le mailing list.
+ *.sys@		Questi indirizzi sono di sistema.
+ *.op@		Questi indirizzi sono dei SysOp (si possono creare solo a
+ 		riga di comando).
+ *.app@		Questi indirizzi sono usati dalle applicazioni.
+ 
+ Il SysOp può riservare alcuni indirizzi per altri utilizzi.
+
+--------------------------------------------------------------------------------
+ [3.0] Comunicare con il server:
+ 
+ Per comunicare con il server è sufficiente inviare un messaggio all'indirizzo
+ server@<xyz>.onion (Dove <xyz> è la stessa parte del tuo indirizzo di posta 
+ dopo il carattere "@" ).
+ 
+ I comandi si specificano su subject del messaggio. In alcuni casi possono
+ essere previsti dei parametri grandi, come per esempio una chiave pubblica.
+ In questi casi il comando sarà sempre sul subject, ma i file ed il resto 
+ andranno messi nel corpo del messaggio.
+ 
+ In ongi caso nel corpo del messaggio è sempre gradita una stringa "Grazie".
+ 
+ Elenco dei principali comandi:
+   
+ ADD SPAM:<mail>
+ 	Aggiunge un indirizzo di posta indesiderato nella tua lista dello spam.
+ 	Se prima del carattere @ inserisci un asterisco *, la tua segnalazione 
+ 	si riferirà a tutto il server di provvenienza.
+ 	
+ SPAM LIST
+ 	Mostra la tua lista degli indirizzi bloccati.
+	 
+ DEL SPAM:<numero>
+ 	Rimuove un indirizzo dalla tua lista di spam.
+	(Vedi approfondimento 3.1).
+
+ RULEZ
+ 	Ti invia un messaggio con le regole del server.
+ 	
+ IDENT
+	Ti invia le informazioni sul server e sui certificati SSL.
+
+ REBOUND HEADERS
+ 	Ti Reinvia gli headers così come sono arrivati.
+ 	
+ EXIT LIST
+ 	Ti invia la lista degli exit/enter di posta.
+
+ EXIT SET <dominio>
+ 	Imposta il server di exit/enter predefinito.
+ 	
+ LIST <indirizzolista> RULEZ
+ 	Ti invia il file di informazioni della lista.
+ 	
+ LIST <indirizzolista> SUBSCRIBE
+ 	Ti sicrive alla lista.
+ 	
+ LIST <indirizzolista> UNSUBSCRIBE
+ 	Ti rimuove dalla lista
+        
+ In caso di errore l'invio del messaggio dara errore 500 e non sarà ricevuto
+ dal server.        
+
+--------------------------------------------------------------------------------
+ [3.1]	La Spam List (Bloccare gli indirizzi)
+ 
+ Queste operazioni sono possibili grazie alla comunicazione con il server 
+ (Vedi 3.0).
+ 
+ La spam list si ottiene mandando un messaggio con subject "SPAM LIST" al 
+ proprio server.
+ 
+ La lista conterrà degli indirizzi (uno per riga) con un numero accanto.
+ Esempio:
+ 
+ 1	<super@spammer.onion>
+ 2	<spam_for_you@fuffa.onion>
+ 3	<*@spamcorporation.onion>
+ 
+ Per rimuovere un indirizzo, invia al server un messaggio con il subject
+ "DEL SPAM:<numero>" dove il numero è quello a sinistra nella lista.
+ Attenzione: Dopo questa operazione occorre rifare SPAM LIST per avere
+ i numeri giusti.
+ 
+ Se c'è un asterisco * perima del carattere @ sul indirizzo, ci si riferisce a
+ tutto il server. Per esempio la riga 3 blocca tutti i messaggi provvenienti da
+ spamcorporation.onion
+ 
+ Non è possibile usare i caratteri jolly, quindi sengalazioni come questa
+ <*.fuffa@spammer.onion> non sono valide.
+ 
+ Le segnalazioni di spam hanno effetto immediato.
+ Se per qualche motivo il tuo indirizzo è stato sengalato come spam, potresti
+ riscevere un messaggio di errore durante l'invio della posta all'indirizzo che
+ ti ha bloccato.
+ 
+ L'errore è tipicamente:
+ 500 FUCK YOU SPAMMER.
+ 
+ In questo caso è meglio chiedere al sysop del server del destinatario la
+ rimozione della segnalazione.
+ Se l'errore fosse uguale allora significa che sei stato bannato dall'intero 
+ server quindi non potrai più comunicare con chiiunque abbia la stessa 
+ stringa dopo il carattere "@" .
+
+--------------------------------------------------------------------------------	 		
+ [4.0]  Cosa fare se ricevi da internet messaggi sgraditi con header X-Notice.
+ 
+ In questo caso avverti subito il sysop. 
+ Lo puoi contattare sempre a questi indirizzi:
+ 	Da internet: Trovi l'indirizzo nel header X-Notice.
+ 		Di solito è: sysop.xyz.onion@dominio.tld
+ 		dove xyz.onion è il server OnionMail e
+ 		dominio.tld è un indirizzo internet del nodo di entrata.
+ 	Da tor:
+ 		sysop@xyz.onion
+ 	
+ IN NESSUN CASO I PROPRIETARI E/O GESTORI DEL NODO DI ENTRATA O DI USCITA
+ POSSONO ESSERE RESPONSABILI DEL ROUTING E DEI MESSAGGI. QUESTO É DOVUTO AL
+ FATTO CHE L'UTENTE PUÒ SCEGLIERE PIÙ NODI DI USCITA E QUINDI CAMBIARE 
+ INDIRIZZO DOPO LA CHIOCCIOLA "@" AD INSAPUTA DEL SYSOP CHE GESTISCE IL NODO
+ DI USCITA.
+ 
+ Quindi conviene avvertire il gestore del server .onion con una semplice mail.
+ Puoi anche richiedere al gestore del nodo di essere messo nella exit policy.
+ In questo caso il nodo non potra inviare o ricevere messaggi dal tuo server o
+ indirizzo.
+  
+--------------------------------------------------------------------------------                                        
