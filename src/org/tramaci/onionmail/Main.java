@@ -41,7 +41,7 @@ public class Main {
 	
 	public static final long VersionID = 0x0000_0001_0004_0006L;
 	public static final String Version="0.1.4B";
-	public static final String VersionExtra="";
+	public static final String VersionExtra=" GitHub1";
 	
 	public static DNSServer DNSServer=null;
 	public static OnionRouter Router = null;
