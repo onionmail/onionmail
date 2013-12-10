@@ -117,7 +117,8 @@ How to use
     To use OnionMail you must use a Tor connection. We suggest to use Tails and 
     GPG or PGP to encrypt your email messages.
     To get your OnionMail use this page.
-
+	http://onionmail.info/reqmail.html
+	
     There aren't any webmail to use your OnionMail. To read your email use the 
     POP3 with TLS protocol.
     (ClwawsMail and Thunderbrid supports this protocol).
