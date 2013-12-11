@@ -64,214 +64,217 @@ Content-Type: text/plain; charset=UTF-8
      @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@  @@  @@   @@      @@        
       @@@   @@  @@  @@@@    @@@@  @@  @@         @@  @@  @@@@@@  @@@@@  @@@@@@      
 
-                              < Guida di Onion Mail >
-                              
- [1.0]	Cos'è Onion Mail
- [1.1]	Perchè usare Onion Mail
- [2.0]	Regole per i messaggi di posta
- [2.1]	Indirizzi speciali
- [3.0]	Comunicare con il server
- [3.1]	La Spam List (Bloccare gli indirizzi)
- [4.0]  Cosa fare se ricevi da internet messaggi sgraditi con header X-Notice.
- 
---------------------------------------------------------------------------------
- [1.0]	Cos'è Onion Mail:
- 
- Onion Mail è un server di posta che funziona tramite la rete Tor, garantendo
- al livello di trasporto dati e di conservazione dei dati, una maggiore 
- sicurezza per la privacy e l'anonimato.
- Il servizio prevede un server di posta SMTP per l'invio dei messaggi ed un 
- server POP3 per la ricezione.
+                                <Onion Mail's Guide>
 
--------------------------------------------------------------------------------- 
- [1.1] Perchè usare Onion Mail:
- 
- Innanzitutto perchè consente di portare ai servizi di posta le stesse 
- caratteristiche di privacy, anonimato e sicurezza intrinseche nella rete Tor.
- Questo programma impedisce l'accesso non autorizzato ai dati ed ai metadati 
- dal più grande numero di sistemi di intercettazione dei "paesi canaglia".
- Anche i dati contenuti all'interno del server sono crittati e le password le
- possidei solo tu. In questo modo anche se il server venisse compromesso con 
- un accesso fisico al disco, non sarebbe possibile leggere il contenuto dei
- tuoi messaggi senza la tua chiave.
- 
- Questo programma può essere usato da chi non ha nulla da far vedere in caso
- delle solite dinamiche propagandistiche dello spionaggio domestico.
+[1.0] What's Onion Mail
+[1.1] Why should I use Onion Mail?
+[2.0] Sending emails
+[2.1] Special addresses
+[3.0] Communicating with the server
+[3.1] Spam list
+[4.0] Dealing with unwanted messages with X-Notice headers
 
---------------------------------------------------------------------------------
- [2.0] Regole per i messaggi di posta:
- (1) I messaggi di posta si salvano solo sul server del destinatario e
- crittandoli con chiavi multiple ed assimmetriche.
-     
- (2) L'uso di PGP/GPG è incoraggiato, in alcuni server o mailing list può essere
- richiesto obbligatoriamente.
- 
- (3) I messaggi, letti o non letti, sono cancellati automaticamente dal server
- dopo qualche giorno che sono stati ricevuti.
- 
- (4) Un indirizzo non utilizzato per leggere i messaggi, abbandonato o segnalato
- come spammer, può essere cancellato.
- 
- (5) I messaggi che passano di server in server, sono inoltrati durante la
- stessa sessione.
- 
- (6) Solo i messaggi delle mailing list possono essere salvati temporaneamente
- durante l'invio. Dopodichè saranno cancellati.
- 
- (7) Alcuni indirizzi sono riservati e non possono essere assegnati agli utenti.
- (Vedere sezione 2.1).
- 
- (8) In ongi momento puoi chiedere al server di eseguire delle operazioni
- contattandolo via messaggio. (Vedere sezione 3.0).
- 
- (9) Puoi segnalare un indirizzo, oppure un'intera onion come spam. Questo
- comporterà l'impossibilità di ricevere alcun messaggio dal mittente segnalato
- come spam. Dopo un certo numero di segnalazioni, sarà allertato il sysop del
- server che contiene il mittente malevolo.
- 
- (10) Le troppe segnalazioni di spam a vuoto, gli accessi errati e/o i tentativi
- di compromissione comportano la segnalazione come spam.
- Quindi le segnalazioni vanno usate con cautela.
+----------------------------------------------------------------------------
 
--------------------------------------------------------------------------------- 
- [2.1] Indirizzi speciali:
- 
- Questi indirizzi hanno una funzione particolare e non possono essere assegnati 
- agli utenti.
- La lista cita gli indirizzi senza l'indirizzo del server, * si riferisce a
- qualunque parola.
- 
- sysop@		Gestore del server
- server@	Questo è il server, un BOT a cui puoi chiedere delle operazioni.
- 		(Vedere sezione 3.0).
+[1.0] What's Onion Mail:
 
- *.onion@	Questi indirizzi sono usati per gli enter/exit node.
- *.list@	Questi indirizzi sono usati per le mailing list.
- *.sys@		Questi indirizzi sono di sistema.
- *.op@		Questi indirizzi sono dei SysOp (si possono creare solo a
- 		riga di comando).
- *.app@		Questi indirizzi sono usati dalle applicazioni.
- 
- Il SysOp può riservare alcuni indirizzi per altri utilizzi.
+Onion Mail is a mail server that uses the Tor network, guaranteeing
+higher privacy and anonymity of data sent and stored.
+The service comprises a SMTP mail server for the sending of messages and
+a POP3 server for their reception.
 
---------------------------------------------------------------------------------
- [3.0] Comunicare con il server:
- 
- Per comunicare con il server è sufficiente inviare un messaggio all'indirizzo
- server@<xyz>.onion (Dove <xyz> è la stessa parte del tuo indirizzo di posta 
- dopo il carattere "@" ).
- 
- I comandi si specificano su subject del messaggio. In alcuni casi possono
- essere previsti dei parametri grandi, come per esempio una chiave pubblica.
- In questi casi il comando sarà sempre sul subject, ma i file ed il resto 
- andranno messi nel corpo del messaggio.
- 
- In ongi caso nel corpo del messaggio è sempre gradita una stringa "Grazie".
- 
- Elenco dei principali comandi:
-   
- ADD SPAM:<mail>
- 	Aggiunge un indirizzo di posta indesiderato nella tua lista dello spam.
- 	Se prima del carattere @ inserisci un asterisco *, la tua segnalazione 
- 	si riferirà a tutto il server di provvenienza.
- 	
- SPAM LIST
- 	Mostra la tua lista degli indirizzi bloccati.
-	 
- DEL SPAM:<numero>
- 	Rimuove un indirizzo dalla tua lista di spam.
-	(Vedi approfondimento 3.1).
+----------------------------------------------------------------------------
 
- RULEZ
- 	Ti invia un messaggio con le regole del server.
- 	
- IDENT
-	Ti invia le informazioni sul server e sui certificati SSL.
+[1.1] Why should I use Onion Mail?
 
- REBOUND HEADERS
- 	Ti Reinvia gli headers così come sono arrivati.
- 	
- EXIT LIST
- 	Ti invia la lista degli exit/enter di posta.
+To start with, because it allows you to have the same level of privacy,
+anonymity and security granted by the Tor network, while using mail
+services. This program prevents unauthorized access to data and metadata
+from most of " Rogue states' " interception systems.
 
- EXIT SET <dominio>
- 	Imposta il server di exit/enter predefinito.
- 	
- LIST <indirizzolista> RULEZ
- 	Ti invia il file di informazioni della lista.
- 	
- LIST <indirizzolista> SUBSCRIBE
- 	Ti sicrive alla lista.
- 	
- LIST <indirizzolista> UNSUBSCRIBE
- 	Ti rimuove dalla lista
-        
- In caso di errore l'invio del messaggio dara errore 500 e non sarà ricevuto
- dal server.        
+----------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
- [3.1]	La Spam List (Bloccare gli indirizzi)
- 
- Queste operazioni sono possibili grazie alla comunicazione con il server 
- (Vedi 3.0).
- 
- La spam list si ottiene mandando un messaggio con subject "SPAM LIST" al 
- proprio server.
- 
- La lista conterrà degli indirizzi (uno per riga) con un numero accanto.
- Esempio:
- 
- 1	<super@spammer.onion>
- 2	<spam_for_you@fuffa.onion>
- 3	<*@spamcorporation.onion>
- 
- Per rimuovere un indirizzo, invia al server un messaggio con il subject
- "DEL SPAM:<numero>" dove il numero è quello a sinistra nella lista.
- Attenzione: Dopo questa operazione occorre rifare SPAM LIST per avere
- i numeri giusti.
- 
- Se c'è un asterisco * perima del carattere @ sul indirizzo, ci si riferisce a
- tutto il server. Per esempio la riga 3 blocca tutti i messaggi provvenienti da
- spamcorporation.onion
- 
- Non è possibile usare i caratteri jolly, quindi sengalazioni come questa
- <*.fuffa@spammer.onion> non sono valide.
- 
- Le segnalazioni di spam hanno effetto immediato.
- Se per qualche motivo il tuo indirizzo è stato sengalato come spam, potresti
- riscevere un messaggio di errore durante l'invio della posta all'indirizzo che
- ti ha bloccato.
- 
- L'errore è tipicamente:
- 500 FUCK YOU SPAMMER.
- 
- In questo caso è meglio chiedere al sysop del server del destinatario la
- rimozione della segnalazione.
- Se l'errore fosse uguale allora significa che sei stato bannato dall'intero 
- server quindi non potrai più comunicare con chiiunque abbia la stessa 
- stringa dopo il carattere "@" .
+[2.0] Sending emails
 
---------------------------------------------------------------------------------	 		
- [4.0]  Cosa fare se ricevi da internet messaggi sgraditi con header X-Notice.
- 
- In questo caso avverti subito il sysop. 
- Lo puoi contattare sempre a questi indirizzi:
- 	Da internet: Trovi l'indirizzo nel header X-Notice.
- 		Di solito è: sysop.xyz.onion@dominio.tld
- 		dove xyz.onion è il server OnionMail e
- 		dominio.tld è un indirizzo internet del nodo di entrata.
- 	Da tor:
- 		sysop@xyz.onion
- 	
- IN NESSUN CASO I PROPRIETARI E/O GESTORI DEL NODO DI ENTRATA O DI USCITA
- POSSONO ESSERE RESPONSABILI DEL ROUTING E DEI MESSAGGI. QUESTO É DOVUTO AL
- FATTO CHE L'UTENTE PUÒ SCEGLIERE PIÙ NODI DI USCITA E QUINDI CAMBIARE 
- INDIRIZZO DOPO LA CHIOCCIOLA "@" AD INSAPUTA DEL SYSOP CHE GESTISCE IL NODO
- DI USCITA.
- 
- Quindi conviene avvertire il gestore del server .onion con una semplice mail.
- Puoi anche richiedere al gestore del nodo di essere messo nella exit policy.
- In questo caso il nodo non potra inviare o ricevere messaggi dal tuo server o
- indirizzo.
-  
---------------------------------------------------------------------------------                                        
+(1) Mail messages are saved only in the recipient's server and encrypted
+with multiple asymmetric keys.
+
+(2) Using PGP/GPG is encouraged, in some servers or mailing lists its
+use could even be compulsory.
+
+(3) Messages, either read or not, are deleted automatically from the
+server after a few days of their reception.
+
+(4) An address that's not used to read messages, that's not in use
+anymore or that has been signaled as a spammer, can be deleted.
+
+
+(5) Messages passing from server to server are sent during the same session.
+
+(6) Only mailing lists' messages can be temporarily saved while they are
+being sent. Later, they are deleted.
+
+(7) Some addresses are reserved and cannot be assigned to users. (See
+section 2.1).
+
+(8) You can, at any moment, ask the server to execute operations by
+contacting it through messages. (See section 3.0).
+
+(9) You can signal an address, or a whole onion, as spam. This will make
+it impossible to receive any messages from the sender signaled as spam.
+After a certain amount of notifications, the malicious sender server's
+SysOp will be warned.
+
+(10) Making too many notifications freely, wrong accesses and/or
+jeopardizing attempts imply being signaled as spam.
+Therefore, notifications are to be used with caution.
+
+----------------------------------------------------------------------------
+
+[2.1] Special addresses:
+
+These addresses have special functions and cannot be assigned to users.
+
+This list shows the addresses' general scheme independent to a specific
+server. The symbol '*' is used to express any word.
+
+sysop@ Server Administrator
+server@ A bot used to communicate operations to the server (See section 3.0)
+*.onion@ Entry/exit node
+*.list@ Mailing lists addresses
+*.sys@ System addresses
+*.op@ SysOps (Can be created only through CLI)
+*.app@ Applications' addresses
+
+A SysOp can reserve other addresses for special purposes.
+----------------------------------------------------------------------------
+
+[3.0] Communicating with the server
+
+To communicate with the server it's sufficient to send a message to
+server@<xyz>.onion (Where <xyz> is identical to your address after "@").
+Commands are specified in the messages' subject. On occasion, long
+parameters could be needed (e.g., a Public key). If that's the case, the
+command will still be in the message's subject, but files and other
+parameters are to be put in the message's body.
+
+In any case, a "Thanks" string in the message's body is always appreciated.
+
+List of the main commands:
+
+ADD SPAM:<email>
+Adds an email address to your spam list.
+Adding a star (*) before the @ will include the whole source server in
+the notification.
+
+SPAM LIST
+Shows your spam list.
+
+DEL SPAM:<numero>
+Removes an address from your spam list.
+(See section 3.1 for details)
+
+RULEZ
+Sends you a message with the server's rules.
+
+IDENT
+Sends you info about the server and about SSL certificates.
+
+REBOUND HEADERS
+Re-sends you the headers the way they were received.
+
+EXIT LIST
+Sends you the list of the mail entry/exit nodes.
+
+EXIT SET <domain>
+Sets the default entry/exit server.
+
+
+LIST <list address> RULEZ
+Sends you the file with the mailing list's information.
+
+LIST <list address> SUBSCRIBE
+Subscribes you to the mailing list.
+
+LIST <list address> UNSUBSCRIBE
+Removes you from the mailing list.
+
+Errors while sending the message will cause error 500 to be displayed
+and the message won't be received by the server.
+
+----------------------------------------------------------------------------
+
+[3.1] Spam List
+
+These operations are performed through server communication (See section
+3.0).
+
+The spam list can be obtained by sending a message with "SPAM LIST" as
+subject to your own server's bot.
+
+The list will comprise all the addresses (one per line) with a number
+next to them.
+
+Example spam list:
+
+1 <super@spammer.onion>
+2 <spam_for_you@fuffa.onion>
+3 <*.@spamcorporation.onion>
+
+To remove an address, send a message to the server with "DEL
+SPAM:<number>" as subject, where <number> is the number on the left in
+the list.
+
+Attention: after this operation you'll have to issue the command "SPAM
+LIST" again to obtain the correct new numbers.
+
+The symbol '*' put before the @ symbol in the address indicates that the
+whole server is in the spam list. (e.g., The 3rd line blocks all
+messages coming from spamcorporation.com.onion)
+
+Wildcards cannot be used. Hence, notifications like this:
+<*.fuffa@spamer.onion> are not valid.
+
+Spam notifications have immediate effect.
+
+If for some reason your address has been signaled as spam, you could
+receive an error message while trying to send an email to the address
+that blocked you.
+
+The error message is usually:
+500 FUCK YOU SPAMMER
+
+If this is the case, the best option is to ask the recipient server's
+SysOp to remove the notification.
+
+If while trying to reach the SysOp the same error is displayed, it means
+you have been banned from the whole server and you won't be able to
+communicate anymore with anyone having the same string after the @
+character.
+
+----------------------------------------------------------------------------
+
+[4.0] Dealing with unwanted messages with X-Notice headers
+
+In the eventuality of unwanted messages with X-Notice headers, contact
+the SysOp immediately.
+
+You can always contact him at these addresses:
+Within the Internet: You can find the address in the
+X-Notice header. It usually is in the form sysop.xyz.onion@dominio.tld
+where xyz.onion is the OnionMail server and dominio.ltd is an internet
+address of the entry node
+Within Tor:
+sysop@xyz.onion
+
+OWNERS AND/OR ADMINISTRATORS OF THE ENTRY/EXIT NODE CANNOT BE HELD
+RESPONSIBLE FOR ROUTING AND FOR THE MESSAGES BEING SENT. THIS IS BECAUSE
+THE USER CAN SELECT MULTIPLE EXIT NODES AND HENCE CHANGE THE ADDRESS
+AFTER THE "@" CHARACTER WITHOUT THE EXIT NODE'S SYSOP KNOWING.
+
+Therefore, it's better to warn the .onion server's administrator with a
+simple email.
+You can also ask the node's administrator to be put in the exit policy.
+This way, the node won't be able to send or receive messages from your
+server or address.
+----------------------------------------------------------------------------
