@@ -236,6 +236,22 @@ public class Stdio {
 		
 	}
 	
+	public static void PokeX(int addr,long valu,int bytes, byte[] ram) {
+		for (int ax=0;ax<bytes;ax++) {
+			ram[addr+ax] = (byte)(255&valu);
+			valu>>=8;
+			}
+	}
+
+	public static long PeekX(int addr,int bytes,byte[] ram) {
+		long valu=0;
+		for (int ax=bytes-1;ax>-1;ax--) {
+			valu<<=8;
+			valu|=(long)(255&ram[addr+ax]);
+			}
+		return valu;
+	}
+	
 	public static int PeekB(int addr,byte[] ram) {
 		int valu = (int)(255&ram[addr+1]);
 		valu|=(int)((255&ram[addr])<<8);
@@ -504,7 +520,139 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
         System.arraycopy(out, 0, result, 0, result.length);
         return result;
     }
-	 	
+	 
+	public static byte[] AESEncMul(byte[] keySpec, byte[] data) throws Exception {
+		   int cx = keySpec.length;
+		   int round=(int) Math.floor(cx/48);
+		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   byte[][] Key = new byte[round][32];
+		   byte[][] IV = new byte[round][16];
+		   for (int ax=0;ax<round;ax++) {
+			   int bp = 48*ax;
+			   System.arraycopy(keySpec, bp, Key[ax], 0, 32);
+			   System.arraycopy(keySpec, bp+16, IV[ax], 0,16);
+		   	}
+		   return AESEnc2m(Key,IV,data);
+	   }
+	
+	public static byte[] AESEncMulP(byte[] keySpec, byte[] data) throws Exception {
+		   int cx = keySpec.length;
+		   int round=(int) Math.floor(cx/48);
+		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   byte[][] Key = new byte[round][32];
+		   byte[][] IV = new byte[round][16];
+		  
+		   byte[] keyp = Stdio.sha256(keySpec);
+		   byte[] ivp = Stdio.md5a(new byte[][] { keyp, keySpec });
+		   
+		   data = Stdio.AES2Enc(keyp, ivp, data);
+		   
+		   for (int ax=0;ax<round;ax++) {
+			   int bp = 48*ax;
+			   System.arraycopy(keySpec, bp, Key[ax], 0, 32);
+			   System.arraycopy(keySpec, bp+16, IV[ax], 0,16);
+		   	}
+		   return AESEnc2m(Key,IV,data);
+	   }
+	
+	public static byte[] AESDecMulP(byte[] keySpec, byte[] data) throws Exception {
+		   int cx = keySpec.length;
+		   int round=(int) Math.floor(cx/48);
+		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   byte[][] Key = new byte[round][32];
+		   byte[][] IV = new byte[round][16];
+		  
+		   byte[] keyp = Stdio.sha256(keySpec);
+		   byte[] ivp = Stdio.md5a(new byte[][] { keyp, keySpec });
+		   
+		   for (int ax=0;ax<round;ax++) {
+			   int bp = 48*ax;
+			   System.arraycopy(keySpec, bp, Key[ax], 0, 32);
+			   System.arraycopy(keySpec, bp+16, IV[ax], 0,16);
+		   	}
+		  
+		   data=AESDec2m(Key,IV,data);
+		   data = Stdio.AES2Dec(keyp, ivp, data);
+		   return data;
+	   }
+	
+	public static byte[] AESDecMul(byte[] keySpec, byte[] data) throws Exception {
+		   int cx = keySpec.length;
+		   int round=(int) Math.floor(cx/48);
+		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   byte[][] Key = new byte[round][32];
+		   byte[][] IV = new byte[round][16];
+		   for (int ax=0;ax<round;ax++) {
+			   int bp = 48*ax;
+			   System.arraycopy(keySpec, bp, Key[ax], 0, 32);
+			   System.arraycopy(keySpec, bp+16, IV[ax], 0,16);
+		   	}
+		   return AESDec2m(Key,IV,data);
+	   }
+	
+	  
+	  public static byte[] AESEnc2m(byte[][] key, byte[][] iv,byte[] data) throws Exception {
+		
+		byte[][] blo = Stdio.DivBlock(data, 16, false);
+		int cx=blo.length;
+		int kc = key.length;
+		for (int kx=0;kx<kc;kx++) {
+			CBCBlockCipher aes = new CBCBlockCipher(new AESEngine());
+			CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key[kx]), iv[kx]);
+			aes.init(true, ivAndKey);
+			for (int ax=0;ax<cx;ax++)  aes.processBlock(blo[ax], 0, blo[ax], 0);
+			}
+		
+		data = Stdio.MulBlock(blo, 16);
+		blo=null;
+        return data;
+	  }
+	  
+	    public static byte[] AESDec2m(byte[][] key, byte[][] iv,byte[] data) throws Exception {
+		
+		byte[][] blo = Stdio.DivBlock(data, 16, false);
+		int cx=blo.length;
+		int kc = key.length-1;
+		for (int kx=kc;kx>-1;kx--) {
+			CBCBlockCipher aes = new CBCBlockCipher(new AESEngine());
+			CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key[kx]), iv[kx]);
+			aes.init(false, ivAndKey);
+			for (int ax=0;ax<cx;ax++)  aes.processBlock(blo[ax], 0, blo[ax], 0);
+			}
+		
+		data = Stdio.MulBlock(blo, 16);
+		blo=null;
+        return data;
+	  }
+	  
+	  public static byte[] AESEnc2(byte[] key, byte[] iv,byte[] data) throws Exception {
+       byte[][] blo = Stdio.DivBlock(data, 16, false);
+		
+        CBCBlockCipher aes = new CBCBlockCipher(new AESEngine());
+        CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key), iv);
+        aes.init(true, ivAndKey);
+
+        int cx=blo.length;
+        for (int ax=0;ax<cx;ax++)  aes.processBlock(blo[ax], 0, blo[ax], 0);
+        data = Stdio.MulBlock(blo, 16);
+        blo=null;
+        return data;
+	  }
+	    
+	  public static byte[] AESDec2(byte[] key, byte[] iv,byte[] data) throws Exception {
+       byte[][] blo = Stdio.DivBlock(data, 16, false);
+		
+        CBCBlockCipher aes = new CBCBlockCipher(new AESEngine());
+        CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key), iv);
+        aes.init(false, ivAndKey);
+
+        int cx=blo.length;
+        for (int ax=0;ax<cx;ax++)  aes.processBlock(blo[ax], 0, blo[ax], 0);
+        data = Stdio.MulBlock(blo, 16);
+        blo=null;
+        return data;
+	  }
+	  
 	 public static byte[] AES2Enc(byte[] key, byte[] iv,byte[] data) throws Exception {
         PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
         CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key), iv);
@@ -513,10 +661,14 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
     }
 	
 	 public static byte[] AES2Dec(byte[] key, byte[] iv,byte[] data) throws Exception {
-        PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+     try {
+		PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
         CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key), iv);
         aes.init(false, ivAndKey);
         return AES2cipher(aes, data);
+      } catch(Exception E) {
+    	   throw new Exception("!Invalid KEY for data");
+       } 
     }
 	 	
 	public static  boolean RSAVerify(byte[] dta,byte[] sign,PublicKey K) throws Exception {
@@ -790,7 +942,15 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
     
     	return o;    	
     }
-   
+/*
+public static byte[] Test(byte[][] in) {
+	String s ="";
+	for (int ax=0;ax<in.length;ax++) s+="\n"+Stdio.Dump(in[ax]);
+	s=s.trim();
+	s=s.replace("\n", "_");
+	return s.getBytes();
+}
+   */
 public static byte[] md5a(byte[][] in)  {
 		MessageDigest digest;
 		try {
@@ -1039,5 +1199,5 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 		}
 	
 	
-
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

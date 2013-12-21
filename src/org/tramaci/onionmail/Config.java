@@ -30,13 +30,14 @@ import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-
+import org.bouncycastle.openpgp.PGPEncryptedData;
 
 	public class Config {
 						
@@ -162,7 +163,15 @@ import java.util.Map;
 		public boolean SSLJavaHasBug = false; 
 		
 		public boolean UseBootSequence = true;
+		
+		public int MinBootDerks = 1;
+		public int PGPEncryptedDataAlgo = 0;
+		public String PGPEncryptedDataAlgoStr="DEFAULT";
+		public String[] PGPSpoofVer = null;
+		public String PGPRootUserPKeyFile = null;
 				
+		public int AESKeyRoundExtra = 0;
+		
 		public static void echo(String st) { System.out.print(st); }
 		
 		public static int parseInt(String st,String name) throws Exception {
@@ -320,6 +329,39 @@ import java.util.Map;
 										C.SMPTServer[ne].ExitRouteDomain = tok[1].toLowerCase().trim();
 										continue;
 										}
+						
+						if (cmd.compareTo("newusrenabled ")==0) { 
+										C.SMPTServer[ne].NewUsrEnabled  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("newusrxday")==0) { 
+										String str[] = tok[1].split("\\s+");
+										int xd = Config.parseInt(str[0], "users", 0, 65535);
+										int xh = xd;
+										if (str.length==2) xh = Config.parseInt(str[1], "users", 0, xd);
+										C.SMPTServer[ne].NewUsrMaxXDay  = xd;
+										C.SMPTServer[ne].NewUsrMaxXHour  = xh;
+										if (xh!=0 || xd!=0) C.SMPTServer[ne].NewUsrEnabled=true;
+										continue;
+										}					
+						
+						if (cmd.compareTo("newlstenabled ")==0) { 
+										C.SMPTServer[ne].NewLstEnabled  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("newlstxday")==0) { 
+										String str[] = tok[1].split("\\s+");
+										int xd = Config.parseInt(str[0], "lists", 0, 65535);
+										int xh = xd;
+										if (str.length==2) xh = Config.parseInt(str[1], "lists", 0, xd);
+										C.SMPTServer[ne].NewLstMaxXDay  = xd;
+										C.SMPTServer[ne].NewLstMaxXHour  = xh;
+										if (xh!=0 || xd!=0) C.SMPTServer[ne].NewLstEnabled=true;
+										continue;
+										}		
+						
 						
 						if (cmd.compareTo("statfile")==0) { 
 										C.SMPTServer[ne].StatFile = J.MapPath(CPath, tok[1]);
@@ -547,22 +589,33 @@ import java.util.Map;
 				if (Main.OnlyLoad) return line;
 				
 				try {
-								File F = new File(C.SMPTServer[ne].Maildir);
-								if (!F.isDirectory() || !F.exists()) throw new Exception();
-							} catch(Exception E) { 
-								try {
-									echo("Creating new SMTP Server `"+C.SMPTServer[ne].Nick+"` \t ... ");
-									C.SMPTServer[ne] = C.CreateServer(C.SMPTServer[ne] );
-									echo("\tDone!\n\n");
-								} catch(Exception QQ) {
-									echo("\tError!!!\n\n");
-									QQ.printStackTrace();
-									throw QQ;
-									
-								}
+					File F = new File(C.SMPTServer[ne].Maildir);
+					if (!F.exists() || !C.SMPTServer[ne].CheckServerPresent()) {
+						
+						if (Main.Oper!=Main.Oper_Gen_ServerS) {
+							echo("\nYou must generate the servers!\n\tUse --gen-servers option\n");
+							System.exit(2);
 							}
-							
-							C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne]);
+						
+						echo("Creating new SMTP Server `"+C.SMPTServer[ne].Nick+"` \t ... ");
+						C.SMPTServer[ne] = C.CreateServer(C.SMPTServer[ne] );
+						echo(" Done!\n\n");
+						
+						} else {
+						if (!F.isDirectory()) throw new Exception("Invalid file or directory `"+C.SMPTServer[ne].Maildir+"` please remove it!");
+						C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne]);
+						}
+				} catch(Exception E) {
+					String ms = E.getMessage();
+					if (ms.startsWith("@")) {
+							Main.echo(" Error!\n\t"+ms+"\n");
+							System.exit(2);
+						} else {
+							Main.echo(" Error!\n\tServer Exception: "+ms+"\n");
+							E.printStackTrace();
+							System.exit(2);
+						}
+				}
 							
 				return line;
 		}
@@ -579,6 +632,7 @@ import java.util.Map;
 			
 			String SMTPS="\n";
 			String Friends="\n";
+			String PGPRnd=null;
 			FileInputStream F = new FileInputStream(filepath);
 			int line=0;
 			String dnsbl=null;
@@ -599,17 +653,7 @@ import java.util.Map;
 			CFile[0] = filepath;
 			br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
 			STKbr[0]=br;
-			/*		
-			C.BlackSale = new byte[32];
-			Stdio.NewRnd(C.BlackSale);
-			File Fx = new File(filepath);
-			String Sx = Fx.getPath();
-			Sx+="/";
-			Sx=Sx.replace("//", "/");
-			Sx=Sx+"spamlog.tmp";
-			C.ServerBlackList=Sx;
-			*/
-			
+						
 			String ConfList="\n"+filepath+"\n";
 								
 			try {
@@ -744,7 +788,8 @@ import java.util.Map;
 								if (cmd.compareTo("mailwipefast")==0) { fc=true; C.MailWipeFast=Config.parseY(tok[1]); }
 								if (cmd.compareTo("ssljavahasbug")==0) { fc=true; C.SSLJavaHasBug=Config.parseY(tok[1]); }								
 								if (cmd.compareTo("usebootsequence")==0) { fc=true; C.UseBootSequence=Config.parseY(tok[1]); }
-																
+								if (cmd.compareTo("aeskeyroundextra")==0) { fc=true; C.AESKeyRoundExtra=Config.parseInt(tok[1],"Round", 0, 15); }		
+								
 								if (cmd.compareTo("dnssotimeout")==0) { fc=true; C.DNSSoTimeout=Config.parseInt(tok[1],"milliseconds timeout",2000); }
 								if (cmd.compareTo("maxsmtpsession")==0) { fc=true; C.MaxSMTPSession=Config.parseInt(tok[1],"smtp connections value",512); }
 								if (cmd.compareTo("maxsmtpsessioninitttl")==0) { fc=true; C.MaxSMTPSessionInitTTL=Config.parseInt(tok[1],"seconds timeout")*1000; }
@@ -760,8 +805,51 @@ import java.util.Map;
 							//	if (cmd.compareTo("serverblacklist")==0) { fc=true; C.ServerBlackList=J.MapPath(CPath, tok[1]); }
 								if (cmd.compareTo("passwordmaxstrangerchars")==0) { fc=true; C.PasswordMaxStrangerChars=Config.parseInt(tok[1],"Chars", 1, 256); }
 								if (cmd.compareTo("passwordsize")==0) { fc=true; C.PasswordSize=Config.parseInt(tok[1],"Chars", 7, 256); }
+								if (cmd.compareTo("minbootderks")==0) { fc=true; C.MinBootDerks=Config.parseInt(tok[1],"Servers", 1, 16); }
 								if (cmd.compareTo("mailretentiondays")==0) { fc=true; C.MailRetentionDays=Config.parseInt(tok[1],"Days", 4, 365); }
+								
+								if (cmd.compareTo("pgpencrypteddataalgo")==0) { 
+										fc=true;
+										int x = -1;
+										String tk = tok[1].trim().toUpperCase();
+										if (tk.compareTo("AES128")==0) x= PGPEncryptedData.AES_128;
+										if (tk.compareTo("AES192")==0) x= PGPEncryptedData.AES_192;
+										if (tk.compareTo("AES256")==0) x= PGPEncryptedData.AES_256;
+										if (tk.compareTo("BLOWFISH")==0) x= PGPEncryptedData.BLOWFISH;
+										if (tk.compareTo("CAST5")==0) x= PGPEncryptedData.CAST5;
+										if (tk.compareTo("IDEA")==0) x= PGPEncryptedData.IDEA;
+										if (tk.compareTo("SAFER")==0) x= PGPEncryptedData.SAFER;
+										if (tk.compareTo("TRIPLEDES")==0) x= PGPEncryptedData.TRIPLE_DES;
+										if (tk.compareTo("TWOFISH")==0) x= PGPEncryptedData.TWOFISH;
+										if (tk.compareTo("DEFAULT")==0) x= 0;
+										if (x==-1) throw new Exception("Invalid PGP Parameter `"+tk+"`");
+										C.PGPEncryptedDataAlgo=x;
+										C.PGPEncryptedDataAlgoStr=tk;
+										}
 																
+								if (cmd.compareTo("pgpversionspoofer")==0 && tok.length==2 && tok[1].compareTo("{")==0) {
+									while(true) {
+										line++;
+										li = br.readLine();
+										if (li==null) break;
+										li=li.trim();
+										tok = li.split("\\#",2);
+										li=tok[0];
+										li=li.trim();
+										if (li.length()==0) continue;
+										if (li.compareTo("}")==0) break;
+										if (PGPRnd==null) PGPRnd="\n";
+										if (!PGPRnd.contains("\n"+li+"\n")) PGPRnd=PGPRnd+li+"\n";
+										}
+									fc=true;
+									}
+								
+								if (cmd.compareTo("pgprootuserpkeyfile")==0) {
+									fc=true;
+									C.PGPRootUserPKeyFile = J.MapPath(CPath, tok[1]);
+									if (!new File (C.PGPRootUserPKeyFile).exists()) throw new Exception("Public PGP key file not found `"+C.PGPRootUserPKeyFile+"`");
+								}
+								
 								if (cmd.compareTo("respath")==0) { 
 										fc=true; 
 										C.ResPath=tok[1];
@@ -916,6 +1004,12 @@ import java.util.Map;
 				Friends=Friends.trim();
 				C.FriendServer = Friends.split("\\n+");
 				
+				if (PGPRnd!=null) {
+					PGPRnd=PGPRnd.trim();
+					C.PGPSpoofVer=PGPRnd.split("\\n+");
+					PGPRnd=null;
+					}
+				
 					if (C.MaxHosts>C.LocalNetArea.getMask()) throw new Exception("MaxHosts is too big for the networkarea");
 					if (C.MaxHosts>65535) throw new Exception("Too many MaxHost.\nSet another MaxHosts value!\n");
 					if (C.MaxHosts==0) C.MaxHosts = C.LocalNetArea.getMask() - 2; 
@@ -927,7 +1021,7 @@ import java.util.Map;
 						Main.echo("\nWarning:\n\tDefault port name list, use a portfile via portnames parameter!\n\n");
 					} else {
 						try {
-							Main.echo("Load PortNames '"+C.IANAPortFile+"' ");
+							Main.echo("Load PortNames `"+C.IANAPortFile+"`");
 							LoadPortList(C);
 							C.UsePortName=true;
 							Main.echo("\nNamed ports: "+C.PortName.size()+" Ok\n");
@@ -1097,8 +1191,17 @@ import java.util.Map;
 		
 		
 		public void EXC(Exception E,String Dove) {
-			this.GlobalLog(Config.GLOG_Bad, Dove,E.getMessage()+"");
-			if (Debug) E.printStackTrace();
+			GlobalLog(Config.GLOG_Bad, Dove,E.getMessage()+"");
+			if (!Debug) return; 
+			StackTraceElement[] SP = E.getStackTrace();
+			int cx = SP.length;
+			String st="Exception: "+E.toString()+"\n";
+			for (int ax=0;ax<cx;ax++) {
+				StackTraceElement x = SP[ax];
+				st+=x.getClassName()+"."+x.getMethodName()+" "+x.getFileName()+" "+x.getLineNumber()+"\n";
+				}
+			GlobalLog(Config.GLOG_Bad,Dove,st.trim());
+			E.printStackTrace();
 		}
 		
 		@SuppressWarnings("resource")
@@ -1161,7 +1264,7 @@ import java.util.Map;
 		private SrvIdentity InitServer(SrvIdentity NewServer) throws Exception {
 			
 			if (Main.CmdRunBoot) {
-				if (new File( NewServer.Maildir+"/boot").exists()) {
+				if (new File( NewServer.Maildir+"/head/boot").exists()) {
 					if ( NewServer.Boot()) return NewServer;
 					Main.echo(" Can't reboot `"+NewServer.Nick+"`\n");
 				} else {
@@ -1172,16 +1275,14 @@ import java.util.Map;
 			String kbf = NewServer.Maildir+"/keyblock.txt";
 			String kb="";
 			String li;
-			BufferedReader in = J.getLineReader(System.in);
 			if (new File(kbf).exists()) kb = new String(Stdio.file_get_bytes(kbf)); else {
-				Main.echo("\nServer "+NewServer.Nick+" Requires a keyblock:\nEnter Keyblock, end with \".\" line:\n");
-				
-				while(true) {
-					li = in.readLine();
-					li=li.trim();
-					if (li.compareTo(".")==0) break;
-					kb+=li+"\n";
+				if (new File( NewServer.Maildir+"/head/boot").exists()) {
+					Main.echo("Try to boot `"+NewServer.Onion+"`\n");
+					if ( NewServer.Boot()) return NewServer;
 					}
+				Main.echo("\nServer "+NewServer.Nick+" Requires a keyblock:\nEnter Keyblock sequence:\n");
+				kb = J.ASCIISequenceReadI(System.in, "KEYBLOCK");
+				
 			}
 			
 			if (Main.SetPass!=null && NewServer.CVMF380TMP==null) NewServer.CVMF380TMP=Main.SetPass;
@@ -1192,11 +1293,12 @@ import java.util.Map;
 				} else {
 					Main.echo("\nServer "+NewServer.Nick+" Requires password:\n");
 					Main.echo("\nEnter Password: ");
+					BufferedReader in = J.getLineReader(System.in);
 					li = in.readLine();
 					li=li.trim();
 				}
 			
-			byte[][] KS = SrvIdentity.KSDecodeASCII(kb, li.getBytes());
+			byte[][] KS = SrvIdentity.KSDecode(J.ASCIISequenceRead(kb, "KEYBLOCK"), li.getBytes());
 			NewServer.Open(KS);
 			return NewServer;
 			
@@ -1204,31 +1306,27 @@ import java.util.Map;
 			
 		private SrvIdentity CreateServer(SrvIdentity NewServer) throws Exception {
 			
-				byte[][] InirS = new byte[7][16];
-				for (int ax=0;ax<6;ax++) Stdio.NewRnd(InirS[ax]);
-				InirS[6] = NewServer.Onion.getBytes();
+				byte[][] InirS =SrvIdentity.CreateSK(NewServer.Onion);
 				
 				NewServer.Create(InirS.clone());
 				NewServer.Open(InirS.clone());
 				
 				String p0 = J.GenPassword(PasswordSize,PasswordMaxStrangerChars);
 				String p1 = J.GenPassword(PasswordSize,PasswordMaxStrangerChars);
-				
-				HashMap <String,String> P = new HashMap <String,String>();
-				P.put("lang", NewServer.DefaultLang);
-				P.put("flag", Const.USR_FLG_ADMIN);
-				
-				NewServer.UsrCreate("sysop", p0, p1, 0,P);
-				String p3 = "";
-				p3= J.GenPassword(80, 64);
+				String p3 = J.GenPassword(80, 64);
 				
 				BufferedReader In = J.getLineReader(System.in);
 				
 				if (Main.SelPass) {
-					Main.echo("\nSet `"+NewServer.Nick+"` password:\n");
+					Main.echo("\nSet `"+NewServer.Nick+"` passwords\n");
 					while(true) {
-						Main.echo("KeyBlock Password: ");
-						p3=In.readLine();
+						if (Main.SetPass==null) {
+							Main.echo("KeyBlock Password:> ");
+							p3=In.readLine();
+							} else {
+							p3=Main.SetPass;
+							Main.echo("KeyBlock Password is not required here!\n");
+							}
 						if (p3==null) System.exit(2);
 						p3=p3.trim();
 						if (p3.length()>7) break;
@@ -1236,7 +1334,7 @@ import java.util.Map;
 						}
 					
 					while(true) {
-						Main.echo("SysOp SMTP Password: ");
+						Main.echo("SysOp SMTP Password:> ");
 						p0=In.readLine();
 						if (p0==null) System.exit(2);
 						p0=p0.trim();
@@ -1245,7 +1343,7 @@ import java.util.Map;
 						}
 					
 					while(true) {
-						Main.echo("SysOp POP3 Password: ");
+						Main.echo("SysOp POP3 Password:> ");
 						p1=In.readLine();
 						if (p1==null) System.exit(2);
 						p1=p1.trim();
@@ -1254,40 +1352,83 @@ import java.util.Map;
 						}
 				}
 				
+				HashMap <String,String> P = new HashMap <String,String>();
+				P.put("lang", NewServer.DefaultLang);
+				P.put("flag", Const.USR_FLG_ADMIN);
+				NewServer.UsrCreate("sysop", p0, p1, 0,P);
+				
 				String p2= NewServer.Maildir+"/sysop.txt";
-				p0 = "Mail address: sysop@"+NewServer.Onion+"\n"+
-						"SMTP Login: sysop\n"+
-						"SMTP Password: "+p0+"\n"+
-						"SMTP Base64 encoded Password: "+J.Base64Encode(p0.getBytes())+"\n"+
-						"SMTP Base64 encoded Login: "+J.Base64Encode("sysop".getBytes())+"\n"+
-						"--\nPOP3 Login: sysop\n"+
-						"POP3 Password: "+p1+"\n"+
-						"--\nServer "+NewServer.Nick+":\n"+
-						"SMTP SERVER "+NewServer.LocalIP.toString()+" port "+NewServer.LocalPort+"\n"+
-						"POP3 SERVER "+NewServer.LocalIP.toString()+" port "+NewServer.LocalPOP3Port+"\n"+
-						"Tor address: "+NewServer.Onion+"\n";
-				 p0+="KeyBlock password: "+p3+"\n";
-							
+				p0 = "Mail address: sysop@"+NewServer.Onion+"\r\n"+
+						"SMTP Login: sysop\r\n"+
+						"SMTP Password: "+p0+"\r\n"+
+						"SMTP Base64 encoded Password: "+J.Base64Encode(p0.getBytes())+"\r\n"+
+						"SMTP Base64 encoded Login: "+J.Base64Encode("sysop".getBytes())+"\r\n"+
+						"--\r\nPOP3 Login: sysop\r\n"+
+						"POP3 Password: "+p1+"\r\n"+
+						"--\r\nServer "+NewServer.Nick+":\r\n"+
+						"SMTP SERVER LISTEN ADDRESS: "+J.IP2String(NewServer.LocalIP)+" port "+NewServer.LocalPort+"\r\n"+
+						"POP3 SERVER LISTEN ADDRESS: "+J.IP2String(NewServer.LocalIP)+" port "+NewServer.LocalPOP3Port+"\r\n"+
+						"Tor address: "+NewServer.Onion+"\r\n";
+				 p0+="KeyBlock password: "+p3+"\r\n";
+
+				if (Main.PGPRootMessages && NewServer.Config.PGPRootUserPKeyFile!=null) try {
+					
+					byte[] original = p0.getBytes();
+					FileInputStream pubKey = new FileInputStream(NewServer.Config.PGPRootUserPKeyFile);
+					byte[] encrypted = PGP.encrypt(original, PGP.readPublicKey(pubKey), null, true, true,new Date(),NewServer.Config.PGPEncryptedDataAlgo);
+					p0 = new String(encrypted);
+					
+					if (NewServer.Config.PGPSpoofVer!=null) try {
+						int cx = NewServer.Config.PGPSpoofVer.length;
+						if (cx!=0) {
+							int r = 1;
+							if (cx>1) r = (int) ((0x7FFFFFFFFFFFFFFFL & Stdio.NewRndLong()) % cx);
+							String spoof = NewServer.Config.PGPSpoofVer[r];
+							p0 = PGP.FilterPGPNSAsMarker(p0, spoof);
+							}
+						} catch(Exception E) { NewServer.Config.EXC(E, "PGP:SpoofNSA:2"); }
+		//TODO PGP
+				/*
+					Main.echo("\nDo you want to insert a PGP Public & Private key for server`"+NewServer.Nick+"`\n\tYes, No ?");
+					boolean re=false;
+					try { re = Config.parseY(In.readLine().trim()); } catch(Exception I) {}
+					if (re) try {
+						Main.echo("Enter the ASCII file name: >");
+						String Pat = In.readLine().trim();
+						Pat = new String(Stdio.file_get_bytes(Pat));
+						Main.echo("Enter the Passphrase: >");
+						String Pass = In.readLine().trim();
+						String Priv = J.ParsePGPPrivKey(Pat);
+						Pat = J.ParsePGPKey(Pat);
+						NewServer.UserSetPGPKey(Pat, "server");
+						NewServer.UserSetPGPKey(Priv, Const.SRV_PRIV);
+						byte[] b = Pat.getBytes("UTF-8");
+						b=Stdio.AESDecMulP(NewServer.Sale, b);
+						Stdio.file_put_bytes(NewServer.Maildir+"/header/hldr", b);
+						} catch(Exception EX) {}
+						*/	
+				} catch(Exception E) { NewServer.Config.EXC(E, "PGP:Config.CreateServer"); }
+				 
 				Stdio.file_put_bytes(p2,p0.getBytes());
-				p2=SrvIdentity.KSEncodeASCII(InirS, p3.getBytes());
+				byte[] t2 =SrvIdentity.KSEncode(InirS, p3.getBytes());
+				p2 = J.ASCIISequenceCreate(t2, "KEYBLOCK");
+				
 				Stdio.file_put_bytes(NewServer.Maildir+"/keyblock.txt",p2.getBytes());
 				NewServer.CVMF380TMP = p3;
 													
-				for (int ax=0;ax<10;ax++) {
-					p0=J.RandomString(32);
-					p1=J.RandomString(32);
-					p2=J.RandomString(32);
-					p3=J.RandomString(32);
-					p0=null;
-					p1=null;
-					p2=null;
-					p3=null;
-					System.gc();
-					}
-				
+				p0=J.RandomString(32);
+				p1=J.RandomString(32);
+				p2=J.RandomString(32);
+				p3=J.RandomString(32);
+				p0=null;
+				p1=null;
+				p2=null;
+				p3=null;
+				System.gc();
+								
 				return NewServer;
 		}
-		
+		/*
 		private String GetCertFile(String CN) {
 			String t0 = CN.toLowerCase()+"\n"+CN.toUpperCase()+"\n"+this.RootPass+"\n"+this.RootPathConfig;
 			return this.RootPathConfig+"/"+J.md2st( t0.getBytes())+".ctx";
@@ -1335,7 +1476,7 @@ import java.util.Map;
 			X509Certificate cert2 = (X509Certificate)cf.generateCertificate(new ByteArrayInputStream(f[1]));
 			return cert2;			
 		}
-	
+	*/
 		public static final int GLOG_All 				= 1;
 		public static final int GLOG_Server 		= 2;
 		public static final int GLOG_Event			= 4;
@@ -1375,7 +1516,7 @@ import java.util.Map;
 				} else t = "X"+Long.toHexString(0x10000L | type).substring(1);
 	
 			String tid = Long.toHexString(Thread.currentThread().getId());
-			String l = h+" "+J.Spaced(J.Limited(tid,8), 8)+" "+J.Spaced(t, 5)+" "+J.Spaced(zone, 24)+" "+st+"\n";
+			String l = h+" "+J.Spaced(J.Limited(tid,8), 8)+" "+J.Spaced(t, 5)+" "+J.Spaced(zone, 32)+" "+st+"\n";
 			
 			if (LogFile==null) echo(l); else try {
 						if (KeyLog!=null) LogInRSA(l); else LogInPlain(l);
@@ -1401,7 +1542,7 @@ import java.util.Map;
 		private synchronized void LogInRSA(String l) throws Exception {
 			l=l.trim();
 			byte [] lb = l.getBytes();
-			lb = Stdio.RSAEncData(lb, KeyLog, 64);
+			lb = Stdio.RSAEncDataP(lb, KeyLog, 64);
 			int sz = 0x8000 | lb.length;
 			RandomAccessFile F = new RandomAccessFile(LogFile,"rw");
 			try {
@@ -1415,5 +1556,31 @@ import java.util.Map;
 				}
 		}
 	
+		private PrivateKey LogKp=null;
+		private RandomAccessFile FileLogRead=null;
 		
+		public void OpenLogFileForRead(PrivateKey K) throws Exception {
+			LogKp=K;
+			FileLogRead = new RandomAccessFile(LogFile,"r");
+			FileLogRead.seek(0);
+			}
+		
+		public void CloseLog() {
+			LogKp=null;
+			try { FileLogRead.close(); } catch(Exception i) {}
+			FileLogRead=null;
+			System.gc();
+			}
+		
+		public String ReadLog() throws Exception {
+			int x = FileLogRead.readUnsignedShort();
+			if (x==0) return null;
+			x&=0x7FFF;
+			byte[] bl = new byte[x];
+			FileLogRead.read(bl);
+			bl = Stdio.RSADecDataP(bl, LogKp,64);
+			return new String(bl);
+		}
+	
+		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

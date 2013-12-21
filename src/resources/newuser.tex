@@ -1,0 +1,65 @@
+mime-version: 1.0
+content-type: text/plain; charset=ISO-8859-1
+content-transfer-encoding: 8bit
+subject: Your new OnionMail
+
+onionmail: !
+onion: !
+username: !
+pop3password: !
+sha1: !
+smtppassword: !
+nick: !
+MsgSize: !
+MaxMsgXuser: !
+MsgOld: !
+Scrambler: Default
+					
+This is your new OnionMail address:
+%onionmail%
+
+To use this you must connect via Tor to the server:
+%onion%
+
+To read your email messages:
+POP3 Server %onion% port 110
+Use STARTTLS and plain password.
+The POP3 usename is:
+%username%
+And the password is:
+%pop3password%
+
+To send your messages:
+SMTP Server %onion% port 25
+Use STARTTLS and plain password.
+The SMTP username is:
+%username%
+And the password is:
+%smtppassword%
+
+The maximum message size is: %MsgSize% bytes.
+Number maximum messages in your inbox: %MaxMsgXuser%.
+The messages will delete after %MsgOld% days.
+This PGP message is encrypted with %Scrambler% algorithm.
+
+Don't forget to check the SSL certificate SHA-1 hash when 
+you connect first time. The SHA-1 is:
+%sha1%
+
+Retry to connect after you accept the SSL certificate.
+
+To get more informations about the server send a message
+to the server mail address server@%onion% 
+with subject IDENT.
+
+To get more help and informations about rules and term of
+use send a message to the server mail address server@%onion%
+with subject RULEZ. 
+
+Remember to create now your PGP key and use PGP.
+When you create a your PGP key don' t forget to get the exit node list
+via the EXIT LIST message to the server. Please create some alternative id
+like <username.%onion%@exitdomain.tld> 
+to communicate correctly with internet users.
+
+%nick% server at %onion% 

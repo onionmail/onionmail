@@ -101,34 +101,31 @@ public class ControlSession extends Thread{
 			
 			///////////////////
 			
-			if (cmd.compareTo("delirio")==0) {
-				byte[] bytes = new byte[512];
-				String[] tmps = new String[] { "","" };
-				
-				byte[] tmp = SRVS[0].CreateBootSequence(new String[] {"l3xzz25unf54s7ii.onion" , "tr2cfxt4n3sm3yom.onion" }, 8, tmps, bytes); 
-				Stdio.file_put_bytes("/sdcard/oniboot", tmp);
-				Reply(true);
-				
-			}
+/*	if (cmd.compareTo("dlr")==0) {
+		Reply(true,"Delirio in corso...");
+		Reply(SRVS[0].Boot());
+		}*/
 			
-			if (cmd.compareTo("fuffa")==0) {
-				byte[] rnd = new byte[512];
-				//Stdio.NewRnd(rnd);
-				Reply(true,"provo!");
-				byte[][] boot =  SRVS[0].SrvCreateRemoteKey(SRVS[1].Onion, 10, rnd);
-				O.write(boot[1]);
-				O.write(new byte[] {13,10});
-				O.write(boot[2]);
-				O.write(new byte[] {13,10});
-				Reply(true,"Provo z");
-				byte[] due = SRVS[0].SrvGetRemoteKey(boot[0]);
+		/*	if (cmd.compareTo("fuffa")==0) {
 				
-				Stdio.file_put_bytes("/sdcard/oniondbg", due);
-				
-				Reply(Arrays.equals(rnd, due),"CMP");
-				
+				 RemoteKSeedInfo[] xy = SRVS[0].RemoteDoKCTLAction("del",new String( Stdio.file_get_bytes("/sdcard/dns/test.txt")) , "l3xzz25unf54s7ii.onion","Z*Sc?Ynp}_-&5kK%");
+				int qcx= xy.length;
+				for (int ax=0;ax<qcx;ax++) Reply(xy[ax].Ok,xy[ax].Confirm);
 			}
+			*/
+	
+	/*
+	if (cmd.compareTo("dlr")==0) {
+		//
+		
+		Reply(true,"prova");
+		Reply(SRVS[0].Boot(),"boot");
+		
+	}
+	*/
 			
+			if (cmd.compareTo("ver")==0) { Reply(true,Main.getVersion()); continue; }
+			if (cmd.compareTo("vers")==0) { Reply(true,Main.CompiledBy+" "+Main.getVersion()); continue; }
 			
 			if (pa==3 && cmd.compareTo("server")==0) {
 				Login = Tok[1];
@@ -305,6 +302,26 @@ public class ControlSession extends Thread{
 			if (cmd.compareTo("mklist")==0  && serveruser) { SA_MKLIST(Tok); continue; }
 			if (cmd.compareTo("addusr")==0  && serveruser) { SA_ADDUSR(Tok); continue; }
 			
+			if (cmd.compareTo("addpgpusr")==0 && serveruser && Tok.length==2) {
+				Reply(true,"Send your PGP armor Key, end width \".\"");
+				String pgpk="";
+				while(true) {
+					String li2 = br.readLine();
+					if (li2==null) throw new Exception("@Disconnected");
+					li2=li2.trim();
+					if (li2.compareTo(".")==0) break;
+					pgpk+=li2+"\r\n";
+				}
+				
+				DynaRes re = SRVS[CurSrv].CreaNewUserViaPGP(pgpk, Tok[1]);
+				re.Res=re.Res.replace("\r\n", "\n");
+				re.Res=re.Res.trim();
+				ReplyA(true,re.Head.get("subject"),re.Res.split("\\n"));
+				continue;
+			}
+			
+			if (cmd.compareTo("status")==0 && serveruser) { Reply(true,SRVS[CurSrv].getStatus()); continue; }
+			
 			if (cmd.compareTo("addalias")==0  && serveruser && Tok.length==3) {
 					Reply(SRVS[CurSrv].UsrCreateAlias(Tok[1].toLowerCase().trim(), Tok[2].toLowerCase().trim()));
 					continue;
@@ -343,7 +360,12 @@ public class ControlSession extends Thread{
 					"Spam-Blocked: "+SRVS[CurSrv].StatSpam ,
 					"Errors: "+SRVS[CurSrv].StatError ,
 					"Exceptions: "+SRVS[CurSrv].StatException ,
-					"UpTime: "+SRVS[CurSrv].StatHcount }) ;
+					"UpTime: "+SRVS[CurSrv].StatHcount ,
+					"NewUsrThisDay: "+SRVS[CurSrv].NewUsrLastDayCnt,
+					"NewUsrThisHour: "+SRVS[CurSrv].NewUsrLastHourCnt,
+					"NewUsrXDay: "+SRVS[CurSrv].NewUsrMaxXDay,
+					"NewUsrXHour: "+SRVS[CurSrv].NewUsrMaxXHour,
+					"NewUsrEnabled: "+(SRVS[CurSrv].NewUsrEnabled ? "YES" : "NO") }) ;
 				continue;
 			}
 				
@@ -601,28 +623,22 @@ public class ControlSession extends Thread{
 				}
 							
 			if (cmd.compareTo("list")==0) {
-				String st = S.Spam.UsrProcList(lpa, -1);
-				ReplyA(true,tpa+" Spam List",st.split("\\n+"));
+				ReplyA(true,tpa+" Spam List",S.Spam.GetList(lpa));
 				return;
 				}
 						
 			if (cmd.compareTo("del")==0&&le==3) {
-				String st = S.Spam.UsrProcList(lpa,J.parseInt(Tok[2]));
-				ReplyA(true,tpa+" Spam List",st.split("\\n+"));
+				String[] nos = Tok[2].split("\\,+");
+				ReplyA(true,tpa+" Spam List",S.Spam.ProcList(lpa, null, nos));
 				return;
 				}
 			
-			if (cmd.compareTo("add")==0&le==3) {
-				String st = J.getMail(Tok[2], false);
-				if (st==null)  {
-					Reply(false,"Invalid address");
-					return;
-					}
-				S.Spam.UsrAddList(lpa, st);
-				Reply(true,"Add to "+tpa);
+			if (cmd.compareTo("add")==0&&le==3) {
+				String[] nos = Tok[2].split("\\,+");
+				ReplyA(true,tpa+" Spam List",S.Spam.ProcList(lpa,nos,null));
 				return;
 				}
-			
+						
 			if (cmd.compareTo("check")==0&le==3) {
 				String st = J.getMail(Tok[2], false);
 				if (st==null)  {
@@ -750,6 +766,7 @@ public class ControlSession extends Thread{
 	private void SA_SSLInfo() throws Exception {
 			SrvIdentity S = SRVS[CurSrv];	
 			String rs="ver="+Main.getVersion()+"\n";
+			rs+="souceid="+Main.CompiledBy+"\n";
 			rs+="onion="+S.Onion+"\n";
 			rs+="nick="+S.Nick+"\n";
 			rs+="maxmsgsize="+S.MaxMsgSize+"\n";
@@ -759,6 +776,7 @@ public class ControlSession extends Thread{
 			rs+="relay="+(S.CanRelay ? 1:0)+"\n";
 			rs+="random="+J.RandomString(16)+"\n";
 			rs+="date="+S.TimeString()+" "+Long.toString(S.Time() %1000L)+"\n";
+			rs+="runstring="+S.GetRunString()+"\n";
 			
 			for ( String K :S.SSlInfo.keySet() ) rs+="i_ssl_"+K+"="+S.SSlInfo.get(K)+"\n";
 			
@@ -1060,7 +1078,7 @@ public class ControlSession extends Thread{
 			if (le>3) pop3p = Tok[2].trim(); else pop3p=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
 			
 			if (
-						!user.matches("[a-z0-9\\-\\_\\.]{4,16}") 	|| 
+						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 
 						user.compareTo("sysop")==0 					|| 
 						user.compareTo("server")==0 					|| 
 						user.endsWith(".onion") 								|| 
@@ -1306,4 +1324,5 @@ public class ControlSession extends Thread{
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_All, "CTRL", st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_All, "CTRL", st); 	}		
 		
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify		
 }

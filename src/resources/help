@@ -1,14 +1,16 @@
 
 Use:
 	onionmail [-q] [-f <config file>] [-v] [-p <password>] [-ndk] 
-		[-pf <global_slat_keyfile>] [-d] [--reboot]
+		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp]
 		
 	onionmail [-q] --gen-passwd 
-	onionmail [-q] --gen-servers [-sp] -f <config file>
+	onionmail [-q] --gen-servers [-sp] -f <config file> [--pgp]
 	onionmail [-q] --stop -f <config file>
 	onionmail [-q] --gen-keyfile <file> <bits>
 	onionmail [-q] --gen-keyfile <file> <bits> --show-passwd
 	onionmail [-q] [-d] --reboot 
+	onionmail [-q] --kctl
+	onionmail [-q] [--pgp]
 	
 	Options:      
 
@@ -20,6 +22,7 @@ Use:
 	-sp		Choose passwords manually for all KeyBlock files.
 	-q		Disable copyright message (must be first parameter).
 	-d		Daemonize: Redirect stdout to onionstart.log file.
+	--pgp		Save the files sysop.txt in encrypted gpg messages.
 	-pf	<file>	Calculate password from global salt keyfile.   
 			The password is calculated form the filename and 
 			contents of file or previous -pf and/or -sp password.
@@ -45,4 +48,5 @@ Use:
 	--gen-keyfile	Generate new global salt Keyfile.
 	--show-passwd	Show current password generated.
 	--reboot	Reboot server via remote network seed/push keys.
-	
+	--kctl		Show the KCTL remote menù to manage remote seeds of 
+			keys.

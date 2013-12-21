@@ -32,6 +32,15 @@ public class ExitRouteList extends HashMap<String, String> {
 		}
 	
 	public String GetDomain(String onion) {
+		if (onion==null) {
+			if (isEmpty()) return null;
+			String o=null;
+				for (String K:keySet()) {
+				o=K;
+				break;
+				}
+			return o;
+			}
 		onion=onion.toLowerCase().trim();
 		for (String K:keySet()) {
 			String o = get(K);
@@ -68,4 +77,6 @@ public class ExitRouteList extends HashMap<String, String> {
 		for (String K:H.keySet()) E.put(K.toLowerCase().trim(), H.get(K).toLowerCase().trim());
 		return E;
 	}
+
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

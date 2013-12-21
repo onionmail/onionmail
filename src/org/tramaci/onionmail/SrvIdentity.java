@@ -21,6 +21,7 @@ package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
@@ -96,6 +97,7 @@ public class SrvIdentity {
 	public PrivateKey SSK = null;
 			
 	public byte[] Sale = null;
+	public byte[][] Subs = null;
 	public Config Config;
 	public Spam Spam;
 	public static final String SpamList="_SPAM_/_LIST@Server";
@@ -146,6 +148,24 @@ public class SrvIdentity {
 	public volatile int StatInet2TorBy = 0;
 	public volatile int StatCurrentM=0;
 	public volatile int LastDoFriend = 0;
+	
+	public boolean NewUsrEnabled = false;
+	public int NewUsrMaxXDay = 0;
+	public int NewUsrMaxXHour = 0;
+	public int NewUsrLastDay = 0;
+	public int NewUsrLastDayCnt = 0;
+	public int NewUsrLastHour = 0;
+	public int NewUsrLastHourCnt = 0;
+	
+	public boolean NewLstEnabled = false;
+	public int NewLstMaxXDay = 0;
+	public int NewLstMaxXHour = 0;
+	public int NewLstLastDay = 0;
+	public int NewLstLastDayCnt = 0;
+	public int NewLstLastHour = 0;
+	public int NewLstLastHourCnt = 0;
+	public long TimeSpoofSubRandom = 0;
+	
 //	public HashMap <String,String> NextCheck = new HashMap<String,String>();
 	public HashMap <String,String> ManifestInfo = new HashMap <String,String>();
 	///public HashMap <String,String>  SSLToVerify = new HashMap<String,String>();
@@ -158,6 +178,24 @@ public class SrvIdentity {
 	
 	public String OnTheSameMachine=null;
 	
+	public String PassPhrase="";
+	
+	public int Status = 0;
+	public static final int ST_NotLoaded=0;		//A
+	public static final int ST_Loaded=1;				//B
+	public static final int ST_Running=2;				//C
+	public static final int ST_Booting=4;				//D
+	public static final int ST_BootOk=8;				//E
+	public static final int ST_FriendRun=16;		//F
+	public static final int ST_FriendOk=32;			//G
+	public static final int ST_Error=64;				//H
+	public static final int ST_Ok=128;					//I
+	
+	public String getStatus() {
+		String st="";
+		for (int ax=0;ax<8;ax++) if ((Status & 1<<ax)!=0) st+=Integer.toString(10+ax,36);
+		return st;
+	} 
 	
 	public void SaveStat() throws Exception {
 			StatHcount++;
@@ -186,19 +224,19 @@ public class SrvIdentity {
 			int tcr = (int)((System.currentTimeMillis()+Config.TimeSpoof)/1000L);
 			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(StatFile, true)));
 			out.println(
-					tcr+","+
-					StatHcount+","+
-					StatMsgIn +","+
-					StatMsgOut+","+
-					StatMsgInet+","+
-					StatError+","+
-					StatException+","+
-					StatSpam+","+
-					StatPop3+","+
-					StatTor2TorBy+","+
-					StatTor2InetBy+","+
-					StatInet2TorBy+","+
-					StatCurrentM+"\n" )
+					tcr+";"+
+					StatHcount+";"+
+					StatMsgIn +";"+
+					StatMsgOut+";"+
+					StatMsgInet+";"+
+					StatError+";"+
+					StatException+";"+
+					StatSpam+";"+
+					StatPop3+";"+
+					StatTor2TorBy+";"+
+					StatTor2InetBy+";"+
+					StatInet2TorBy+";"+
+					StatCurrentM )
 					;
 			out.close();
 			
@@ -217,10 +255,241 @@ public class SrvIdentity {
 		
 	
 	SrvIdentity(Config C) { 
-					
+			long a = Stdio.NewRndLong() & 0x7FFFFFFFL;
+			TimeSpoofSubRandom = a % 3600000L;
+			TimeSpoofSubRandom-=	1800000L;
+			
 			Config=C;
 			Spam= null; // new Spam(C,this);
-								
+			ManifestInfo.put("info", "1.0");
+			
+	}
+	
+	private void StartProcs() throws Exception {
+		if (Main.Oper!=0) return;
+		if (executor!=null) {
+			Log("Hops: Can't run StartProcs with executor!=null!");
+			return;
+			}
+		
+		executor= Executors.newSingleThreadScheduledExecutor();
+			Runnable ServerOp = new Runnable() {
+				public void run() {
+					try { 
+							DoGarbage();
+							int t0 =(int)(System.currentTimeMillis()/1000);
+							if (FriendOk && LastDoFriend!=0 && (t0-LastDoFriend)>Config.MaxDoFriendOld) {
+								FriendOk=false; //DoFriens!
+								LastFriend=0;
+								}
+							if (!FriendOk) {
+									DoFriends(); 
+									FriendOk=true;
+									LastDoFriend=(int)(System.currentTimeMillis()/1000);
+									}
+							try { SearchExit(); } catch(Exception EX) { Log(Config.GLOG_Bad,"SearchExit: "+EX.getMessage()); }
+							
+							if (Main.Oper==0 && Config.UseBootSequence && !new File(Maildir+"/head/boot").exists() && CVMF3805TMP!=null) try {
+									CreateBoot();
+									} catch(Exception EX) { 
+										if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
+										CVMF3805TMP=null;
+										String ms = EX.getMessage();
+										if (ms.startsWith("@")) Log(Config.GLOG_Server,ms.substring(1)); else Config.EXC(EX, "SCBF2`"+Onion+"`"); 
+										}
+							
+							if (BlackList!=null) try { BlackList.AutoSave(); } catch(Exception EX) { Log(Config.GLOG_Bad,"BlackList AutoSave: "+EX.getMessage()); }
+							} catch(Exception E) { Config.EXC(E, "ServerOp"); }
+					Status |= SrvIdentity.ST_Ok;
+					Log(Config.GLOG_Server,"Server Init Complete. Status `"+getStatus()+"`");
+					}
+				};
+
+			executor.scheduleAtFixedRate(ServerOp,15/* 60 + (7&Stdio.NewRndLong())*/ ,Config.MessagesGarbageEvery, TimeUnit.SECONDS); //TODO Ripiazzare!
+		
+			StatRun = Executors.newSingleThreadScheduledExecutor();
+			Runnable StatOp = new Runnable() {
+				public void run() {
+					try { 
+							SaveStat();
+							} catch(Exception E) { Config.EXC(E, "StatOp"); }
+					}
+				};
+				
+			StatRun.scheduleAtFixedRate(StatOp, 1 ,60, TimeUnit.MINUTES);
+	}
+	
+	public static byte[][] CreateSK(String onion) throws Exception {
+		byte[][] sk = new byte[][] {
+					new byte[32],
+					new byte[16],
+					new byte[32],
+					new byte[16],
+					new byte[32],
+					new byte[16],
+					new byte[0]}
+				;
+		for (int ax=0;ax<6;ax++) Stdio.NewRnd(sk[ax]);
+		sk[6] = onion.toLowerCase().trim().getBytes();
+		return sk;
+	}
+	
+	public void Create(byte[][] sk) throws Exception {
+				
+		File F = new File(Maildir);
+		if (!F.exists()) F.mkdirs();
+			
+		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed","head" }) {
+			F = new File(Maildir+"/"+p);
+			F.mkdir();
+			F.setExecutable(true, true);
+			F.setReadable(true,true);
+			F.setWritable(true, true);
+			if (!F.exists()) throw new Exception("Can' create path `"+Maildir+"/"+p+"`");
+			}
+		
+		byte[] rnd = new byte[512];
+		Stdio.NewRnd(rnd);
+		
+		KeyPair GPG = Stdio.RSAKeyGen(2048);
+		Sale=rnd.clone();
+		SPK = GPG.getPublic();
+		SSK = GPG.getPrivate();
+		Subs = new byte[16][16];
+		for (int ax=0;ax<16;ax++) Stdio.NewRnd(Subs[ax]);
+		
+		byte[] Head = Stdio.MxAccuShifter(new byte[][] {
+					"OnionMail".getBytes(),
+					Stdio.md5(Onion.getBytes()),
+					rnd,
+					Stdio.Public2Arr(GPG.getPublic()),
+					Stdio.Private2Arr(GPG.getPrivate()) ,
+					Stdio.MxAccuShifter(Subs, 1,true) }
+					, Const.MS_Server, true) ;
+		
+		Head = Stdio.AES2Enc(sk[0], sk[1], Head);
+		Head = Stdio.AES2Enc(sk[2], sk[3], Head);
+		Head = Stdio.AES2Enc(sk[4], sk[5], Head);
+		
+		Stdio.file_put_bytes(Maildir+"/head/header", Head);
+		GenCert();
+	NewCreated=true;	
+
+		byte[] sh = new byte[8];
+		Stdio.NewRnd(sh);
+		sh = Stdio.MXImplode(new byte[][] {
+					"OnionMail".getBytes()	,
+					Stdio.Stosx(new long[] { Main.VersionID , Main.getVersion().hashCode() },8) ,
+					sh	,
+					Stdio.md5a(new byte[][] { sh, Onion.toLowerCase().trim().getBytes() })	,
+					new byte[] { 0 ,0 , 0 , 0 }}
+					, 0x13c03c09) ;
+	
+		Stdio.file_put_bytes(Maildir+"/server.bin", sh);
+		
+	}
+	
+	public boolean CheckServerPresent() throws Exception {
+		if (!new File(Maildir+"/server.bin").exists()) {
+				File F = new File(Maildir);
+				String[] ls = F.list();
+				int cx=ls.length;
+				for (int ax=0;ax<cx;ax++) {
+					if (ls[ax].startsWith(".")) continue;
+					if (ls[ax].endsWith(".txt")) continue;
+					if (ls[ax].endsWith(".log")) continue;
+					if (ls[ax].endsWith(".csv")) continue;
+					if (ls[ax].startsWith("rulez.")) continue;
+					if (ls[ax].compareTo("res")==0) continue;
+					if (ls[ax].compareTo("!FIXME!")==0) return true;
+					throw new Exception("@Server directory error: Unknown content or unsupported server type `"+Maildir+"`");
+					}
+				return false;
+				}
+		byte[] sh = Stdio.file_get_bytes(Maildir+"/server.bin");
+		byte[][] F = Stdio.MXExplode(sh, 0x13c03c09);
+		if (new String(F[0]).compareTo("OnionMail")!=0) throw new Exception("@Not an OnionMail server: `"+Maildir+"`");
+		byte[] t = Stdio.md5a(new byte[][] { F[2] , Onion.toLowerCase().trim().getBytes() } );
+		if (!Arrays.equals(t, F[3])) throw new Exception("@This is not `"+Onion+"` in path `"+Maildir+"`");
+		if (F[4][0]!=0) throw new Exception("@This server is not supported by version `"+Main.getVersion()+"`");
+		return true;
+	}
+	
+	public void GenCert() throws Exception {
+		
+		String at = "";
+		if (SSlInfo.containsKey("country")) at+="C="+SSlInfo.get("country")+"\n";
+		if (SSlInfo.containsKey("organization")) at+="O="+SSlInfo.get("organization")+"\n";
+		if (SSlInfo.containsKey("orgunit")) at+="OU="+SSlInfo.get("orgunit")+"\n";
+		if (SSlInfo.containsKey("state")) at+="ST="+SSlInfo.get("state")+"\n";
+		at=at.replace(',',' ');
+		at=at.trim();
+		at=at.replace("\n", ", ");
+		
+		long TimeFrom = 0; 
+		long TimeTo = 0;
+		if (SSlInfo.containsKey("from")) TimeFrom = J.parseInt(SSlInfo.get("from"));
+		if (SSlInfo.containsKey("to")) TimeTo = J.parseInt(SSlInfo.get("to"));
+		
+		if (TimeFrom<1) TimeFrom = System.currentTimeMillis() - (86400000L * Math.abs(Stdio.NewRndLong() % 365)+86400000L);
+		if (TimeTo<1) TimeTo =  System.currentTimeMillis() + (86400000L * Math.abs(Stdio.NewRndLong() % 365)+315360000000L);
+		
+		MyCert = LibSTLS.CreateCert(new KeyPair(SPK,SSK), Onion, TimeFrom, TimeTo, at);
+		LibSTLS.SaveCert(Maildir+"/head/data", Sale, MyCert);
+		
+		Main.echo("\n\t"+J.Spaced("New Cert:", 16)+"`"+J.Limited(Onion, 40)+"`");
+		Main.echo("\n\t"+J.Spaced("From:", 16)+"`"+J.Limited(new Date(TimeFrom).toString(),40)+"`");
+		Main.echo("\n\t"+J.Spaced("To:", 16)+"`"+J.Limited(new Date(TimeTo).toString(), 40)+"`");
+		
+		for (String K:SSlInfo.keySet()) {
+			Main.echo("\n\t"+J.Spaced(K+":", 16)+"`"+J.Limited(SSlInfo.get(K), 40)+"`");
+			} 
+		Main.echo("\n");
+		
+	}
+	
+		
+	public void Open(byte[][] sk) throws Exception {
+		
+		File F = new File(Maildir);
+		if (!F.exists()) throw new Exception("Maildir doesn't exist: `"+Maildir+"`");
+		for (String p : new String[] {  "usr" , "inbox" , "keys" , "log", "feed","head" }) {
+			F = new File(Maildir+"/"+p);
+			if (!F.exists()) throw new Exception("Can' open path `"+Maildir+"/"+p+"`");
+			}
+		
+		if (Config.UseBootSequence && !new File(Maildir+"/head/boot").exists()) CVMF3805TMP = sk.clone(); else CVMF3805TMP=null; 
+		
+		byte[][] Head = new byte[1][];
+		Head[0] = Stdio.file_get_bytes(Maildir+"/head/header");
+		
+		Head[0] = Stdio.AES2Dec(sk[4], sk[5], Head[0]);
+		Head[0] = Stdio.AES2Dec(sk[2], sk[3], Head[0]);
+		Head[0] = Stdio.AES2Dec(sk[0], sk[1], Head[0]);
+		
+		try {
+			Head = Stdio.MxDaccuShifter(Head[0], Const.MS_Server);
+		} catch(Exception E) {
+			throw new Exception("Invalid keyblock or password");
+			}
+		if (new String(Head[0]).compareTo("OnionMail")!=0) throw new Exception("Invalid server header");
+		Sale = Head[2].clone();
+		SPK = Stdio.Arr2Public(Head[3]);
+		SSK = Stdio.Arr2Private(Head[4]);
+		Subs = Stdio.MxDaccuShifter(Head[5], 1);
+		
+		MyCert = LibSTLS.LoadCert(Maildir+"/head/data", Sale);
+			
+		SSLClient = LibSTLS.GetSSLForClient();
+		SSLServer = LibSTLS.GetSSLForServer(MyCert, new KeyPair(SPK,SSK));
+		
+		if (EnterRoute) try { 
+				BlackList = new IPList(this,"smtp"); 
+				} catch(Exception E) { 
+				Config.EXC(E, "IPList: `"+Nick+"`");
+				BlackList=null;
+				}
+		
 			try {
 				byte[] b = Stdio.file_get_bytes(Maildir+"/stats");
 				byte[][] c = Stdio.MxDaccuShifter(b, 0xf385);
@@ -244,226 +513,7 @@ public class SrvIdentity {
 				StatHcount=-1;
 				}
 			
-			ManifestInfo.put("info", "1.0");
-			
-	}
-	
-	private void StartProcs() throws Exception {
-		if (executor!=null) {
-			Log("Hops: Can't run StartProcs with executor!=null!");
-			return;
-			}
-		
-		executor= Executors.newSingleThreadScheduledExecutor();
-			Runnable ServerOp = new Runnable() {
-				public void run() {
-					try { 
-							DoGarbage();
-							int t0 =(int)(System.currentTimeMillis()/1000);
-							if (FriendOk && LastDoFriend!=0 && (t0-LastDoFriend)>Config.MaxDoFriendOld) {
-								FriendOk=false; //DoFriens!
-								LastFriend=0;
-								}
-							if (!FriendOk) {
-									DoFriends(); 
-									FriendOk=true;
-									LastDoFriend=(int)(System.currentTimeMillis()/1000);
-									}
-							try { SearchExit(); } catch(Exception EX) { Log(Config.GLOG_Bad,"SearchExit: "+EX.getMessage()); }
-							
-							if (Config.UseBootSequence && !new File(Maildir+"/boot").exists() && CVMF3805TMP!=null) try {
-								Log(Config.GLOG_Event,"Creating boot sequence");
-								
-								String[] slist = RequildFriendsList();
-								String s0="\n";
-								int cx= slist.length;
-								for (int ax=0;ax<cx;ax++) {
-									String fn="\n"+slist[ax].toLowerCase().trim()+"\n";
-							/*		if (!OnTheSameMachine.contains(fn) && s0.contains(fn)) */ s0+=slist[ax].toLowerCase().trim()+"\n"; //TODO RIABILITA!
-									}
-								
-								s0=s0.trim();
-								slist=s0.split("\\n+");
-								if (slist.length==0 || s0.length()==0) throw new Exception("No server available to build  BootSequence file");
-								String[] info=new String[] { "","" };
-								byte[] rky = Stdio.MXImplode(CVMF3805TMP, 0x7C01F6C7);
-								J.WipeRam(CVMF3805TMP);
-								CVMF3805TMP=null;
-								System.gc();
-								byte[] boot = CreateBootSequence(slist, MaxServerDERKPoint, info, rky);
-								J.WipeRam(rky);
-								rky=null;
-								Stdio.file_put_bytes(Maildir+"/boot", boot);
-								boot=null;
-								System.gc();
-								PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(Maildir+"/sysop.txt", true)));
-								
-								out.println();
-								out.println("----- BEGIN BOOT PASSWORD BLOCK -----");
-								out.println(info[0]);
-								out.println("----- END BOOT PASSWORD BLOCK -----");
-								out.println("----- BEGIN BOOT CONFIRM BLOCK -----");
-								out.println(info[1]);
-								out.println("----- END BOOT CONFIRM BLOCK -----");
-								out.println();
-								out.close();
-								
-								Log("BootSequence created");
-								} catch(Exception EX) { 
-									J.WipeRam(CVMF3805TMP);
-									CVMF3805TMP=null;
-									Config.EXC(EX, "Server(`"+Onion+"`).CreateBootFile"); 
-									}
-							
-							if (BlackList!=null) try { BlackList.AutoSave(); } catch(Exception EX) { Log(Config.GLOG_Bad,"BlackList AutoSave: "+EX.getMessage()); }
-							} catch(Exception E) { Config.EXC(E, "ServerOp"); }
-					}
-				};
-
-			executor.scheduleAtFixedRate(ServerOp,15/* 60 + (7&Stdio.NewRndLong())*/ ,Config.MessagesGarbageEvery, TimeUnit.SECONDS); //TODO Ripiazzare!
-		
-			StatRun = Executors.newSingleThreadScheduledExecutor();
-			Runnable StatOp = new Runnable() {
-				public void run() {
-					try { 
-							SaveStat();
-							} catch(Exception E) { Config.EXC(E, "StatOp"); }
-					}
-				};
-				
-			StatRun.scheduleAtFixedRate(StatOp, 1 ,60, TimeUnit.MINUTES);
-	}
-	
-	public void Create(byte[][] sk) throws Exception {
-				
-		File F = new File(Maildir);
-		if (!F.exists()) F.mkdirs();
-			
-		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed" }) {
-			F = new File(Maildir+"/"+p);
-			F.mkdir();
-			F.setExecutable(true, true);
-			F.setReadable(true,true);
-			F.setWritable(true, true);
-			if (!F.exists()) throw new Exception("Can' create path `"+Maildir+"/"+p+"`");
-			}
-		
-		byte[] rnd = new byte[512];
-		Stdio.NewRnd(rnd);
-		
-		KeyPair GPG = Stdio.RSAKeyGen(2048);
-		Sale=rnd.clone();
-		SPK = GPG.getPublic();
-		SSK = GPG.getPrivate();
-				
-		byte[] Head = Stdio.MxAccuShifter(new byte[][] {
-					"SMTP".getBytes(),
-					Stdio.md5(Onion.getBytes()),
-					rnd,
-					Stdio.Public2Arr(GPG.getPublic()),
-					Stdio.Private2Arr(GPG.getPrivate()) }
-					, Const.MS_Server, true) ;
-		
-		Head = Stdio.AESEnc(Stdio.GetAESKey(sk[0]), sk[1], Head);
-		Head = Stdio.AESDec(Stdio.GetAESKey(sk[2]), sk[3], Head);
-		Head = Stdio.AESEnc(Stdio.GetAESKey(sk[4]), sk[5], Head);
-		
-		Stdio.file_put_bytes(Maildir+"/header", Head);
-		GenCert();
-	NewCreated=true;	
-
-	}
-	
-	public void GenCert() throws Exception {
-		
-		String at = "";
-		if (SSlInfo.containsKey("country")) at+="C="+SSlInfo.get("country")+"\n";
-		if (SSlInfo.containsKey("organization")) at+="O="+SSlInfo.get("organization")+"\n";
-		if (SSlInfo.containsKey("orgunit")) at+="OU="+SSlInfo.get("orgunit")+"\n";
-		if (SSlInfo.containsKey("state")) at+="ST="+SSlInfo.get("state")+"\n";
-		at=at.replace(',',' ');
-		at=at.trim();
-		at=at.replace("\n", ", ");
-		
-		long TimeFrom = 0; 
-		long TimeTo = 0;
-		if (SSlInfo.containsKey("from")) TimeFrom = J.parseInt(SSlInfo.get("from"));
-		if (SSlInfo.containsKey("to")) TimeTo = J.parseInt(SSlInfo.get("to"));
-		
-		if (TimeFrom<1) TimeFrom = System.currentTimeMillis() - (86400000L * Math.abs(Stdio.NewRndLong() % 365)+86400000L);
-		if (TimeTo<1) TimeTo =  System.currentTimeMillis() + (86400000L * Math.abs(Stdio.NewRndLong() % 365)+315360000000L);
-		
-		MyCert = LibSTLS.CreateCert(new KeyPair(SPK,SSK), Onion, TimeFrom, TimeTo, at);
-		LibSTLS.SaveCert(Maildir+"/data", Sale, MyCert);
-		
-		Main.echo("\n\t"+J.Spaced("New Cert:", 16)+"`"+J.Limited(Onion, 40)+"`");
-		Main.echo("\n\t"+J.Spaced("From:", 16)+"`"+J.Limited(new Date(TimeFrom).toString(),40)+"`");
-		Main.echo("\n\t"+J.Spaced("To:", 16)+"`"+J.Limited(new Date(TimeTo).toString(), 40)+"`");
-		
-		for (String K:SSlInfo.keySet()) {
-			Main.echo("\n\t"+J.Spaced(K+":", 16)+"`"+J.Limited(SSlInfo.get(K), 40)+"`");
-			} 
-		Main.echo("\n");
-		
-	}
-	
-	public boolean Boot() throws Exception {
-		if (!new File(Maildir+"/boot").exists()) return false;
-		int st=0;
-		try {
-			Log(Config.GLOG_Server,"Try to boot from network");
-			byte[] boot = Stdio.file_get_bytes(Maildir+"/boot");
-			st=1;
-			boot = RunBootSequence(boot);
-			if (boot==null) throw new Exception("RC6008: No BOOT data found into the network!");
-			byte[][] rky = Stdio.MXExplode(boot,  0x7C01F6C7);
-			st=2;
-			Open(rky);
-		} catch(Exception E) {
-			Log(Config.GLOG_Server,"ServerBoot: `"+Onion+"` ST"+st+" "+E.getMessage());
-			return false;
-		}
-		return true;
-	} 
-	
-	
-	public void Open(byte[][] sk) throws Exception {
-		File F = new File(Maildir);
-		if (!F.exists()) throw new Exception("Maildir doesn't exist: `"+Maildir+"`");
-		for (String p : new String[] {  "usr" , "inbox" , "keys" , "log", "feed" }) {
-			F = new File(Maildir+"/"+p);
-			if (!F.exists()) throw new Exception("Can' open path `"+Maildir+"/"+p+"`");
-			}
-		
-		if (Config.UseBootSequence && !new File(Maildir+"/boot").exists()) CVMF3805TMP = sk.clone(); else CVMF3805TMP=null; 
-		
-		byte[][] Head = new byte[1][];
-		Head[0] = Stdio.file_get_bytes(Maildir+"/header");
-		Head[0] = Stdio.AESDec(Stdio.GetAESKey(sk[4]), sk[5], Head[0]);
-		Head[0] = Stdio.AESEnc(Stdio.GetAESKey(sk[2]), sk[3], Head[0]);
-		Head[0] = Stdio.AESDec(Stdio.GetAESKey(sk[0]), sk[1], Head[0]);
-		try {
-			Head = Stdio.MxDaccuShifter(Head[0], Const.MS_Server);
-		} catch(Exception E) {
-			throw new Exception("Invalid keyblock or password");
-			}
-		if (new String(Head[0]).compareTo("SMTP")!=0) throw new Exception("Invalid server header");
-		Sale = Head[2].clone();
-		SPK = Stdio.Arr2Public(Head[3]);
-		SSK = Stdio.Arr2Private(Head[4]);
-			
-		MyCert = LibSTLS.LoadCert(Maildir+"/data", Sale);
-			
-		SSLClient = LibSTLS.GetSSLForClient();
-		SSLServer = LibSTLS.GetSSLForServer(MyCert, new KeyPair(SPK,SSK));
-		
-		if (EnterRoute) try { 
-				BlackList = new IPList(this,"smtp"); 
-				} catch(Exception E) { 
-				Config.EXC(E, "IPList: `"+Nick+"`");
-				BlackList=null;
-				}
-		
+		Status |= SrvIdentity.ST_Running;
 		StartProcs();
 		}
 	
@@ -489,7 +539,7 @@ public class SrvIdentity {
 		String fn = UFname(local+"@alias")+".alf";
 		if (!new File(fn).exists()) return null;
 		byte[] rw = Stdio.file_get_bytes(fn);
-		byte[][] X = J.DerAesKey(Sale, local);
+		byte[][] X = J.DerAesKey2(Sale, local);
 		rw = Stdio.AES2Dec(X[0], X[1], rw);
 		X = Stdio.MxDaccuShifter(rw, Const.MX_Alias);
 		return new String(X[0]);
@@ -516,7 +566,7 @@ public class SrvIdentity {
 		String fn = UFname(alias+"@alias")+".alf";
 		byte[][] X = new byte[][] { local.getBytes(), alias.getBytes() };
 		byte[] rw = Stdio.MxAccuShifter(X,Const.MX_Alias,true);
-		X = J.DerAesKey(Sale, alias);
+		X = J.DerAesKey2(Sale, alias);
 		rw = Stdio.AES2Enc(X[0], X[1], rw);
 		Stdio.file_put_bytes(fn, rw);
 		X=null;
@@ -719,30 +769,6 @@ public class SrvIdentity {
 		return Stdio.MxDaccuShifter(k, 0x900E);
 		}
 	
-	public static byte[][] KSDecodeASCII(String in,byte[] p) throws Exception {
-		String[] tok = in.split("\\n+");
-		int cx= tok.length;
-		String b64="";
-		
-		for (int ax=0;ax<cx;ax++) b64+=tok[ax].trim();
-		b64=b64.trim();
-		byte[] b = J.Base64Decode(b64);
-		return KSDecode(b,p);
-	}
-	
-	public static String KSEncodeASCII(byte[][] ks,byte[] p) throws Exception {
-		byte[] k = KSEncode(ks,p);
-		String q = J.Base64Encode(k);
-		k=null;
-		String w="";
-		int cx = q.length();
-		for (int ax=0;ax<cx;ax++) {
-			w+=q.charAt(ax);
-			if ((ax&63)==63) w+="\n";
-		}	
-		
-		return w;
-	}
 
 	public long Time() {
 		long tcr = System.currentTimeMillis();
@@ -825,6 +851,8 @@ public class SrvIdentity {
 	public MailingList OpenMailingList(String loc) throws Exception { return MailingList.Open(this, loc);	}
 	
 	public void SendLocalMessage(String LocalPart,HashMap <String,String> Hldr,MailBoxFile I) throws Exception {
+		StatMsgIn++;
+		
 		MailBox M = UsrOpenW(Config,LocalPart);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
@@ -882,6 +910,7 @@ public class SrvIdentity {
 		
 		if (ExitEnterPolicyBlock!=null && !SO.MailTo.endsWith(".onion")) {
 			if (!CanEnterExit(SO.MailTo, false)) throw new PException(503,"Address rejected by the exit policy");
+			StatMsgInet++;
 			}
 		
 		String Server = J.getDomain(SO.MailTo);
@@ -950,7 +979,7 @@ public class SrvIdentity {
 	///////////////////////// RAW SESSION /////////////////////
 		
 	private void RawHeaders(SMTPOutSession SO) throws Exception {
-	
+		
 		SO.SupTLS=false;
 		SO.SupTorm=false;
 		SMTPReply Re = null;
@@ -974,7 +1003,7 @@ public class SrvIdentity {
 				}
 		
 		if (SO.SupTLS && usalo) { //TODO CHECKSSLNonTorM
-				if (Config.Debug) Log("SSL Connect to `"+SO.HostName+"` "+SO.RS.getInetAddress().toString());
+				if (Config.Debug) Log("SSL Connect to `"+SO.HostName+"` -> `"+SO.RS.getInetAddress().toString()+"`");
 				Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"STARTTLS");
 				if (Re.Code>199 || Re.Code<300) {
 					SSLSocket SS = LibSTLS.ConnectSSL(SO.RS, SSLClient,SO.HostName);
@@ -1269,7 +1298,7 @@ public class SrvIdentity {
 
 	public Spam GetSpamHinstance() { return Spam; } 
 	public boolean isSpam(String addr) { return Spam.isSpam(SrvIdentity.SpamList, addr); }
-	public void AddSpam(String addr) throws Exception { Spam.UsrAddList(SrvIdentity.SpamList, addr); }
+	public void AddSpam(String addr) throws Exception { Spam.ProcList(SrvIdentity.SpamList, new String[] { addr } , null); }
 	public String SpamProc(int id) throws Exception { return Spam.UsrProcList(SrvIdentity.SpamList, id); }
 		
 	public void DoGarbage() throws Exception {
@@ -1539,6 +1568,7 @@ public class SrvIdentity {
 		
 		private void DoFriends() throws Exception {
 		SrvManifest M=null;	
+		Status |= SrvIdentity.ST_FriendRun;
 		Log("Begin DoFriends\n");
 		HashMap <String,String> net = new HashMap <String,String>();
 		String[] FriendServer = RequildFriendsList();
@@ -1582,6 +1612,8 @@ public class SrvIdentity {
 			
 		Log("DoFriends Complete\n");
 		LastFriend=0;
+		Status &= -1 ^ SrvIdentity.ST_FriendRun;
+		Status |= SrvIdentity.ST_FriendOk;
 		}
 	
 		private void SearchExit() throws Exception {
@@ -1842,287 +1874,42 @@ public class SrvIdentity {
 		
 		//////////////
 		
-		public byte[][] SrvCreateRemoteKey(String oni,int points,byte[] data) throws Exception {
+		public RemoteKSeedInfo[] RemoteDoKCTLAction(String action,String crt, String foronio,String Psw) throws Exception {
 			
-			String[][] cmds = new String[][] {
-						new String[]  {"new"}	,
-						new String[]  {"max" , Integer.toString(points) } ,
-						new String[]  {"start"} ,
-						new String[]  {"derk"} ,
-						new String[]  {"start"} }
-					;
-			
-			byte[] ind0 = new byte[512];
-			Stdio.NewRnd(ind0);
-			byte[][] r0 = SrvPushOption(oni,"",cmds,true,ind0,null,null);
-			// { dta,KeyH,DataH,pwl==null ? null : pwl.getBytes() };
-			if (cmds.length==0 || cmds[0].length<2) throw new Exception("@550 No reply correctly to create new DERK via TORM PUSH");
-			
-			String Psw = cmds[0][1];
-			String Cnf = cmds[0][2];
-			
-			byte[] xorer = data.clone();
-			J.xorsb(xorer, r0[0]);
-			
-			byte[][] Cobj = new byte[][] {
-						"BOOT".getBytes()	,		//0 Sign
-						r0[1]						,		//1 KeyHash
-						r0[2]						,		//2 DataHash								
-						oni.getBytes()			,		//3 Onion
-						ind0							,		//4 Init_data
-						xorer						}		//5 Xorer
-						;
-									
-			String StInfo = oni+" "+Psw;
-			String CfInfo = oni+" "+Cnf;
-			xorer = Stdio.MxAccuShifter(Cobj,Const.MX_E_Boot);
-			
-			return new byte[][] { xorer , StInfo.getBytes() , CfInfo.getBytes() } ; //JAVA MERDA!
-		}
-		
-		public byte[] SrvGetRemoteKey(byte[] in) throws Exception {
-			byte[][] Cobj = Stdio.MxDaccuShifter(in, Const.MX_E_Boot);
-			if (new String(Cobj[0]).compareTo("BOOT")!=0) throw new Exception("@Invalid BOOT sequence!");
-			String onion = new String(Cobj[3]);
-			onion=onion.toLowerCase().trim();
-			
-			byte[][] rs = SrvDoDer(Cobj[4], onion,Cobj[1], Cobj[2]); 
-			byte[] dta = rs[0];
-			rs=null;
-			byte[] out = Cobj[5].clone();
-			J.xorsb(out,dta);
-			
-			return out;
-		}
-		
-		public String SvcDoRemotePushArray(String parin) throws Exception {
-			Log("Begin user/sysop remote PUSH");
-			parin=parin.trim();
-			String[] par = parin.split("\\n+");
-			int cx = par.length;
-			String[] cmd = par[0].split("\\s+");
-			cmd[0]=cmd[0].toLowerCase().trim();
-			String re="";
-			String[][] opt = new String[][] { null };
-			try {
-				if ("\nset\nmax\nsstatus\n".contains("\n"+cmd[0]+"\n") && cmd.length>0) {
-						int i = Config.parseInt(cmd[1], "Value", 0, 255);
-						opt[0] = new String[] { cmd[0] , Integer.toString(i) };
-						}
-				
-				if ("\nstart\ndel\n".contains("\n"+cmd[0]+"\n") && cmd.length==1) {
-						opt[0] = new String[] { cmd[0] };
-						}
-				
-				if (opt[0]==null) throw new Exception("Error on command `"+cmd[0]+"`");
-			} catch(Exception E) { throw new Exception("@550 Bad command: "+E.getMessage()); } 
-			
-			for (int ax=1;ax<cx;ax++) {
-				String[] tok = par[ax].trim().split("\\s+");
-				re+="Line: "+J.Spaced(ax+"",4);
-				if (tok.length!=2) {
-					re+="Error invalid line `"+par[ax]+"`";
-					continue;
-					}				
-				
-				String oni = tok[0].trim().toLowerCase();
-				if (!oni.matches("[a-z0-9]{16}\\.onion"))  {
-					re+="Error invalid Server `"+oni+"`";
-					continue;
-					}				
-				
-				try {
-					re+="`"+oni+"` ";
-					String pwl = tok[1].trim();
-					SrvPushOption(oni,pwl,opt,false,null, null,null);
-					try { re+=opt[0][1]; } catch(Exception E) { Config.EXC(E, "Dove"); re+="???"; }
-					} catch(Exception E) {
-						re+="Error: "+E.getMessage();
-						}
-				
-				re+="\n";
-				}
-			
-		return re;
-		}
-		
-		public byte[][] SrvPushOption(String oni,String pwl,String[][] cmds,boolean usessl,byte[] in, byte[] KeyH,byte[] DataH) throws Exception {
-				byte[] dta=null;
-				Socket	RS=null;
-				OutputStream RO=null;
-				BufferedReader RI=null;
-				SMTPReply Re=null;
-				boolean SupTLS=false;
-				boolean SupTORM=false;
-				Log("Push/DERK Options to `"+oni+"`");
-				try {
+			RemoteKSeedInfo[] pw = CreateRemoteKCTLPasswords(crt, foronio, Psw);
+			Log("Begin KCTL Actions for `"+foronio+"`");
+			int cx = pw.length;
+			boolean isDel = action.compareToIgnoreCase("del")==0;
+			String[][] cmds;
+			for (int ax=0;ax<cx;ax++) {
+				if (isDel) {
+					cmds = new String[][] { new String[] { "del" } } ;
+					} else {
+					cmds = new String[][] {
+							action.split("\\s+") 		,
+							new String[] { "cnf" }	}
+							;}
 					
-					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
-					RO = RS.getOutputStream();
-					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
-					Re = new SMTPReply(RI);
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-					SupTLS = SrvSMTPSession.CheckCapab(Re,"STARTTLS");
-					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
-					
-					if (!SupTORM) throw new Exception("Doesn't support TORM");
-					if (usessl) {
-						if (!SupTLS) throw new Exception("Doesn't support STARTTLS");
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"STARTTLS");
-						if (Re.Code<200 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
-						SSLSocket SS = LibSTLS.ConnectSSL(RS, SSLClient,oni);
-						CheckSSL(SS, oni,"PUSH1");
-						
-						RO = null;
-						RO = SS.getOutputStream();
-						RI=null;
-						RI=J.getLineReader(SS.getInputStream());
-						RS=SS;	
-						
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
-						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-						} 
-					
-					int cx= cmds.length;
-					for (int ax=0;ax<cx;ax++) {
-						String cmd = cmds[ax][0].toUpperCase().trim();
-						String rcmd="";
-						if (cmd.compareTo("NEW")==0) {
-							if (usessl) try {
-									Re = SrvSMTPSession.RemoteCmd(RO,RI,"TKIM");
-									if (Re.Code<299 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)"); //chkkk
-									byte[] rnd = Re.getData();
-									try { rnd = Stdio.RSASign(rnd, SSK); } catch(Exception E) { 
-											Config.EXC(E, "Push::TKIM.RSASign(`"+oni+"`)");
-											rnd = new byte[0];
-											}
-									SMTPReply.Send(RO,220,J.Data2Lines(rnd, "TKIM/1.0 REPLY"));
-									Re = new SMTPReply(RI);
-									if (Re.Code<200 || Re.Code>299) Log(Config.GLOG_Event,"PUSH::TKIM: `"+oni+"` Error: "+Re.toString().trim());
-									} catch (Exception EK) {
-										String ms = EK.getMessage();
-										if (ms.startsWith("@")) Log ("Error: `"+oni+"` "+ms.substring(1)); else Config.EXC(EK, "PUSH::TKIM `"+oni+"`");
-									}
-
-							Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM PUSH NEW");
-							if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-							pwl=Re.Msg[0].trim();
-							cmds[ax] = new String[] { "new",Re.Msg[0].trim(), Re.Msg[1].trim() };
-							continue;
-							}
-						
-						if (cmd.compareTo("DERK")==0) {
-							Log("DERK Request in PUSH to `"+oni+"`");
-							Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
-							if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
-							dta = Re.getData();
-							byte[] test = Stdio.sha1(dta);
-							if (KeyH!=null && !Arrays.equals(test, KeyH)) throw new Exception("@500 DERK: Server KEY error `"+oni+"`");
-							if (KeyH==null) KeyH = test;
-							
-							Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM DERK");
-							if (Re.Code!=334) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
-												
-								PublicKey ks = Stdio.Arr2Public(dta);
-								dta = Stdio.RSAEncDataP(in, ks, 256); 
-							
-							
-							SMTPReply rp = new SMTPReply(334, dta,"FUFFA/1.0");
-							rp.Send(RO);
-							
-							Re = new SMTPReply(RI);
-							if (Re.Code>399) throw new Exception("@"+Re.toString().trim()+" (DERK)");
-							dta=Re.getData();
-							test = Stdio.sha1(dta);
-							if (DataH!=null && !Arrays.equals(test, DataH)) throw new Exception("@500 DERK: Server DATA error `"+oni+"`");
-							if (DataH==null) DataH = test;
-							
-							continue;
-						}
-						
-						rcmd="TORM PUSH "+cmd+" "+pwl;
-						int dx=cmds[ax].length;
-						for (int bx=1;bx<dx;bx++) rcmd+=" "+cmds[ax][bx];
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,rcmd);
-					
-						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-						cmds[ax]= new String[] {cmd.toLowerCase() , Re.Msg[0].trim() };
-						}
-					
-					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
-					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
-					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
-					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
-				} catch(Exception E) {
-					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
-					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
-					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
-					Log("PUSH Option `"+oni+"` Error: "+E.toString().replace("@", ""));
-				}
-			return new byte[][] { dta,KeyH,DataH,pwl==null ? null : pwl.getBytes() };
-		}
-	
-		public byte[][] SrvDoDer(byte[] in, String oni,byte[] KeyH,byte[] DataH) throws Exception {
-			
-			Socket	RS=null;
-			OutputStream RO=null;
-			BufferedReader RI=null;
-			SMTPReply Re=null;
-			boolean SupTORM=false;
-			byte[] dta=null;
-			
-			try {
-			
-					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
-					RO = RS.getOutputStream();
-					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
-					Re = new SMTPReply(RI);
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (DERK)"); 
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
-					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
-					if (!SupTORM) throw new Exception("@500 DERK: Server `"+oni+"` doesn't support TORM");
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
-					dta = Re.getData();
-					byte[] test = Stdio.sha1(dta);
-					if (KeyH!=null && !Arrays.equals(test, KeyH)) throw new Exception("@500 DERK: Server KEY error `"+oni+"`");
-					if (KeyH==null) KeyH = test;
-					
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM DERK");
-					if (Re.Code!=334) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
-										
-						PublicKey ks = Stdio.Arr2Public(dta);
-						dta = Stdio.RSAEncDataP(in, ks, 256); 
-					
-					SMTPReply rp = new SMTPReply(334, dta,"FUFFA/1.0");
-					rp.Send(RO);
-					
-					Re = new SMTPReply(RI);
-					if (Re.Code>399) throw new Exception("@"+Re.toString().trim()+" (DERK)");
-					dta=Re.getData();
-					test = Stdio.sha1(dta);
-					if (DataH!=null && !Arrays.equals(test, DataH)) throw new Exception("@500 DERK: Server DATA error `"+oni+"`");
-					if (DataH==null) DataH = test;
-					
-					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception I) {}
-					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
-					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
-					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
-					
-			} catch(Exception E) {
-					try { RS.close(); } catch(Exception Ii) {}
-					try { RO.close(); } catch(Exception Ii) {}
-					try { RI.close(); } catch(Exception Ii) {}
-					throw E;
+				SrvPushOption(pw[ax].Onion,pw[ax].Password,cmds,false,null, null,null);
+				int ix = isDel ? 0 :1;
+				if (ix>cmds.length-1 || cmds[ix].length<2) {
+						pw[ax].Ok=false;
+						Log("Request KCTL `"+pw[ax].Onion+"` GeneralError");
+						pw[ax].Confirm="";
+						continue;
 					}
-					
-		return new byte[][] { dta,KeyH,DataH,null };
+				
+				String cf = cmds[ix][1];
+				pw[ax].Ok = VerifyRemoteKCTLRe(pw[ax].Confirm, cf);
+				Log("Request KCTL `"+pw[ax].Onion+"` "+ (pw[ax].Ok ? "Ok" : "Error: "+cf));
+				pw[ax].Confirm=cf;
+				pw[ax].Password="";
+				
+			}
+			return pw;
 		}
+		
+
 	
 		public void ChechPendingSSL(HashMap <String,String> hls,String[] SrvA) throws Exception { //TODO Da usare!
 			int scx=SrvA.length;
@@ -2278,43 +2065,6 @@ public class SrvIdentity {
 			if (SrvDerToday.size()==0) SrvDerToday = new HashMap <String,int[]>();
 			
 		}
-		
-		public SMTPReply SrvDer(SMTPReply Re,String onion) throws Exception {
-			int TCR = (int)(System.currentTimeMillis()/1000);
-			onion=onion.toLowerCase().trim();
-			
-			if (SrvDerToday.containsKey(onion)) {
-				int[] inf = SrvDerToday.get(onion);
-				if (TCR<inf[0] && inf[1]>3) throw new PException("@550 Too many DERK for `"+onion+"`"+" try before `"+J.TimeStandard(inf[0]+1)+"`");
-				inf[1]++;
-				SrvDerToday.put(onion, inf);
-				} else {
-				SrvDerToday.put(onion, new int[] { TCR+86400, 1 });	
-				}
-			byte[] in = Re.getData();
-			
-			RemoteDerK RK = RemoteDerK.Load(this, onion);
-			if (RK==null) throw new PException("@500 No DERK for `"+onion+"`, please PUSH new!");
-			int s = RK.getStatus();
-			if (s!=1) {
-				if (s==RemoteDerK.ST_Disabled) throw new PException("@550 DERK Disabled for `"+onion+"`");
-				if (s==RemoteDerK.ST_Sfiduciato) throw new PException("@550 DERK Disabled by `ROOT` for `"+onion+"`");
-				throw new PException("@550 DERK Error status `"+s+"` for `"+onion+"`");
-				}
-			
-			s=RK.getCredit();
-			if (s<1) throw new PException("@550 DERK: No credit for `"+onion+"`, please restart!");
-			Log(Config.GLOG_Event,"DERK Request for `"+onion+"`");
-			try { 
-					in = Stdio.RSADecDataP(in, SSK, 256);
-				
-					in =RK.Computa(in);
-				} catch(Exception E) {
-					Config.EXC(E, "SrvDer(`"+onion+"`)");
-					throw new PException("@500 Invalid FUFFA seqence!");
-				}
-			return new SMTPReply(220,in,"DERK/1.0 TCR="+J.TimeStandard(Time()));
-		}		
 
 		public String[] RequildFriendsList() {
 			if (!new File(Maildir+"/friends").exists()) return Config.FriendServer;
@@ -2344,8 +2094,261 @@ public class SrvIdentity {
 				return Config.FriendServer;
 				} 
 		}
+			
+		//////////////////////////////// KCTL Section /////////////////////////////////////////////////
+				
+		public String CreateRemoteKCTL(RemoteKSeedInfo[] Item,String Psw,String foronio) throws Exception {
+			byte[] salt = new byte[32];
+			Stdio.NewRnd(salt);
+			foronio=foronio.toLowerCase().trim();
+			foronio=Stdio.Dump(Stdio.md5a(new byte[][] { salt,foronio.getBytes() })).toLowerCase();
+			String crt=foronio+"\n";
+			int cx = Item.length;
+			for (int ax=0;ax<cx;ax++) {
+				if (!Item[ax].Ok) {
+					Log("KCTL `"+Item[ax].Onion+"` Not Ok");
+					continue;
+					}
+				String oni = Item[ax].Onion.toLowerCase().trim();
+				String ps = Item[ax].Password.trim(); // rawpassword
+				String cnf = Item[ax].Confirm.trim(); //confirmcode
+				String itd = Item[ax].SecData.trim(); //internaldata
+
+				if (oni.length()==0 || ps.length()==0 || cnf.length()==0 || itd.length()==0) {
+					Log("KCTL/Content `"+Item[ax].Onion+"` Not Ok");
+					continue;
+					}
+				
+				crt+=oni+"\t"+ps+"\t"+cnf+"\t"+itd+"\n";
+				}
+			crt=crt.trim();
+			byte[] b0 = crt.getBytes();			//Dati
+			byte[] v0 = Stdio.md5(b0);			//Md5 Dati
+			byte[][] X = J.DerAesKey2(salt, Psw);		
+			b0=Stdio.AES2Enc(X[0], X[1], b0);	//Crittati in AES 256 con sale
+			X = J.DerAesKeyB2(v0, Stdio.sha1a(new byte[][] { Psw.getBytes() , salt })); //Seconda chiave
+			b0=Stdio.AES2Enc(X[0], X[1], b0);
 		
-		private byte[] RunBootSequence(byte[] in) throws Exception {
+			b0 = Stdio.MxAccuShifter(new byte[][] {
+					salt	,
+					v0	,
+					b0	}, Const.MX_RKCTL);
+			
+			J.WipeRam(X);
+			X=null;
+			
+			return J.ASCIISequenceCreate(b0, Const.ASC_KB_KCTL);
+			
+		}
+		
+		public RemoteKSeedInfo[] CreateRemoteKCTLPasswords(String crt, String foronio,String Psw) throws Exception {
+			
+			byte[] b0 = J.ASCIISequenceRead(crt, Const.ASC_KB_KCTL);
+			byte[][] field =Stdio.MxDaccuShifter(b0, Const.MX_RKCTL);
+			byte[] v0 = field[1];
+			byte[] salt = field[0];
+			b0 = field[2];
+			byte[][] X = J.DerAesKeyB2(v0, Stdio.sha1a(new byte[][] { Psw.getBytes() , salt })); //Seconda chiave
+			field=null;
+			b0=Stdio.AES2Dec(X[0], X[1], b0);
+			X = J.DerAesKey2(salt, Psw);	
+			b0=Stdio.AES2Dec(X[0], X[1], b0);
+			J.WipeRam(X);
+			X=null;
+			byte[] v1 = Stdio.md5(b0);
+			if (!Arrays.equals(v0, v1)) throw new Exception("Access Deinied");
+			foronio=foronio.toLowerCase().trim();
+			foronio=Stdio.Dump(Stdio.md5a(new byte[][] { salt,foronio.getBytes() })).toLowerCase();
+			crt = new String(b0);
+			b0=null;
+			
+			String[] li = crt.split("\\n+");
+			if (li[0].compareTo(foronio)!=0) throw new Exception("KCTL: Not for this onion!");
+			
+			int cx = li.length;
+			RemoteKSeedInfo[] RS = new RemoteKSeedInfo[cx-1];
+			for (int ax=1;ax<cx;ax++) {
+				String[] tok = li[ax].split("\\t");
+				if (tok.length!=4) {
+					Log("CreateRemoteKCTLAction: Invalid KCTL line: `"+li[ax]+"`");
+					continue;
+					}
+				int bx=ax-1;
+				RS[bx] = new RemoteKSeedInfo();
+				RS[bx].Onion = tok[0];
+				String rtok = CreateRemoteKCTLToken(tok[3]);
+				RS[bx].Password="#"+rtok;
+				RS[bx].Confirm=tok[tok.length-1];
+				RS[bx].Ok=true;
+				}
+				
+			return RS;
+		}
+		
+		public String CreateRemoteKCTLToken(String intData) throws Exception {
+			long tcr = (int) (Math.floor(System.currentTimeMillis()/86400000));
+			String[] tok = new String[] { Long.toString(tcr,36) , Long.toString( 0x7FFFFFFFFFFFFFFFL & Stdio.NewRndLong() ,36) , "" };
+			byte[] b0 = Stdio.HexData(intData);
+			b0 =  Stdio.md5a(new byte[][] {b0 , tok[0].getBytes(), tok[1].getBytes() });
+			tok[2] = Stdio.Dump(b0).toLowerCase();
+			b0=null;
+			return tok[0]+"-"+tok[1]+"-"+tok[2];
+			}
+		
+		public boolean VerifyRemoteKCTLRe(String intData,String line) throws Exception {
+			String[] tok = line.split("\\s+");
+			if (tok.length<3) return false;
+			byte[] InternalData = Stdio.HexData(intData);
+			String a0 = tok[1].trim();
+			byte[] b0 = Stdio.md5a(new byte[][] { InternalData , a0.getBytes() });
+			String b0s=Stdio.Dump(b0);
+			return tok[2].compareToIgnoreCase(b0s)==0;
+			}
+		
+		///////////////////////////////////// BOOT SECTION ///////////////////////////////////
+		
+		public void CreateBoot() throws Exception {
+			if (CVMF3805TMP==null) throw new Exception("Cant create BOOT without `CVMF3805TMP`");
+							
+			Log("Create BOOT");
+			try {
+						String[] slist = RequildFriendsList();
+						String s0="\n";
+						int cx= slist.length;
+						for (int ax=0;ax<cx;ax++) {
+								String fn="\n"+slist[ax].toLowerCase().trim()+"\n";
+								/*		if (!OnTheSameMachine.contains(fn) && s0.contains(fn)) */ s0+=slist[ax].toLowerCase().trim()+"\n"; //TODO RIABILITA!
+								}
+											
+						s0=s0.trim();
+						slist=s0.split("\\n+");
+						if (slist.length==0 || s0.length()==0) throw new Exception("No server available to build  BootSequence file");
+						RemoteKSeedInfo[] info = new RemoteKSeedInfo[slist.length];
+						byte[] rky = Stdio.MXImplode(CVMF3805TMP, 0x7C01F6C7);		//Implode Server KeyBlock 0x7C01F6C7 is the magic number
+						J.WipeRam(CVMF3805TMP);		//Destroy KeyBlock
+						CVMF3805TMP=null;
+						System.gc();  //try to garbage
+						
+						byte[] boot = CreateBootSequence(slist, MaxServerDERKPoint, info, rky); // Create boot sequence
+						byte[] test = Stdio.sha1(rky); // Key verify
+						J.WipeRam(rky); //Destroy the key
+						rky=null;
+						System.gc();
+						
+						//Create the BOOT file
+						boot = Stdio.MXImplode(new byte[][] {
+												"OnionBoot".getBytes(),				// 0 Magic Number
+												test		,										// 1 Test sha1
+												boot		}										// BOOT sequences 
+													, 0x7C00004);							//Magic number
+											
+						Stdio.file_put_bytes(Maildir+"/head/boot", boot);	//Save the file!
+						boot=null;
+						System.gc();
+						
+						//Create the KCTL ASCII SEQUENCE
+						String Pwls = J.GenPassword(16, 8);
+						String KCTL = CreateRemoteKCTL(info,Pwls,Onion);
+						//Try to send it to the sysop ...
+						try {
+								String secW = J.RandomString(8);
+								
+								HashMap <String,String> H = SrvSMTPSession.ClassicHeaders("server@"+Onion, "sysop@"+Onion);
+								H.put("subject", "Server BOOT informations");
+								String boundary="===="+J.RandomString(32)+"=";
+								H.put("mime-version", "1.0");
+								H.put("content-type","multipart/mixed;  boundary=\""+boundary+"\"");
+								
+								String msg = "This is a multi-part message in MIME format.\n\n--"+boundary+"\n";
+									msg+="Content-Type: text/plain; charset=UTF-8\n";
+									msg+="Content-Transfer-Encoding: 8bit\n\n";
+									msg+="This is the KCTL sequence to remote control the boot sequence\n";
+									msg+="of the server.\nThe password is:\n"+Pwls+"\n\n";
+									msg+="Use this to destroy/lock/unlock the remote keys.\n\n";
+									msg+="To avoid fake messages compares the code with the following in the logs on this server.\n";
+									msg+="Server: "+Nick+"\n";
+									msg+="SECRET CODE `"+secW+"`\n\n";
+									msg+="--"+boundary+"\n";
+									msg+="Content-Type: text/plain; name=\"KCTL_SEQUENCE.txt\"\n";
+									msg+="Content-Disposition: attachment; filename=\"KCTL_SEQUENCE.txt\"\n";
+									msg+="Content-Transfer-Encoding: 8bit\n\n";
+									msg+=KCTL.replace("\r", "")+"\n--"+boundary+"--\n\n";
+								Log(Config.GLOG_Server,"Sending KCTL to sysop user");
+								SendLocalMessage("sysop",H,msg);
+								Log(Config.GLOG_Server,"SECRET CODE `"+secW+"`");
+							} catch(Exception E) {
+								// ... or save to the sysop.txt
+								Config.EXC(E, "SaveKTCL");
+								Log(Config.GLOG_Server,"Saving KCTL data to sysop.txt");
+								PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(Maildir+"/sysop.txt", true)));
+								out.println("KCTL: Password: "+Pwls);
+								out.println();
+								out.println(KCTL);
+								out.close();
+							}
+				
+						//Apply keyblock delete policy
+						if (Main.NoDelKeys==false &&	new File(Maildir+"/boot").exists() && new File(Maildir+"/keyblock.txt").exists()) {
+								Log(Config.GLOG_Server,"KeyBlock removed after boot Save");
+								try { J.Wipe(Maildir+"/keyblock.txt", false); } catch(Exception E) { Config.EXC(E, "SPRKD "+Onion); }
+								}
+						
+				Log("BootSequence created");
+						} catch(Exception EX) {
+									//On error wipe the KeyBlock
+									if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
+									CVMF3805TMP=null;
+									Config.EXC(EX, "SCBF`"+Onion+"`"); 
+						}		
+			
+		}
+		
+		/**
+		 * Boot the server
+		 *  
+		 * **/
+		public boolean Boot() throws Exception {
+		if (!new File(Maildir+"/head/boot").exists()) return false;
+		Status |= SrvIdentity.ST_Booting;
+		int st=0;
+		try {
+			Log(Config.GLOG_Server,"Try to boot from network");
+			byte[] boot = Stdio.file_get_bytes(Maildir+"/head/boot");
+			st=1;
+			byte[][] field = Stdio.MXExplode(boot, 0x7C00004);
+			if (!new String(field[0]).contains("OnionBoot")) {
+					Status = SrvIdentity.ST_Error;
+					throw new Exception("RC6007: Invalid BOOT file");
+					}
+						
+			byte[] test = field[1];
+			boot = field[2];
+			field=null;
+			boot = RunBootSequence(boot,test);
+
+			if (boot==null) {
+					Status = SrvIdentity.ST_Error;
+					throw new Exception("RC6008: No BOOT data found into the network!");
+					}
+			
+			Log(Config.GLOG_Server,"Opening server by boot");
+			byte[][] rky = Stdio.MXExplode(boot,  0x7C01F6C7);
+			st=2;
+			Open(rky);
+		} catch(Exception E) {
+			Log(Config.GLOG_Server,"ServerBoot: `"+Onion+"` ST"+st+" "+E.getMessage());
+			Status = SrvIdentity.ST_Error;
+			return false;
+		}
+		Status |= SrvIdentity.ST_BootOk;
+		Log("Server BOOT complete!");
+		return true;
+	} 
+		
+		/**
+		 * Do the boot sequence 
+		 * **/
+		private byte[] RunBootSequence(byte[] in,byte[] test) throws Exception {
 			byte[][] boo = Stdio.MxDaccuShifter(in,  Const.MX_1_Boot);
 			int cx=boo.length;
 			Log(Config.GLOG_Server,"Running BOOT sequence");
@@ -2354,7 +2357,11 @@ public class SrvIdentity {
 				if (bt.length==0) continue;
 				try {
 					byte[] out = SrvGetRemoteKey(bt);
-					if (out!=null && out.length!=0) return out;
+					if (out!=null && out.length!=0) {
+							byte[] t = Stdio.sha1(out);
+							if (!Arrays.equals(t, test)) throw new Exception("Wrong DERK F(x)");
+							return out;
+							}
 				} catch(Exception E) {
 					Log("Boot Sequence `"+ax+"` Error: "+E.getMessage());
 				}
@@ -2362,25 +2369,610 @@ public class SrvIdentity {
 			return null;
 		}
 		
-		public byte[] CreateBootSequence(String[] SrvA,int points,String[] info,byte[] data) throws Exception {
+		
+		/** 
+		 * INTERNAL
+		 * Create the boot sequence
+		 * SrvA	<- Array of servers hostname
+		 * info <- Pointer to new RemoteKSeedInfo[SrvA.lenth]
+		 * data <- Data to store.  
+		 * **/
+		private  byte[] CreateBootSequence(String[] SrvA,int points,RemoteKSeedInfo[] info,byte[] data) throws Exception {
 			int scx = SrvA.length;
 			byte[][] boot = new byte[scx][];
+			int okb=0;
 			for (int sax =0;sax<scx;sax++) {
 				try {
-					byte[][] r = SrvCreateRemoteKey(SrvA[sax],points,data.clone());
-					boot[sax]=r[0];
-					info[0]+=new String(r[1])+"\n";
-					info[1]+=new String(r[2])+"\n";
-					//return new byte[][] { xorer , StInfo.getBytes() , CfInfo.getBytes() } ; //JAVA MERDA!
+					RemoteKSeedInfo r = SrvCreateRemoteKey(SrvA[sax],points,data.clone());
+					boot[sax]=r.bytes;
+					r.bytes=null;
+					info[sax]=r;
+					info[sax].Ok=true;
+					okb++;
 				} catch(Exception E) {
 					boot[sax]=new byte[0];
+					info[sax] = new RemoteKSeedInfo();
+					info[sax].Onion = SrvA[sax];
+					info[sax].Ok=false;
 					String ms = E.getMessage();
 					if (ms.startsWith("@")) Log("Server: `"+SrvA[sax]+"` "+ms.substring(1)); else Config.EXC(E, "CreateBootSeq(`"+SrvA[sax]+"`)");
 				}
+			if (okb<Config.MinBootDerks) throw new Exception("@Unable to create the BOOT / DERK / F(x) sequence. Participating too few servers. `"+okb+"`");
 			}
 			return Stdio.MxAccuShifter(boot, Const.MX_1_Boot);
 		}
 		
+		/**
+		 * Execute a single BOOT sequence
+		 * 
+		 * */
+		public byte[] SrvGetRemoteKey(byte[] in) throws Exception {
+			byte[][] Cobj = Stdio.MxDaccuShifter(in, Const.MX_E_Boot);
+			if (new String(Cobj[0]).compareTo("DERK")!=0) throw new Exception("@Invalid BOOT sequence!");
+			String onion = new String(Cobj[3]);
+			onion=onion.toLowerCase().trim();
+			
+			byte[][] rs = SrvDoDer(Cobj[4], onion,Cobj[1], Cobj[2]); 
+			
+			byte[] verakey = J.Der2048(Cobj[5], rs[0]); //rand , REMOTE DERK F(x)
+			byte[] kblo = Stdio.AESDecMulP(verakey, Cobj[6]);
+			J.WipeRam(verakey);
+			verakey=null;
+			return kblo;
+		}
+		
+		/*
+		 * 
+DERK/boot
+
+byte[][] Cobj = new byte[][] {
+						"DERK".getBytes()	,		//0 Sign
+						r0[1]						,		//1 KeyHash
+						r0[2]						,		//2 DataHash								
+						oni.getBytes()			,		//3 Onion
+						ind0							,		//4 Init_data
+						locrnd						,		//5 rand
+						kblo							}		//6 kblo
+						;
+	
+
+		 * 
+		 * */
+		
+		
+		/////////// DERK Client /////////////// ////////////////////////////////////////// DERK SECTION ////////////////////
+		/**
+		 * Create a remote DERK
+		 **/
+		public RemoteKSeedInfo SrvCreateRemoteKey(String oni,int points,byte[] data) throws Exception {
+			
+			String[][] cmds = new String[][] {	// TORM PUSH script
+						new String[]  {"new"}	,		// create DERK
+						new String[]  {"gets"} ,		// get sec data
+						new String[]  {"max" , Integer.toString(points) } ,	// set points 
+						new String[]  {"start"} ,		// restart 
+						new String[]  {"derk"} ,		// doDerk 
+						new String[]  {"start"} }		// restart 
+					;
+			
+			byte[] ind0 = new byte[512];		//x for remote DERK f(x)
+			Stdio.NewRnd(ind0);
+			byte[][] r0 = SrvPushOption(oni,"",cmds,true,ind0,null,null);
+			// { dta,KeyH,DataH,pwl==null ? null : pwl.getBytes() };
+			if (cmds.length==0 || cmds[0].length<2) throw new Exception("@550 No reply correctly to create new DERK via TORM PUSH");
+			
+			String Psw = cmds[0][1];
+			String Cnf = cmds[0][2];
+			
+			byte[] locrnd = new byte[128];
+			Stdio.NewRnd(locrnd);
+			byte[] verakey = J.Der2048(locrnd, r0[0]);
+			byte[] kblo = Stdio.AESEncMulP(verakey, data);
+			J.WipeRam(verakey);
+			verakey=null;
+			
+			byte[][] Cobj = new byte[][] {
+						"DERK".getBytes()	,		//0 Sign
+						r0[1]						,		//1 KeyHash
+						r0[2]						,		//2 DataHash								
+						oni.getBytes()			,		//3 Onion
+						ind0							,		//4 Init_data
+						locrnd						,		//5 rand
+						kblo							}		//6 kblo
+						;
+	
+			byte[] rderk = Stdio.MxAccuShifter(Cobj,Const.MX_E_Boot);
+			RemoteKSeedInfo rt = new RemoteKSeedInfo();
+			rt.bytes = rderk;
+			rt.Onion = oni.toLowerCase().trim();
+			rt.Confirm=Cnf.trim();
+			rt.Password = Psw.trim();
+			rt.SecData = cmds[1][1].trim();
+			return rt;
+		}
+	
+	
+		/**
+		 * Execute some PUSH/DERK options. 
+		 * **/
+		
+		public String SvcDoRemotePushArray(String parin) throws Exception {
+			Log("Begin user/sysop remote PUSH");
+			parin=parin.trim();
+			String[] par = parin.split("\\n+");
+			int cx = par.length;
+			String[] cmd = par[0].split("\\s+");
+			cmd[0]=cmd[0].toLowerCase().trim();
+			String re="";
+			String[][] opt = new String[][] { null };
+			try {
+				if ("\nset\nmax\nsstatus\n".contains("\n"+cmd[0]+"\n") && cmd.length>0) {
+						int i = Config.parseInt(cmd[1], "Value", 0, 255);
+						opt[0] = new String[] { cmd[0] , Integer.toString(i) };
+						}
+				
+				if ("\nstart\ndel\n".contains("\n"+cmd[0]+"\n") && cmd.length==1) {
+						opt[0] = new String[] { cmd[0] };
+						}
+				
+				if (opt[0]==null) throw new Exception("Error on command `"+cmd[0]+"`");
+			} catch(Exception E) { throw new Exception("@550 Bad command: "+E.getMessage()); } 
+			
+			for (int ax=1;ax<cx;ax++) {
+				String[] tok = par[ax].trim().split("\\s+");
+				re+="Line: "+J.Spaced(ax+"",4);
+				if (tok.length!=2) {
+					re+="Error invalid line `"+par[ax]+"`";
+					continue;
+					}				
+				
+				String oni = tok[0].trim().toLowerCase();
+				if (!oni.matches("[a-z0-9]{16}\\.onion"))  {
+					re+="Error invalid Server `"+oni+"`";
+					continue;
+					}				
+				
+				try {
+					re+="`"+oni+"` ";
+					String pwl = tok[1].trim();
+					SrvPushOption(oni,pwl,opt,false,null, null,null);
+					try { re+=opt[0][1]; } catch(Exception E) { Config.EXC(E, "Dove"); re+="???"; }
+					} catch(Exception E) {
+						re+="Error: "+E.getMessage();
+						}
+				
+				re+="\n";
+				}
+			
+		return re;
+		}
+		
+		/**
+		 * Execute a PUSH/DERK sequence script
+		 * 
+		 * **/
+		
+		public byte[][] SrvPushOption(String oni,String pwl,String[][] cmds,boolean usessl,byte[] in, byte[] KeyH,byte[] DataH) throws Exception {
+				byte[] dta=null;
+				Socket	RS=null;
+				OutputStream RO=null;
+				BufferedReader RI=null;
+				SMTPReply Re=null;
+				boolean SupTLS=false;
+				boolean SupTORM=false;
+				
+				Log("Push/DERK Options to `"+oni+"`");
+				try {
+					
+					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
+					RO = RS.getOutputStream();
+					RI  =J.getLineReader(RS.getInputStream());
+					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					Re = new SMTPReply(RI);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+					SupTLS = SrvSMTPSession.CheckCapab(Re,"STARTTLS");
+					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
+					
+					if (!SupTORM) throw new Exception("Doesn't support TORM");
+					if (usessl) {
+						if (!SupTLS) throw new Exception("Doesn't support STARTTLS");
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"STARTTLS");
+						if (Re.Code<200 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
+						SSLSocket SS = LibSTLS.ConnectSSL(RS, SSLClient,oni);
+						CheckSSL(SS, oni,"PUSH1");
+						
+						RO = null;
+						RO = SS.getOutputStream();
+						RI=null;
+						RI=J.getLineReader(SS.getInputStream());
+						RS=SS;	
+						
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
+						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+						} 
+					
+					int cx= cmds.length;
+					for (int ax=0;ax<cx;ax++) {
+						String cmd = cmds[ax][0].toUpperCase().trim();
+						String rcmd="";
+						if (cmd.compareTo("NEW")==0) {
+							if (usessl) try {
+									Re = SrvSMTPSession.RemoteCmd(RO,RI,"TKIM");
+									if (Re.Code<299 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)"); //chkkk
+									byte[] rnd = Re.getData();
+									try { rnd = Stdio.RSASign(rnd, SSK); } catch(Exception E) { 
+											Config.EXC(E, "Push::TKIM.RSASign(`"+oni+"`)");
+											rnd = new byte[0];
+											}
+									SMTPReply.Send(RO,220,J.Data2Lines(rnd, "TKIM/1.0 REPLY"));
+									Re = new SMTPReply(RI);
+									if (Re.Code<200 || Re.Code>299) Log(Config.GLOG_Event,"PUSH::TKIM: `"+oni+"` Error: "+Re.toString().trim());
+									} catch (Exception EK) {
+										String ms = EK.getMessage();
+										if (ms.startsWith("@")) Log ("Error: `"+oni+"` "+ms.substring(1)); else Config.EXC(EK, "PUSH::TKIM `"+oni+"`");
+									}
+
+							Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM PUSH NEW");
+							if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+							pwl=Re.Msg[0].trim();
+							cmds[ax] = new String[] { "new",Re.Msg[0].trim(), Re.Msg[1].trim() };
+							continue;
+							}
+						
+						if (cmd.compareTo("DERK")==0) {
+							byte[][] X = DoRawDERK(RO, RI, in, KeyH, DataH, oni);
+							dta = X[0];
+							KeyH=X[1];
+							DataH=X[2];
+							continue;
+							}
+						
+						rcmd="TORM PUSH "+cmd+" "+pwl;
+						int dx=cmds[ax].length;
+						for (int bx=1;bx<dx;bx++) rcmd+=" "+cmds[ax][bx];
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,rcmd);
+					
+						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+						cmds[ax]= new String[] {cmd.toLowerCase() , Re.Msg[0].trim() };
+						}
+					
+					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
+					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
+					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
+					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
+				} catch(Exception E) {
+					if (RS!=null && RS.isConnected()) try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
+					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
+					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
+					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
+					Log("PUSH Option `"+oni+"` Error: "+E.toString().replace("@", ""));
+				}
+			return new byte[][] { dta,KeyH,DataH,pwl==null ? null : pwl.getBytes() };
+		}
+	
+		/**
+		 * Execute a Single remote DERK f(x) action.
+		 * 
+		 * **/
+		
+		public byte[][] SrvDoDer(byte[] in, String oni,byte[] KeyH,byte[] DataH) throws Exception {
+			byte[][] X=null;
+			
+			Socket	RS=null;
+			OutputStream RO=null;
+			BufferedReader RI=null;
+			SMTPReply Re=null;
+			boolean SupTORM=false;
+			byte[] dta=null;
+			
+			try {
+			
+					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
+					RO = RS.getOutputStream();
+					RI  =J.getLineReader(RS.getInputStream());
+					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					Re = new SMTPReply(RI);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (DERK)"); 
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
+					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
+					if (!SupTORM) throw new Exception("@500 DERK: Server `"+oni+"` doesn't support TORM");
+					
+					X = DoRawDERK(RO,RI,in,KeyH,DataH,oni);
+										
+					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception I) {}
+					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
+					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
+					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
+					
+			} catch(Exception E) {
+					try { RS.close(); } catch(Exception Ii) {}
+					try { RO.close(); } catch(Exception Ii) {}
+					try { RI.close(); } catch(Exception Ii) {}
+					throw E;
+					}
+					
+		return X;
+		}
+		
+		/**
+		 * Raw Client DERK operation into an opened SMTP session.
+		 * 
+		 * **/
+		
+		public static byte[][] DoRawDERK(OutputStream RO,BufferedReader RI,byte[] in ,byte[] KeyH,byte[] DataH,String oni) throws Exception {
+				SMTPReply Re=null;
+				
+				Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
+				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
+				byte[] dta = Re.getData();
+				byte[] test = Stdio.sha1(dta);
+				if (KeyH!=null && !Arrays.equals(test, KeyH)) throw new Exception("@500 DERK: Server KEY error `"+oni+"`");
+				if (KeyH==null) KeyH = test;
+				
+				Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM DERK");
+				if (Re.Code!=334) throw new Exception("@"+Re.toString().trim()+ " (DERK)");
+				
+				PublicKey ks = Stdio.Arr2Public(dta);
+				
+				byte[] key = new byte[32];
+				byte[] iv = new byte[16];
+				Stdio.NewRnd(key);
+				Stdio.NewRnd(iv);
+				in = Stdio.MxAccuShifter(new byte[][] { key, iv, in},Const.MX_DERK);
+				dta = Stdio.RSAEncDataP(in, ks, 256); 
+					
+				SMTPReply rp = new SMTPReply(334, dta,"FUFFA/1.0");
+				rp.Send(RO);
+					
+				Re = new SMTPReply(RI);
+				if (Re.Code>399) throw new Exception("@"+Re.toString().trim()+" (DERK)");
+				dta=Re.getData();
+				try { dta = Stdio.AES2Dec(key, iv,dta); } catch(Exception E) { throw new Exception("@550 Invalid Return AES Key"); }
+				
+				test = Stdio.sha1(dta);
+				if (DataH!=null && !Arrays.equals(test, DataH)) throw new Exception("@500 DERK: Server DATA error `"+oni+"`");
+				if (DataH==null) DataH = test;
+				
+			return new byte[][] { dta, KeyH,DataH,null };
+			
+		}
+		
+		/////////// DERK SERVER //////////
+		
+		/**
+		 * Server operation DERK f(x) into an opened server SMTP session.
+		 **/
+		
+		public SMTPReply SrvDer(SMTPReply Re,String onion) throws Exception {
+			int TCR = (int)(System.currentTimeMillis()/1000);
+			onion=onion.toLowerCase().trim();
+			
+			if (SrvDerToday.containsKey(onion)) {
+				int[] inf = SrvDerToday.get(onion);
+				if (TCR<inf[0] && inf[1]>3) throw new PException("@550 Too many DERK for `"+onion+"`"+" try before `"+J.TimeStandard(inf[0]+1)+"`");
+				inf[1]++;
+				SrvDerToday.put(onion, inf);
+				} else {
+				SrvDerToday.put(onion, new int[] { TCR+86400, 1 });	
+				}
+			byte[] in = Re.getData();
+						
+			RemoteDerK RK = RemoteDerK.Load(this, onion);
+			if (RK==null) throw new PException("@500 No DERK for `"+onion+"`, please PUSH new!");
+			int s = RK.getStatus();
+			if (s!=1) {
+				if (s==RemoteDerK.ST_Disabled) throw new PException("@550 DERK Disabled for `"+onion+"`");
+				if (s==RemoteDerK.ST_Sfiduciato) throw new PException("@550 DERK Disabled by `ROOT` for `"+onion+"`");
+				throw new PException("@550 DERK Error status `"+s+"` for `"+onion+"`");
+				}
+			
+			s=RK.getCredit();
+			if (s<1) throw new PException("@550 DERK: No credit for `"+onion+"`, please restart!");
+			Log(Config.GLOG_Event,"DERK Request for `"+onion+"`");
+			byte[][] F;
+			byte[] key;
+			byte[] iv;
+					
+			try { 
+					in = Stdio.RSADecDataP(in, SSK, 256);
+			
+					if (in.length<64) throw new Exception("S");
+					F = Stdio.MxDaccuShifter(in, Const.MX_DERK);
+					if (F.length<3) throw new Exception("F");
+					key=F[0];
+					iv=F[1];
+					in=F[2];
+					if (in.length<1) throw new Exception("D");
+					if (iv.length!=16) throw new Exception("IV");
+					if (key.length!=32) throw new Exception("KEY");
+					
+					in =RK.Computa(in);
+					in = Stdio.AES2Enc(key, iv, in);
+					
+				} catch(Exception E) {
+					Config.EXC(E, "SrvDer(`"+onion+"`)");
+					throw new PException("@500 Invalid FUFFA seqence!");
+				}
+			return new SMTPReply(220,in,"DERK/1.0 TCR="+J.TimeStandard(Time()));
+		}		
+		
+		private String PGPKeyFile(String user) throws Exception {
+			byte[] by = Stdio.md5a(new byte[][] { user.toLowerCase().trim().getBytes() , Sale , user.toUpperCase().trim().getBytes() });
+			long rx=0;
+			for (int ax=1;ax<9;ax++) {
+				rx<<=8;
+				rx^=(int)(255&by[ax]);
+				}
+			return Maildir+"/keys/P"+Long.toString(rx,36)+".dat";
+			}
+		
+		public boolean UserHasPGP(String user) throws Exception { return new File(PGPKeyFile(user)).exists(); }
+		
+		public DynaRes UserSetPGPKey(String PGPKey,String user) throws Exception {
+			String fs = PGPKeyFile(user);
+			PGPKey=J.ParsePGPKey(PGPKey);
+			byte[] K = Stdio.sha256a(new byte[][] { Sale, user.getBytes()} );
+			byte[] b = PGPKey.getBytes();
+			b=Stdio.AESEncMulP(K, b);
+			Stdio.file_put_bytes(fs, b);
+			DynaRes Re = DynaRes.GetHinstance(Config, "mykey", DefaultLang);
+			Re.Par.put("user", user);
+			return Re;
+		}
+		
+		public String UserGetPGPKey(String user) throws Exception {
+			String fs = PGPKeyFile(user);
+			if (new File(fs).exists()) return null;
+			String PGPKey=null;
+			try {
+				byte[] K = Stdio.sha256a(new byte[][] { Sale, user.getBytes()} );
+				byte[] b = Stdio.file_get_bytes(fs);
+				b=Stdio.AESDecMulP(K, b);
+				PGPKey = new String(b);
+				if (!PGPKey.contains(" PGP ") && !PGPKey.contains(" KEY ")) return null;
+			} catch(Exception E) {
+				Config.EXC(E, "UserGetPGPKey");
+				return null;
+			}
+			return PGPKey;
+		}
+		
+		
+		//////////////////// NEWUSER VIA GPG /////////////////
+		
+		public DynaRes CreaNewUserViaPGP(String PGPKey,String user) throws Exception {
+			
+			String smtpp;
+			String pop3p;
+			if (user==null || user.length()==0)  user=J.RandomString(8);
+			user=user.toLowerCase().trim();
+						
+			if (
+						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 
+						user.compareTo("sysop")==0 					|| 
+						user.compareTo("server")==0 					|| 
+						user.endsWith(".onion") 								|| 
+						user.endsWith(".o") 									||
+						user.endsWith(".list") 									|| 
+						(user.endsWith(".sys"))								||
+						(user.endsWith(".app"))								||
+						(user.endsWith(".sysop"))							||
+						(user.endsWith(".op"))								|| 
+						user.startsWith(".") 									|| 
+						user.endsWith(".") 										|| 
+						user.contains("..")) 									{
+				
+				throw new PException("@550 Invalid or reserved user name");						
+				}
+			
+			if (UsrExists(user)) throw new PException("@550 User arleady exists");
+			smtpp=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			pop3p=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			
+			HashMap <String,String> P = new HashMap <String,String>();
+			P.put("lang", DefaultLang);
+			P.put("flag", Const.USR_FLG_TERM);
+			UsrCreate(user,pop3p, smtpp, 1,P);
+					
+			DynaRes re = DynaRes.GetHinstance(Config, "newuser", DefaultLang);
+			re.Par.put("onionmail", user+"@"+Onion);
+			re.Par.put("onion", Onion);
+			re.Par.put("username", user);
+			re.Par.put("pop3password", pop3p);
+			re.Par.put("sha1",LibSTLS.GetCertHash(MyCert)); 
+			re.Par.put("smtppassword",smtpp);
+			re.Par.put("nick", Nick);
+			re.Par.put("MsgSize", Integer.toString(MaxMsgSize));
+			re.Par.put("MaxMsgXuser",  Integer.toString(MaxMsgXuser));
+			re.Par.put("MsgOld",  Integer.toString(Config.MailRetentionDays));
+			re.Par.put("Scrambler", Config.PGPEncryptedDataAlgoStr);
+			re = re.Get();
+						
+			Log(Config.GLOG_Event, "NewUser Created via PGP `"+user+"`");
+			
+			pop3p="X";
+			smtpp="X";
+			pop3p=null;
+			smtpp=null;
+			System.gc();
+
+			byte[] original = re.Res.getBytes();
+			ByteArrayInputStream pubKey = new ByteArrayInputStream(PGPKey.getBytes());
+			byte[] encrypted = PGP.encrypt(original, PGP.readPublicKey(pubKey), null, true, true,new Date(Time()),Config.PGPEncryptedDataAlgo);
+			re.Res = new String(encrypted);
+			
+			if (Config.PGPSpoofVer!=null) try {
+				int cx = Config.PGPSpoofVer.length;
+				if (cx!=0) {
+					int r = 1;
+					if (cx>1) r = (int) ((0x7FFFFFFFFFFFFFFFL & Stdio.NewRndLong()) % cx);
+					String spoof = Config.PGPSpoofVer[r];
+					re.Res = PGP.FilterPGPNSAsMarker(re.Res, spoof);
+					}
+				} catch(Exception E) { Config.EXC(E, "PGP:SpoofNSA"); }
+			
+		return re;			
+		}
+		
+		public void CanAndCountCreateNewUser() throws Exception {
+			if (!NewUsrEnabled) throw new Exception("@550 Operation not permitted");
+			int tcr = (int) Math.floor((System.currentTimeMillis()+TimeSpoofSubRandom) / 1000L);
+			int day =(int) Math.floor(tcr / 86400);
+			int hour = (int) Math.floor(tcr / 3600);
+			
+			if (hour==NewUsrLastHour) {
+				if (NewUsrLastHourCnt>NewUsrMaxXHour) throw new Exception("@550 To many new user for this hour. Try again in next hour.");
+				} else {
+				NewUsrLastHourCnt=0;
+				NewUsrLastHour=hour;
+				}
+			NewUsrLastHourCnt++;
+			
+			if (day==NewUsrLastHour) {
+				if (NewUsrLastDayCnt>NewUsrMaxXDay) throw new Exception("@550 To many new user for this day. Try again tomorrow.");
+				} else {
+				NewUsrLastDayCnt=0;
+				NewUsrLastDay=hour;
+				}
+			NewUsrLastDayCnt++;
+			}
+		
+		public void CanAndCountCreateNewList() throws Exception {
+			if (!NewLstEnabled) throw new Exception("@550 Operation not permitted");
+			int tcr = (int) Math.floor((System.currentTimeMillis()+TimeSpoofSubRandom) / 1000L);
+			int day =(int) Math.floor(tcr / 86400);
+			int hour = (int) Math.floor(tcr / 3600);
+			
+			if (hour==NewLstLastHour) {
+				if (NewLstLastHourCnt>NewLstMaxXHour) throw new Exception("@550 To many new list for this hour. Try again in next hour.");
+				} else {
+				NewLstLastHourCnt=0;
+				NewLstLastHour=hour;
+				}
+			NewLstLastHourCnt++;
+			
+			if (day==NewLstLastHour) {
+				if (NewLstLastDayCnt>NewLstMaxXDay) throw new Exception("@550 To many new list for this day. Try again tomorrow.");
+				} else {
+				NewLstLastDayCnt=0;
+				NewLstLastDay=hour;
+				}
+			NewLstLastDayCnt++;
+			}
+		
+		public String GetRunString() { 
+				long x = TimeSpoofSubRandom;
+				x^=x<<1;
+				return Long.toString(Long.toString(x,36).hashCode(),36); 
+				}
+		
+		// Log functions
+		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server, Nick, st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server, Nick, st); 	}
+
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

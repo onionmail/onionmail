@@ -152,7 +152,8 @@ public class ControlService extends Thread {
 	
 	public void Log(String st) { Config.GlobalLog(Config.GLOG_Server, "CTRL_S", st); 	}
 	public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server, "CTRL_S", st); 	}	
-	
+
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
 
 	

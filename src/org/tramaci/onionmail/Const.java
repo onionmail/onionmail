@@ -29,9 +29,12 @@ public class Const {
 		public static final int MX_CertChain=		0x1A0A;
 		public static final int MX_Friends=				0x1A0B;
 		public static final int MX_Alias=					0x1A0C;
+		public static final int MX_DERK=				0x7310;
 		
 		public static final int MX_E_Boot=				0x7C01;
 		public static final int MX_1_Boot=				0x7C00;
+		
+		public static final int MX_RKCTL=				0xfc4a;
 		
 		public static final int MS_Server = 			0x701;
 		
@@ -50,5 +53,8 @@ public class Const {
 		public static final String Manifest_Splitter="-:-";
 		public static final String TormVer="1.0";
 		
-	
+		public static final String ASC_KB_KCTL = "KCTL";
+		public static final String SRV_PRIV="#Server/Private#";
+		
+		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify	
 }

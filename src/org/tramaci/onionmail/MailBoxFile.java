@@ -18,22 +18,25 @@
  */
 
 package org.tramaci.onionmail;
-
+//TODO KEY 256
 
 import java.io.EOFException;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.Arrays;
 
 import javax.crypto.SecretKey;
 
 public class MailBoxFile {
-	private static final long MagicNumber =Long.parseLong("mailboxfile2",36);
+	private static final String InternalEncoding="UTF-8";
+	private static final long MagicNumber =Long.parseLong("mailboxfile3",36);
 	private static final int KBSize=256;
 	
-	private SecretKey[] KEY= new SecretKey[4];
-	private byte[][] IV = new byte[4][16];
+	private byte[] KEY= null;
+	private byte[] FKEY = null;
+	private byte[] FIV = new byte[16];
 	
 	private RandomAccessFile O =null;
 	private int mode=0;
@@ -42,7 +45,7 @@ public class MailBoxFile {
 	
 	private String FileName=null;
 	
-	private byte[] SrvK = new byte[] {1,2,4,8 };
+	//private byte[] SrvK = new byte[] {1,2,4,8 };
 	public boolean isTEMP = false;
 	
 	public boolean isOpen() { return mode!=0; }
@@ -52,16 +55,15 @@ public class MailBoxFile {
 	public long getStartPox() { return StartPox; }
 	public String getFileName() { return FileName; }
 	
-	public void SetSrvKey(byte[] b) { SrvK = b.clone(); }
+	//public void SetSrvKey(byte[] b) { SrvK = b.clone(); }
 	
 	private void clear() {
 		O=null;
-		for (int ax=0;ax<3;ax++) {
-					KEY[ax] = null;
-				for(int bx=0;bx<16;bx++) {
-					IV[ax][bx] = 0;
-					}
-		}
+		if (KEY!=null) J.WipeRam(KEY);
+		FKEY=null;
+		if (FIV!=null) J.WipeRam(FIV);
+		FIV=null;
+		KEY=null;
 		mode=0;
 		StartPox=0;
 		EndPoint=0;
@@ -70,15 +72,34 @@ public class MailBoxFile {
 		System.gc();
 	}
 	
-	public void OpenW(String filename,PublicKey K) throws Exception {
+	public void OpenW(String filename,PublicKey K,SrvIdentity si) throws Exception {
 		if (mode!=0) throw new Exception("@500 File arleady open");
 		FileName = filename;
-		byte[][] Keys = new byte[6][16];
+		int extra=0;
+		if (si!=null) extra = si.Config.AESKeyRoundExtra;
 		
-		for (int ax=0;ax<6;ax++) Stdio.NewRnd(Keys[ax]);
+		byte[] fkey =new byte[32];
+		Stdio.NewRnd(fkey);
+		FKEY = fkey.clone();
+		FIV = new byte[16];
+		Stdio.NewRnd(FIV);
+		KEY = new byte[144+ (48*extra) ];
+		Stdio.NewRnd(KEY);
 		
-		byte[] bot = Stdio.RSAEncData(Stdio.MxAccuShifter(Keys, 0x4b01, true), K, KBSize);
+		byte[] bot = Stdio.MxAccuShifter(new byte[][] {
+					fkey	,
+					FIV	,
+					KEY	}, 0x4b02,true) ;
 		
+		bot = Stdio.RSAEncData(bot, K, KBSize);
+		byte[] Salt = new byte[16];
+		Stdio.NewRnd(Salt);
+		byte[] Ck = (si==null) ? "OnionMail".getBytes() : si.Sale;
+		byte[][] X  = J.DerAesKeyB2(Ck, Salt);
+		Ck = Stdio.md5(bot);
+		bot = Stdio.AES2Enc(X[0], X[1], bot);
+		bot = Stdio.MxAccuShifter(new byte[][] { Salt,  Ck , bot , new byte[] { (byte)((si==null) ? 0 : 1) } },0x4b01,true);
+				
 		O = new RandomAccessFile(filename,"rw");
 		O.seek(0);
 		O.writeLong(MagicNumber);
@@ -87,42 +108,23 @@ public class MailBoxFile {
 		O.writeShort(bot.length);
 		O.write(bot);
 		
-		KEY = new SecretKey[3];
-		byte[] tmpk = SrvK.clone();
-		for (int ax=0;ax<3;ax++) {
-			IV[ax] = Stdio.md5a(new byte[][] { Keys[ax+3] , tmpk });
-			tmpk = IV[ax].clone();
-			tmpk =Stdio.md5a(new byte[][] { Keys[ax] , tmpk , IV[ax] });
-			KEY[ax] = KEY[ax] = Stdio.GetAESKey(tmpk);
-			}
-		
-		for (int ax=0;ax<16;ax++) tmpk[ax]=0;
-		tmpk=null;
-		
 		mode=1;
 		StartPox = O.getFilePointer();
 	}
 	
 	public void OpenTMP(String filename) throws Exception {
 		FileName = filename;
-		byte[][] Keys = new byte[6][16];
+		byte[] Keys = new byte[32];
 		
-		for (int ax=0;ax<6;ax++) Stdio.NewRnd(Keys[ax]);
+		Stdio.NewRnd(Keys);
 		
 		StartPox=0;
 		isTEMP=true;
 				
-		KEY = new SecretKey[3];
-			byte[] tmpk = SrvK.clone();
-			for (int ax=0;ax<3;ax++) {
-				IV[ax] = Stdio.md5a(new byte[][] { Keys[ax+3] , tmpk });
-				tmpk = IV[ax].clone();
-				tmpk =Stdio.md5a(new byte[][] { Keys[ax] , tmpk , IV[ax] });
-				KEY[ax] = KEY[ax] = Stdio.GetAESKey(tmpk);
-				}
-			
-			for (int ax=0;ax<16;ax++) tmpk[ax]=0;
-			tmpk=null;
+		FKEY = Keys;
+		byte[] FIV = new byte[16];
+		Stdio.NewRnd(FIV);
+		
 		mode=1;
 		O = new RandomAccessFile(filename,"rw");
 		O.seek(0);
@@ -131,26 +133,14 @@ public class MailBoxFile {
 	
 	public void OpenAES(String filename,byte[] Salt,boolean create) throws Exception {
 		FileName = filename;
-		byte[][] Keys = new byte[6][16];
 		
-		for (int ax=0;ax<6;ax++) Keys[ax] = Stdio.md5a(new byte[][] { Keys[5-ax] , Salt }); 
-		for (int ax=0;ax<6;ax++) Keys[ax] = Stdio.md5a(new byte[][] { Salt, Keys[5-ax] });
+		KEY = J.Der2048(Salt, "OnionMail".getBytes());
+		FKEY = Stdio.sha256(KEY);
+		FIV = Stdio.md5a(new byte[][] { KEY ,FKEY });
 		
 		StartPox=0;
 		isTEMP=true;
-				
-		KEY = new SecretKey[3];
-			byte[] tmpk = SrvK.clone();
-			for (int ax=0;ax<3;ax++) {
-				IV[ax] = Stdio.md5a(new byte[][] { Keys[ax+3] , tmpk });
-				tmpk = IV[ax].clone();
-				tmpk =Stdio.md5a(new byte[][] { Keys[ax] , tmpk , IV[ax] });
-				KEY[ax] = KEY[ax] = Stdio.GetAESKey(tmpk);
-				}
-			
-		for (int ax=0;ax<16;ax++) tmpk[ax]=0;
 		
-		tmpk=null;
 		if (create) mode=1; else mode=2;
 		O = new RandomAccessFile(filename,"rw");
 		O.seek(0);
@@ -162,10 +152,10 @@ public class MailBoxFile {
 		O.seek(0);
 	}
 	
-	public void OpenR(String filename,PrivateKey K) throws Exception {
+	public void OpenR(String filename,PrivateKey K,SrvIdentity si) throws Exception {
 		if (mode!=0) throw new Exception("@500 File arleady open");
 		FileName = filename;
-		byte[][] Keys = null;
+		byte[][] F = null;
 		
 		O = new RandomAccessFile(filename,"rw");
 		try {
@@ -180,55 +170,61 @@ public class MailBoxFile {
 			
 			
 			try {
+					F = Stdio.MxDaccuShifter(bot, 0x4b01);
+					byte[] Salt = F[0];
+					bot = F[2];
+					byte m = (byte) ((si==null) ? 0:1);
+					if (m!=F[3][0]) throw new Exception("FileOpenR Mode "+Integer.toString((int)m));
+					byte[] Ck = (si==null) ? "OnionMail".getBytes() : si.Sale;
+					byte[][] X  = J.DerAesKeyB2(Ck, Salt);
+					bot = Stdio.AES2Dec(X[0], X[1], bot);
+					Ck = Stdio.md5(bot);
+					if (!Arrays.equals(Ck, F[1])) throw new Exception("Level 1-K");
 					bot = Stdio.RSADecData(bot, K, KBSize);
-					Keys = Stdio.MxDaccuShifter(bot, 0x4b01);
+					F = Stdio.MxDaccuShifter(bot, 0x4b02);
+					FKEY=F[0];
+					FIV=F[1];
+					KEY=F[2];
 				} catch(Exception E) {
 					O.close();
-					throw new Exception("@500 Invalid USER key");
+					throw new Exception("@500 Invalid USER key: `"+E.getMessage()+"`");
 				}
-		
-			KEY = new SecretKey[3];
-			byte[] tmpk = SrvK.clone();
-			for (int ax=0;ax<3;ax++) {
-				IV[ax] = Stdio.md5a(new byte[][] { Keys[ax+3] , tmpk });
-				tmpk = IV[ax].clone();
-				tmpk =Stdio.md5a(new byte[][] { Keys[ax] , tmpk , IV[ax] });
-				KEY[ax] = KEY[ax] = Stdio.GetAESKey(tmpk);
-				}
-			
-			for (int ax=0;ax<16;ax++) tmpk[ax]=0;
-			tmpk=null;
-			
+			F=null;
 			mode=2;
 			StartPox = O.getFilePointer();
 		} catch(EOFException E) {
-			throw new Exception("@Invalid message file `"+filename+"`");
-			
-		} 
+			throw new Exception("@Invalid message file `"+filename+"` error: "+E.getMessage());
+			} 
 	}
 	
 	public void WriteLn(String st) throws Exception {
 		if (mode!=1) throw new Exception("@500 Bad file access mode");
-		
-		byte[] stv = st.getBytes();
+		long padder=Stdio.NewRndLong();
+		byte[] stv = st.getBytes(MailBoxFile.InternalEncoding);
 		int cx = stv.length;
 		int blo = cx>>4;
 		if ((cx&15)!=0) blo++;
 		int dx = blo<<4;
 		byte[] out = new byte[dx];
-		Stdio.NewRnd(out);
+		for (int ax=cx;ax<dx;ax++) {
+				out[ax] = (byte)(255&padder);
+				padder^=padder<<1;
+				padder^=0x5a5a5a5a5a5a5a5aL;
+				padder^=padder>>2;
+				}
 		System.arraycopy(stv, 0, out, 0, cx);
 		
 		long Pox = O.getFilePointer();
-		byte[] Fix = Stdio.md5a(new byte[][] { IV[2] , Long.toString(Pox,36).getBytes() });
+		byte[] Fix = Stdio.md5a(new byte[][] { FIV , Long.toString(Pox,36).getBytes() });
 		
 		O.writeShort(0x8000 | blo);
 		O.writeShort(cx);
 		
-		if (!isTEMP) {	out = Stdio.AESEnc(KEY[0], IV[0], out);
-								out = Stdio.AESDec(KEY[1], IV[1], out);
-							}
-		out = Stdio.AESEnc(KEY[2],Fix, out);
+		if (!isTEMP) {
+				out = Stdio.AESEncMul(KEY, out);
+				out = Stdio.AESEnc2(FKEY,Fix, out);
+		} else  out = Stdio.AESEnc(Stdio.GetAESKey(Stdio.md5a(new byte[][] { FKEY, Fix })), Fix, out);
+		
 	
 		O.write(out);
 		}
@@ -246,18 +242,18 @@ public class MailBoxFile {
 		O.read(in);
 		if (cx==0) return "";
 		
-		byte[] Fix = Stdio.md5a(new byte[][] { IV[2] , Long.toString(Pox,36).getBytes() });
+		byte[] Fix = Stdio.md5a(new byte[][] { FIV , Long.toString(Pox,36).getBytes() });
 				
-		byte[] out = Stdio.AESDec(KEY[2], Fix, in);
+		byte[] out;
 		
 		if (!isTEMP) {
-					out = Stdio.AESEnc(KEY[1], IV[1], out);
-					out = Stdio.AESDec(KEY[0], IV[0], out);
-					}
-
+				out = Stdio.AESDec2(FKEY, Fix, in);
+				out = Stdio.AESDecMul(KEY,out);
+			} else out = Stdio.AESDec(Stdio.GetAESKey(Stdio.md5a(new byte[][] { FKEY, Fix })), Fix, in);
+		
 		in=new byte[cx];
 		System.arraycopy(out, 0, in, 0, cx);
-		return new String(in,"UTF-8");
+		return new String(in,MailBoxFile.InternalEncoding);
 		}
 		
 	
@@ -339,4 +335,6 @@ public class MailBoxFile {
 	
 
 	public long GetPox() throws Exception { return O.getFilePointer(); }
+
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

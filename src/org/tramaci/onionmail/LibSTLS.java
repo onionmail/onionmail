@@ -216,7 +216,7 @@ public class LibSTLS {
 		javax.security.cert.X509Certificate[] Y = X.getPeerCertificateChain();
 		return Y;
 	}
-	
+	/*
 	public static String GetRemoteOnion(X509Certificate cert,KeyPair TK) throws Exception {
 		
 		BigInteger ID = cert.getSerialNumber();
@@ -238,9 +238,9 @@ public class LibSTLS {
 		String x = cert.getIssuerDN().getName();
 		return x.contains(dts);
 	}
-	
+	*/
 	public static PublicKey getPublicKey(X509Certificate C) throws Exception { return C.getPublicKey(); } //OK
-	
+	/*
 	public static X509Certificate CreateDynaCert(KeyPair KP,PublicKey TK,String OnionFrom,String OnionTo,long Dfrom, int secs) throws Exception {
 		long Secs = secs*1000L;
 		
@@ -285,7 +285,7 @@ public class LibSTLS {
 			
 			return cert;			
 	}
-		
+	*/
 	public static void SaveCert(String file,byte[] pass,X509Certificate cert) throws Exception {
 		byte[] Sale = new byte[16];
 		Stdio.NewRnd(Sale);
@@ -431,8 +431,6 @@ public class LibSTLS {
 		raw = null;
 		return rs;
 		}
-	
-	
-	
-}
 
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
+}

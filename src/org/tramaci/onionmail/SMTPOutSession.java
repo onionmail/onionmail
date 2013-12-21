@@ -73,4 +73,5 @@ public class SMTPOutSession {
 				try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
 		}
 	
+		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

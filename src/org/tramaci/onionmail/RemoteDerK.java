@@ -21,6 +21,7 @@ package org.tramaci.onionmail;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.zip.CRC32;
 
 public class RemoteDerK {
@@ -37,6 +38,7 @@ public class RemoteDerK {
 	public String Password=null;
 	public byte[] LocalKey=null;
 	private byte[] RawData = null;
+	private byte[] PublicToken = null;
 	
 	public static final int ST_Disabled = 0;
 	public static final int ST_Enabled = 1;
@@ -55,7 +57,13 @@ public class RemoteDerK {
 		x^=0xff5a5a5a5a5aL;
 		x^=x<<1;
 		x&=0x7FFFFFFFFFL;
-		return Long.toString(x,36);
+		String s=  Long.toString(x,36);
+		
+		String a0 = J.RandomString(8);
+		byte[] b0 =  Stdio.md5a(new byte[][] { PublicToken , a0.getBytes() });
+		s+=" "+a0+" "+Stdio.Dump(b0); 
+		
+		return s;
 	}
 	
 	public void setCredit(int c) throws Exception {
@@ -87,6 +95,7 @@ public class RemoteDerK {
 			Stdio.NewRnd(LocalKey);
 			InternalData=new byte[32];
 			Stdio.NewRnd(InternalData);
+			PublicToken=new byte[32];
 			credits=0;
 			maxcredit=0;
 			used=0;
@@ -98,6 +107,7 @@ public class RemoteDerK {
 			LocalKey=null;
 			InternalData=null;
 			access=false;
+			PublicToken=null;
 			System.gc();
 			}
 	
@@ -115,10 +125,14 @@ public class RemoteDerK {
 		LocalKey = new byte[64];
 		Stdio.NewRnd(LocalKey);
 		Md5Passw = Stdio.md5a(new byte[][] { InternalData,Password.getBytes() });
+		PublicToken = new byte[16];
+		Stdio.NewRnd(PublicToken);
 		access=true;
 		onion=Oni;
 		RawData=new byte[0];
 		}
+	
+	public String getInternal() throws Exception { return Stdio.Dump(PublicToken);	}
 	
 	public void Save() throws Exception {
 		byte[][] X =  new byte[][] {
@@ -126,7 +140,8 @@ public class RemoteDerK {
 					InternalData,
 					Md5Passw,
 					LocalKey,
-					RawData}
+					RawData,
+					PublicToken}
 					;
 		
 		byte[] raw = Stdio.MxAccuShifter(X, 0xFC4A,true);
@@ -147,6 +162,66 @@ public class RemoteDerK {
 		public int getStatus() { return status; }
 		
 		public boolean isAccess() { return access; }
+		
+		public boolean LogonSec(String cod) throws Exception {
+			
+		/*
+			String fnp = fileName+".otp";
+			HashMap <String,String> OTP = new HashMap <String,String>();
+			
+			cod=cod.toLowerCase().trim();
+			byte[][] X = J.DerAesKey2(Srv.Sale, onion);
+			
+			if (new File(fnp).exists()) {
+				byte[] b8 = Stdio.file_get_bytes(fnp);
+				
+				b8 = Stdio.AES2Dec(X[0], X[1], b8);
+				OTP = J.HashMapUnPack(b8);
+				long tcr = System.currentTimeMillis()/1000;
+				String rm="";
+				for (String K:OTP.keySet()) {
+					String t = OTP.get(K);
+					try { 
+						long t0 = Long.parseLong(t,36);
+						if (tcr>t0) rm+=K.trim()+"\n";
+						} catch(Exception E) { rm+=K.trim()+"\n"; }
+					}
+				rm=rm.trim();
+				String[] rma=rm.split("\\n+");
+				int cx = rma.length;
+				for (int ax=0;ax<cx;ax++) OTP.remove(rma[ax]);
+				if (OTP.size()==0) OTP =  new HashMap <String,String>();
+				}
+			
+			access=false;
+			if (OTP.containsKey(cod)) return false;
+			if (OTP.size()>maxcredit*2) return false;
+			
+			
+			OTP.put(cod, Long.toString((System.currentTimeMillis()/1000)+86500,36));
+			byte[] b8 = J.HashMapPack(OTP);
+			b8 = Stdio.AES2Enc(X[0], X[1], b8);
+			Stdio.file_put_bytes(fnp, b8);
+			b8=null;
+			J.WipeRam(X);
+			X=null;
+			*/
+			
+			long tcr =(int) Math.floor(System.currentTimeMillis()/86400000L);
+	
+			String[] tok = cod.split("\\-");
+
+		//	if (tok.length!=3) return false;
+			long rta = Long.parseLong(tok[0],36);
+		//	if (rta!=tcr) return false;
+			
+			byte[] vr = Stdio.md5a(new byte[][] {PublicToken , tok[0].getBytes(), tok[1].getBytes() }); 
+			String st = Stdio.Dump(vr).toLowerCase();
+
+			if (st.compareToIgnoreCase(tok[2])!=0) return false;
+			access=true;
+			return true;
+			}
 		
 		public boolean Logon(String pwl) throws Exception {
 			byte[] raw = Stdio.md5a(new byte[][] { InternalData,pwl.getBytes() });
@@ -201,6 +276,7 @@ public class RemoteDerK {
 			DK.maxcredit=dta[1];
 			DK.used=dta[2];
 			DK.status=dta[3];
+			DK.PublicToken=X[5];
 			X=null;
 			raw=null;
 			return DK;
@@ -218,8 +294,10 @@ public class RemoteDerK {
 			C.update(onion.getBytes());
 			fn +="-"+ Long.toString(C.getValue(),36);
 			int x = onion.hashCode();
+			x^=Stdio.Peek(2, srv.Sale)<<16;
 			x^=x>>1;
 			x^=Stdio.Peek(0, srv.Sale);
+			x^=Stdio.Peek(4, srv.Sale)<<24;
 			x^=x<<1;
 			x&=0x7FFFFFFF;
 			fn+="-"+Long.toString(x,36);
@@ -261,4 +339,6 @@ public class RemoteDerK {
 			return true;
 			}
 	}
+
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

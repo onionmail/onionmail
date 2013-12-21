@@ -22,6 +22,7 @@ package org.tramaci.onionmail;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -34,6 +35,12 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.zip.CRC32;
+
+import org.bouncycastle.crypto.CipherParameters;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithIV;
 
 
 public class J {
@@ -86,12 +93,38 @@ public class J {
     
     public static String TimeStandard(long tcr,String fus) {
     	String[] M = new String [] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    	String[] S = new String [] { "Sun" , "Mon", "Tue", "Wed", "Thu", "Fri", "Sat","Sun"};
-    	
+    	//String[] S = new String [] { "Sun" , "Mon", "Tue", "Wed", "Thu", "Fri", "Sat","Sun"};
+    	//SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY
     	GregorianCalendar  c = new GregorianCalendar();
     	c.setTime(new Date(tcr));
-    	    	
-    	String q = S[c.get(Calendar.DAY_OF_WEEK)]+", "; //Timestandard!
+    	 
+    	String q = "???";
+    
+    	 switch (c.get(Calendar.DAY_OF_WEEK)) {
+    	 			case Calendar.SUNDAY:
+    	 				q="Sun";
+    	 				break;
+    	 			case Calendar.MONDAY:
+    	 				q="Mon";
+    	 				break;
+    	 			case Calendar.TUESDAY:
+    	 				q="Tue";
+    	 				break;
+    	 			case Calendar.WEDNESDAY:
+    	 				q="Wed";
+    	 				break;
+    	 			case Calendar.THURSDAY:
+    	 				q="Thu";
+    	 				break;
+    	 			case Calendar.FRIDAY:
+    	 				q="Fri";
+    	 				break;
+    	 			case Calendar.SATURDAY:
+    	 				q="Sat";
+    	 				break;
+    	 	}
+    			
+    	q+=", "; //Timestandard!
     	q+=c.get(Calendar.DAY_OF_MONTH)+" ";
     	q+=M[c.get(Calendar.MONTH)]+" ";
     	q+=J.Int2Str(c.get(Calendar.YEAR), 4)+" ";
@@ -596,6 +629,26 @@ public class J {
 		return l.toLowerCase().trim();
 	}
 
+	public static String MailInet2Onion(String MailFrom) throws Exception {
+		String E = "@503 Invalid Onion Exit Route Mail Address '"+MailFrom+"'";
+		String lo = getLocalPart(MailFrom);
+		if (!lo.endsWith(".onion")) throw new Exception(E);
+		String[] Tok = lo.split("\\.+");
+		int cx = Tok.length;
+		if (cx<3) throw new Exception(E);
+		cx-=2;
+		String o = Tok[cx].trim();
+		cx--;
+		String l = "";
+		for (int ax=0;ax<=cx;ax++) {
+			l += Tok[ax].trim();
+			if (ax!=cx) l+=".";
+			}
+		if (l.length()<4) throw new Exception(E);
+		l+="@"+o+".onion";
+		return l.toLowerCase().trim();
+	}
+	
 	public static String[] GetFuckedTokens(String in,String[] cmds) {
 		in=in.trim();
 		String ino=in.toUpperCase();
@@ -638,12 +691,24 @@ public class J {
 				O.close();
 				} catch(Exception I) {
 					try { O.close(); } catch(Exception II) {}
+					throw I;
 				}
-			Stdio.file_put_bytes(fn,"DELETED!\0\0\0\0".getBytes());
+			O=null;
+			System.gc();
+			
+			FileOutputStream Q = new FileOutputStream(fn);
+			Q.flush();
+			Q.close();
+			Q=null;
+			System.gc();
+			
 			File F = new File(fn);
-			if (!F.delete()) throw new Exception("Raw delete");
+			if (!F.delete()) {
+				if (F.exists()) throw new Exception("Can't delete Size="+F.length()); 
+				}
 			} catch(Exception F) { 
-					throw new Exception("@500 Can't delete `"+fn+"` CAUSE="+F.toString());
+				F.printStackTrace();	
+				throw new Exception("@500 Can't delete `"+fn+"` CAUSE="+F.getMessage());
 				}
 		}
 	
@@ -783,7 +848,7 @@ public class J {
 		S.KBL = F[2];
 	}
 	
-	public static byte[][] DerAesKey2(byte[] Sale,String Ders) throws Exception { //TODO Cambiare Key a 256bit
+	public static byte[][] DerAesKey2(byte[] Sale,String Ders) throws Exception { //XXX Cambiare Key a 256bit
 		byte[] b = Stdio.sha512a(new byte[][] { Sale, Ders.getBytes()});
 		byte[][] k = new byte[][] { new byte[32] , new byte[16] };
 		System.arraycopy(b, 0, k[0], 0, 31);
@@ -799,7 +864,7 @@ public class J {
 		return k;
 	}
 	
-	public static byte[][] DerAesKey(byte[] Sale,String Ders) throws Exception { //TODO Cambiare Key a 256bit
+	public static byte[][] DerAesKey(byte[] Sale,String Ders) throws Exception { //XXX Cambiare Key a 256bit
 		byte[] b = Stdio.sha256a(new byte[][] { Sale, Ders.getBytes()});
 		byte[][] k = new byte[2][16];
 		System.arraycopy(b, 0, k[0], 0, 16);
@@ -874,12 +939,16 @@ public class J {
 		}
 	
 	public static void WipeRam(byte[] b) {
+		if (b==null) return;
+		
 		int cx = b.length;
 		for (int ax=0;ax<cx;ax++) b[ax]=0;
 		}
 	public static void WipeRam(byte[][] b) {
+		if (b==null) return;
 		int cx = b.length;
 		for (int ax=0;ax<cx;ax++) {
+			if (b[ax]==null) continue;
 			int dx = b[ax].length;
 			for (int bx=0;bx<dx;bx++)	b[ax][bx]=0;
 			}
@@ -966,5 +1035,221 @@ public class J {
 			}
 	
 	}
+
+	public static String ASCIISequenceCreate(byte[] data, String name) throws Exception {
+		name=name.toUpperCase().trim();
+		CRC32 C = new CRC32();
+		C.update(data);
+		long crc = C.getValue();
+		String w="------ BEGIN "+name+" SEQUENCE ------\r\n";
+		String crt = J.Base64Encode(data);
+		int cx = crt.length();
+				for (int ax=0;ax<cx;ax++) {
+					w+=crt.charAt(ax);
+					if ((ax&63)==63) w+="\r\n";
+				}
+
+		w=w.trim();		
+		w+="\r\n@"+Long.toString(crc,36)+"\r\n------ END "+name+" SEQUENCE ------\r\n";
+		return w;				
+	} 
 	
+	public static String ASCIISequenceReadI(InputStream ino,String name) throws Exception {
+		name=name.toUpperCase().trim();
+		String in="";
+		int by=0;
+		boolean st=false;
+		while(true) {
+			String li = "";
+			 //How to prevent JAVA Buffer overflow!
+			for (int ax=0;ax<1024;ax++) {
+				by = ino.read();
+				if (by==-1) break;
+				li+=(char) (255&by);
+				if (by==13 || by==10) break;
+				}
+			li=li.trim();
+			if (li.contains("------ BEGIN "+name+" SEQUENCE ------")) if (!st) st=true; else throw new Exception("ASCII sequence: `"+name+"` too many marker!");
+			if (!st) continue;
+			in+=li+"\n";
+			if (in.length()>65535) throw new Exception("@500 ASCII sequence: `"+name+"` too long");
+			if (li.contains("------ END "+name+" SEQUENCE ------")) break;
+			if (by==-1) break;
+			}
+		if (!st) throw new Exception("ASCII sequence: ` "+name+"` not found!");
+		return in;
+	}
+	
+	public static byte[] ASCIISequenceRead(String in,String name) throws Exception {
+		name=name.toUpperCase().trim();
+		in=in.trim();
+		String[] lin = in.split("\\n+");
+		int cx = lin.length;
+		String w="";
+		long crcs=-1;
+		int st=0;
+		try {
+			for (int ax=0;ax<cx;ax++) {
+				String li=lin[ax].trim();
+				if (st==0) {
+					if (li.contains("------ BEGIN "+name+" SEQUENCE ------")) st=1;
+					continue;
+					}
+				if (st==1) {
+					if (li.contains("------ END "+name+" SEQUENCE ------")) {
+						st=2;
+						break;
+						}
+					if (li.startsWith("@")) {
+						li=li.substring(1);
+						crcs=Long.parseLong(li,36) & 0xFFFFFFFF;
+						continue;
+						} 
+					
+					if (li.startsWith(";")) continue;
+					w+=li;
+					continue;
+				}
+			}
+		} catch(Exception E) { throw new Exception("Invalid ASCII `"+name+"` Ivalid sequence data"); }
+		if (st!=2) throw new Exception("Invalid ASCII `"+name+"` sequence: Incomplete or not found");
+		if (crcs==-1) throw new Exception("Invalid ASCII `"+name+"` sequence: No @CRC32");
+		byte[] b0;
+		try { b0 = J.Base64Decode(w); } catch(Exception E) { throw new Exception("Invalid ASCII `"+name+"` sequence: Invalid BASE64 Data"); }
+		CRC32 C = new CRC32();
+		C.update(b0);
+		if (C.getValue() !=crcs)  throw new Exception("Invalid ASCII `"+name+"` sequence: Data corrupted");
+		return b0;
+	}
+
+	public static String Compiler() {
+		/*
+		 * Try to certificate  the source/version of program
+		 * 
+		 * */	
+		byte[] mf = new byte[] {0};
+		//Get MANIFEST HASH
+		try {
+			InputStream i = Main.class.getResourceAsStream("/META-INF/MANIFEST.MF");
+			int cx = i.available();
+			mf = new byte[cx];
+			i.read(mf);
+			} catch(Exception E) { mf=Stdio.md5(E.getLocalizedMessage().getBytes());	}
+			String rs="";
+			//Verify Source via DEBUG and Exception
+				try { Config.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { Const.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { DBCrypt.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { DynaRes.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { ExitRouteList.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { LibSTLS.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { MailBox.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { MailBoxFile.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { MailingList.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { Main.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { PGP.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { RemoteDerK.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { SrvIdentity.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { J.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+				try { Stdio.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
+			try { mf = Stdio.md5a(new byte[][] { mf , rs.getBytes("UTF-8") }); } catch(Exception I) {}
+					
+			byte[] vm=new byte[] { 0 };
+			try { vm= Stdio.md5(rs.getBytes("UTF-8")); } catch(Exception I) {}
+			return 
+						Stdio.Dump(mf) + "-" +					//Manifest compiled
+						Long.toHexString(Main.VersionID);//Ver.
+			}
+		
+		public static String GetExceptionalInfo(Exception E) {
+			String St = E.getLocalizedMessage();
+			StackTraceElement[] Sp = E.getStackTrace();
+			int cx = Sp.length;
+			for (int ax=0;ax<cx;ax++) try {
+				if (Sp[ax].isNativeMethod()) continue;
+				St+=Sp[ax].getClassName()+"\t"+Sp[ax].getFileName()+"\t"+Sp[ax].getLineNumber()+"\t"+Sp[ax].getMethodName()+"\t"+Sp[ax].getClassName()+"\n";
+				} catch(Exception F) { St+="\n"+F.getLocalizedMessage()+" "+F.getMessage()+"\n\n"; }
+			return St.trim();
+		}
+
+		public static boolean isReserved(String m,int type) {
+			m=m.toLowerCase().trim();
+			String[] tok = m.split("\\@");
+			m=tok[0].trim();
+			if (
+						m.endsWith(".onion") 	||
+						m.endsWith(".o")			||
+						m.endsWith(".sys")		||
+						m.compareTo("sysop")==0||
+						m.compareTo("server")==0) return true;
+			
+			if (type!=1 && m.endsWith(".list")) return true;
+			if (type!=2 && m.endsWith(".op")) return true;
+			if (type!=3 && m.endsWith(".app")) return true;
+			
+			return false;
+						
+		}
+
+	public static String ParsePGPKey(String msg) throws Exception {
+		String q="";
+		String[] li = msg.split("\\n");
+		int cx = li.length;
+		int pgp = 0;
+		for (int ax=0;ax<cx;ax++) {
+			String s = li[ax].trim();
+			if (s.contains("---BEGIN PGP PUBLIC KEY BLOCK---")) {
+				if (pgp!=0) throw new PException("@550 Invalid PGP KEY block");
+				pgp=1;
+				}
+			if (pgp==1) q+=s+"\r\n";
+			if (s.contains("---END PGP PUBLIC KEY BLOCK---")) {
+				if (pgp!=1) throw new PException("@550 Invalid PGP KEY block"); else pgp=2;
+				} 
+		}
+	if (pgp!=2) throw new PException("@550 Can't read PGP KEY block correctly");
+	return q;
+	}
+	
+	public static String ParsePGPPrivKey(String msg) throws Exception {
+		String q="";
+		String[] li = msg.split("\\n");
+		int cx = li.length;
+		int pgp = 0;
+		for (int ax=0;ax<cx;ax++) {
+			String s = li[ax].trim();
+			if (s.contains("---BEGIN PGP PRIVATE KEY BLOCK---")) {
+				if (pgp!=0) throw new PException("@550 Invalid PRIVATE KEY block");
+				pgp=1;
+				}
+			if (pgp==1) q+=s+"\r\n";
+			if (s.contains("---BEGIN PGP PRIVATE KEY BLOCK---")) {
+				if (pgp!=1) throw new PException("@550 Invalid PRIVATE KEY block"); else pgp=2;
+				} 
+		}
+	if (pgp!=2) throw new PException("@550 Can't read PRIVATE KEY block correctly");
+	return q;
+	}
+	
+	public static String ParsePGPMessage(String msg) throws Exception {
+		String q="";
+		String[] li = msg.split("\\n");
+		int cx = li.length;
+		int pgp = 0;
+		for (int ax=0;ax<cx;ax++) {
+			String s = li[ax].trim();
+			if (s.contains("---BEGIN PGP MESSAGE---")) {
+				if (pgp!=0) throw new PException("@550 Invalid PGP MESSAGE");
+				pgp=1;
+				}
+			if (pgp==1) q+=s+"\r\n";
+			if (s.contains("---END PGP MESSAGE---")) {
+				if (pgp!=1) throw new PException("@550 Invalid PGP MESSAGE"); else pgp=2;
+				} 
+		}
+	if (pgp!=2) throw new PException("@550 Can't read PGP MESSAGE correctly");
+	return q;
+	}
+	
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

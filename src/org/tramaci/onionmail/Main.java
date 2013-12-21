@@ -33,15 +33,17 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.KeyPair;
 import java.security.PublicKey;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import javax.crypto.SecretKey;
 
 public class Main {
 	Config Config = new Config();
 	
-	public static final long VersionID = 0x0000_0001_0004_0006L;
-	public static final String Version="0.1.4B";
-	public static final String VersionExtra=" GitHub1";
+	public static final long VersionID = 0x0000_0001_002F_00A1L;
+	public static final String Version="0.2.47B";
+	public static final String VersionExtra="dev~rc0.3";
 	
 	public static DNSServer DNSServer=null;
 	public static OnionRouter Router = null;
@@ -61,24 +63,118 @@ public class Main {
 	
 	protected static HashMap <String,String> ConfVars=null;
 	
-	public static String getVersion() { return Main.Version+" "+Long.toHexString(Main.VersionID)+VersionExtra; }
+	public static String getVersion() { return (Main.Version+" "+Long.toHexString(Main.VersionID)+" "+VersionExtra).trim(); }
 	public static boolean NoDelKeys = false;
 	
-	private static  int Oper = 0;	
-	private static final int Oper_Gen_ServerS=1;
-	private static final int Oper_Stop=2;
-	private static final int Oper_Del_Keys=3;
+	public static  int Oper = 0;	
+	public static final int Oper_Gen_ServerS=1;
+	public static final int Oper_Stop=2;
+	public static final int Oper_Del_Keys=3;
+	public static final int Oper_KCTL = 4;
+	
 	public static boolean OnlyLoad=false;
 	
 	public static boolean SelPass=false;
+	public static boolean PGPRootMessages=false;
+	
 	public static String SetPass=null;
 	public static boolean CmdRunBoot=false;
 	public static boolean CmdDaemon=false;
+	
 	private static PrintWriter out=null;
+	private static String OutFile="onionstart.log";
+	
+	public static String CompiledBy = null;
+	
+	public void SelfTest() throws Exception {
+		int cx= SMTPS.length;
+		if (!Config.LogStdout) Main.echo("Self server test:\n");
+		
+		Socket	RS=null;
+		OutputStream RO=null;
+		BufferedReader RI=null;
+		SMTPReply Re=null;
+		int fun=0;
+		
+		for (int ax=0;ax<cx;ax++) {
+			if (!Config.LogStdout) Main.echo("\tTest: "+J.Spaced(SMTPS[ax].Identity.Nick, 25)+"... SMTP ");
+				try {
+					RS=null;
+					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, SMTPS[ax].Identity.Onion,25);
+					RO = RS.getOutputStream();
+					RI  =J.getLineReader(RS.getInputStream());
+					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					Re = new SMTPReply(RI);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()); 
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO iam.onion");
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim());
+					if (!Re.Msg[0].toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new Exception("Fatal error: The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":25` is not `"+SMTPS[ax].Identity.Nick+"`");
+					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception I) {}
+					try { if (RS!=null) RS.close(); } catch(Exception I) {}
+					try { if (RO!=null) RO.close(); } catch(Exception I) {}
+					try { if (RI!=null) RI.close(); } catch(Exception I) {}
+					} catch(Exception E) {
+						try { if (RS!=null) RS.close(); } catch(Exception I) {}
+						try { if (RO!=null) RO.close(); } catch(Exception I) {}
+						try { if (RI!=null) RI.close(); } catch(Exception I) {}
+						String mx = E.getMessage();
+						if (mx.startsWith("@")) {
+								mx=mx.substring(1);
+								Main.echo("Error: "+mx+"\n");
+								Config.GlobalLog(Config.GLOG_Server, SMTPS[ax].Identity.Nick, "Server SMTP test error: "+mx);
+								} else {
+								Main.echo("Exception: "+mx+"\n");
+								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
+								} 
+					}
+				
+				if (!Config.LogStdout) Main.echo("POP3 ");
+				
+				try {
+					RS=null;
+					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, SMTPS[ax].Identity.Onion,110);
+					RO = RS.getOutputStream();
+					RI  =J.getLineReader(RS.getInputStream());
+					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					String in = RI.readLine();
+					if (!in.toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new Exception("Fatal error: POP3 The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":"+SMTPS[ax].Identity.LocalPOP3Port+"` is not `"+SMTPS[ax].Identity.Nick+"`");
+				
+					try { 
+						RO.write("quit\r\n".getBytes());
+						in = RI.readLine();
+						} catch(Exception I) {}
+					
+					try { if (RS!=null) RS.close(); } catch(Exception I) {}
+					try { if (RO!=null) RO.close(); } catch(Exception I) {}
+					try { if (RI!=null) RI.close(); } catch(Exception I) {}
+					} catch(Exception E) {
+						try { if (RS!=null) RS.close(); } catch(Exception I) {}
+						try { if (RO!=null) RO.close(); } catch(Exception I) {}
+						try { if (RI!=null) RI.close(); } catch(Exception I) {}
+						String mx = E.getMessage();
+						if (mx.startsWith("@")) {
+								mx=mx.substring(1);
+								Main.echo("Error: "+mx+"\n");
+								Config.GlobalLog(Config.GLOG_Server, SMTPS[ax].Identity.Nick, "Server POP3 test error: "+mx);
+								} else {
+								Main.echo("Exception: "+mx+"\n");
+								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
+								System.exit(2);
+								} 
+					}
+				
+				if (!Config.LogStdout) Main.echo("Ok\n");
+				fun++;
+			}
+		
+		if (!Config.LogStdout) Main.echo("\nTest complete: "+cx+" Servers "+(cx-fun)+" Errors "+fun+" Ok\n\n");
+		if (cx==fun) Config.GlobalLog(Config.GLOG_All, "MAIN.TEST", "OnionMail "+fun+" servers, running Ok");
+		
+		}
 	
 	private static void RedirectOut() throws Exception {
 		try {
-			out = new PrintWriter(new BufferedWriter(new FileWriter("onionstart.log", true)));
+			out = new PrintWriter(new BufferedWriter(new FileWriter(Main.OutFile, true)));
 		} catch(Exception E) {
 			out=null;
 			echo("Can't daemonize\n");
@@ -155,10 +251,53 @@ public class Main {
 		return false;
 	}
 	
+	
 	@SuppressWarnings("static-access")
 	public void Start(String fc) throws Exception {
 		try {
 			Config = Config.LoadFromFile(fc);
+			
+			if (Oper==Main.Oper_KCTL) {
+				echo("Remote KCTL operation\nPaste here the KCTL Sequence:\n");
+				String kctl = J.ASCIISequenceReadI(System.in, Const.ASC_KB_KCTL);
+				echo("\nEnter Onion address: ");
+				BufferedReader br = J.getLineReader(System.in);
+				String oni;
+				while(true) {
+					echo(">");
+					oni= br.readLine();
+					if (oni==null) System.exit(2);
+					oni=oni.toLowerCase().trim();
+					if (oni.matches("[a-z0-9]{16}\\.onion")) break;
+					}
+				echo("Enter password: ");
+				String pwl = br.readLine();
+				if (pwl==null) System.exit(2);
+				pwl=pwl.trim();
+				if (pwl.length()<4) System.exit(2);
+				Config.LogStdout=true;
+				SrvIdentity S = new SrvIdentity(Config);
+				S.Onion = oni.toLowerCase().trim();
+				
+				while(true) {
+					echo("Remote DERK options for `"+oni+"`\n");
+					echo("Choose action:\n\t(0) Quit\n\t(1) Unlock/Reset Credit\n\t(2) Lock\n\t(3) Destroy\n\t>");
+					int act = Config.parseInt(br.readLine().trim());
+					if (act==0 || act> 3) System.exit(0);
+					String acts="";
+					if (act==1) acts="start";
+					if (act==2) acts="set 0";
+					if (act==3) acts="del";
+					echo("Running remote KCTL\n");
+					RemoteKSeedInfo[] xy = S.RemoteDoKCTLAction(acts,kctl ,oni,pwl);
+					int cx= xy.length;
+					for (int ax=0;ax<cx;ax++) {
+						echo(J.Spaced(Integer.toString(cx), 4)+J.Spaced(xy[ax].Onion, 24)+J.Spaced(xy[ax].Ok ? "Ok":"Error", 6)+xy[ax].Confirm+"\n");
+						}
+					}
+				
+				// 
+			}
 			
 			if (Oper==Main.Oper_Del_Keys) {
 					DelKeys();
@@ -194,7 +333,7 @@ public class Main {
 		echo("TorDNS Service:\t" + (Config.RunDNSServer ? "Enabled":"Disabled")+"\n");
 		
 		if (!J.TCPRest(Config.TorIP, Config.TorPort)) {
-			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"\n");
+			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"`\n");
 			System.exit(2);
 			}
 		
@@ -300,9 +439,7 @@ public class Main {
 			}
 		
 		echo("Service Started\n");
-		try {echo("Running at: ["+ManagementFactory.getRuntimeMXBean().getName()+"] "); } catch(Exception E) {}
-		echo("Ok\n");
-		
+				
 	if (Main.NoDelKeys) echo("Warning: NoDelKeys ENABLED!\n");  else DelKeys();
 			
 	if (Main.SetPass!=null) for (int ax=0;ax<5;ax++) {
@@ -316,8 +453,8 @@ public class Main {
 						}
 	
 	Config.GlobalLog(Config.GLOG_All, "MAIN", "OnionMail is running!");
-			
-		
+	Thread.sleep(2000);		
+	SelfTest();
 	}
 	
 	private void DelKeys() throws Exception {
@@ -359,18 +496,17 @@ public class Main {
 			}
 	}
 
-public static void main(String args[]) 
-      {
+public static void main(String args[]) {
 		Main N=null;
 		boolean verbose=false;
 		
 		try {
 			LibSTLS.AddBCProv();
-					
-			String fc = "onionmail.conf";
-			if (new File("etc/config.conf").exists()) fc="etc/config.conf";
-			if (new File("/etc/onionmail/onionmail.conf").exists()) fc="/etc/onionmail/config.conf";
-									
+			CompiledBy = J.Compiler();
+						
+			String fc=null;
+			for(String x:new String[] { "etc/config.conf", "onionmail.conf" , "/etc/onionmail/config.conf"} ) if (new File(x).exists()) fc = x;
+												
 			int cx = args.length;
 			boolean fp=true;
 			if (cx>0 && args[0].compareTo("-q")==0) fp=false;
@@ -387,10 +523,14 @@ public static void main(String args[])
 							Helpex();
 							return;
 							}
-						fc = args[ax+1]; 
+						fc = args[ax+1];
+						if (!new File(fc).exists()) {
+							echo("\nCan't open `"+fc+"`\n");
+							System.exit(2);
+							}
 						ax++;
 						}
-				
+								
 				if (cmd.compareTo("-v")==0) { 
 						fm=true;
 						verbose=true;
@@ -413,7 +553,19 @@ public static void main(String args[])
 						}
 				
 				if (cmd.compareTo("--del-keys")==0) { 
+						OnlyLoad=true;
 						Oper=Oper_Del_Keys; 
+						fm=true; 
+						}
+								
+				if (cmd.compareTo("--pgp")==0) { 
+						PGPRootMessages=true;
+						fm=true; 
+						}
+				
+				if (cmd.compareTo("--kctl")==0) { 
+						OnlyLoad=true;
+						Oper=Oper_KCTL; 
 						fm=true; 
 						}
 				
@@ -421,9 +573,23 @@ public static void main(String args[])
 					fm=true;
 					CmdRunBoot=true;
 					}
+				
 				if (cmd.compareTo("-d")==0) {
 					fm=true;
 					CmdDaemon=true;
+					RedirectOut();
+					}
+				
+				if (cmd.compareTo("-dr")==0) {
+					if ((ax+1)>=cx) {
+							echo("Error in command line: -dr\n\tFile required!\n");
+							Helpex();
+							return;
+							}
+					
+					fm=true;
+					Main.OutFile = args[ax+1].trim();
+					ax++;
 					RedirectOut();
 					}
 				
@@ -497,22 +663,22 @@ public static void main(String args[])
 				
 				}
 			
+			if (fc==null) {
+				echo("\nCan't find any config file!\n");
+				System.exit(2);
+				}
+			
 			echo("Load Config '"+fc+"'\n");
 			N = new Main();
-			N.Start(fc);
-			if (N.Config==null) { 
-				echo("\nCan't start!\n");
-				} else {
-				
-				if (verbose) {
+			if (verbose) {
 					N.Config.Debug=true;
 					N.Config.DNSLogQuery=true;
 					N.Config.LogStdout=true;
-					echo("Verbose activate.\n");
 					}
-					
-		
-				}
+			N.Start(fc);
+			if (N.Config==null) { 
+				echo("\nCan't start!\n");
+				} 
 		} catch(Exception E) { 
 			if (N!=null && N.Config!=null) { 
 				if (N.Config.Debug) EXC(E,"Main");
@@ -545,9 +711,7 @@ public static void main(String args[])
 			b= J.Der2048(b, c);
 			return J.by2pass(b);
 		}
-	
-	
-	
+		
 	public static void GenKeyFile(String fpa,int size) throws Exception {
 		if (size>65535) size=65535;
 		if ((size&7)!=0) size++;
@@ -608,5 +772,11 @@ public static void main(String args[])
 			fo.write(data);
 			fo.close();
 		}	
+
 	
+	
+	
+	
+	
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

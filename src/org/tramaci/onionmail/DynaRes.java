@@ -30,17 +30,35 @@ public class DynaRes {
 		public HashMap <String,String> Head = new HashMap <String,String>();
 		public HashMap <String,String> Par = new HashMap <String,String>();
 		public String Res = "";
+		private boolean Default=false;
 		
-		public static DynaRes GetHinstance(Config C,String rs) throws Exception {
+		public static DynaRes GetHinstance(Config C,String rs,String lang) throws Exception {
 			if (!rs.matches("[0-9A-Za-z\\-\\_]{1,32}")) throw new Exception("Invalid resource file");
+			lang=lang.toLowerCase().trim();
+			if (!lang.matches("[a-z\\-]{2,5}")) throw new Exception("Invalid resource lang");
 			
 			if (C.ResPath!=null) {
-				String f = J.MapPath(C.ResPath, rs+".res");
+				String f = J.MapPath(C.ResPath, rs+"-"+lang+".tex");
 				if (new File(f).exists()) return new DynaRes(Stdio.file_get_bytes(f));
 				}
 			
-			InputStream I= C.getClass().getResourceAsStream("resources/"+rs+".res");
-			if (I==null) throw new Exception("Unknown resource `"+rs+"`");
+			InputStream I=  DynaRes.class.getResourceAsStream("/resources/"+rs+"-"+lang+".tex");
+			if (I==null) {
+				
+					if (C.ResPath!=null) {
+						String f = J.MapPath(C.ResPath, rs+".tex");
+						if (new File(f).exists()) return new DynaRes(Stdio.file_get_bytes(f));
+						}
+					I=  DynaRes.class.getResourceAsStream("/resources/"+rs+".tex");
+				}
+			
+			if (I==null) {
+					Main.echo("Unknown resource `"+rs+"`");
+					DynaRes D = new DynaRes();
+					D.Default=true;
+					D.Head.put("subject", "DEFAULT `"+rs+"` MESSAGE");
+					return D;
+				}
 			return new DynaRes(I);
 			
 		}
@@ -90,8 +108,26 @@ public class DynaRes {
 					Res+=li+"\n";
 					}
 			}
-					
+		
+		public DynaRes GetH(HashMap <String,String>H) {
+			DynaRes re = this.Get();
+			for (String K:re.Head.keySet()) H.put(K, re.Head.get(K));
+			re.Head=H;
+			return re;
+		}
+		
 		public DynaRes Get() {
+			if (Default) {
+				String tmp="";
+				for(String K:Par.keySet()) tmp+=K+": "+Par.get(K)+"\n";
+				DynaRes re = new DynaRes();
+				re.Par=Par;
+				re.Head=Head;
+				re.Default=true;
+				re.Res="DEFAULT RESOURCE FILE\r\nPARAMETERS:\n"+tmp+"\n"+Res;
+				return re;
+			}
+			
 			String tmp = Res;
 			HashMap <String,String> H = new HashMap <String,String>();
 			for(String K:Par.keySet()) tmp=tmp.replace("%"+K+"%",Par.get(K));
@@ -104,8 +140,10 @@ public class DynaRes {
 				}
 		DynaRes D = new DynaRes();
 		D.Head=H;
-		D.Par=Par;
-		D.Res=tmp;
+		D.Par=null;
+		D.Res=tmp; //XXX Vedere!
 		return D;
 		}
+
+		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

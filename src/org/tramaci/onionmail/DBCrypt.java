@@ -351,4 +351,6 @@ public class DBCrypt {
 				F.write(c);
 				}
 		}
+
+	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

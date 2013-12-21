@@ -99,7 +99,7 @@ public class MailingList {
 			return rec;
 			}
 		
-		private MLUserInfo UnPackUser(byte[] i) throws Exception {
+		MLUserInfo UnPackUser(byte[] i) throws Exception {
 			MLUserInfo U = new MLUserInfo();
 			if (Stdio.Peek(0,i)!=0x900e) throw new Exception("Invalid key");
 			U.Type = 255&i[2];
@@ -301,7 +301,7 @@ public class MailingList {
 				if (new File(fi).exists()) try { 
 						J.Wipe(fi, Config.MailWipeFast); 
 							} catch(Exception E) { 
-								E.printStackTrace();
+								if (Config.Debug) E.printStackTrace();
 						Config.EXC(E, "MailingList.Destroy `"+LocalPart+"` ("+fi+")"); 
 						bit=false; 
 						}
@@ -383,19 +383,24 @@ public class MailingList {
 							if (qfdn==null) Config.GlobalLog(Config.GLOG_Event, Mid.Onion, "MailingList CFG QFDN=null");
 							}
 						
+						HeadI = new HashMap <String,String>();
+						for (String K:Head.keySet()) HeadI.put(K,Head.get(K));
+						
 						if (qfdn!=null) {
-								HeadI = new HashMap <String,String>();
-								
-								for (String K:Head.keySet()) HeadI.put(K,Head.get(K));
-								
 								HeadI.put("from", J.MailOnion2Inet(Config, MailFrom, qfdn));
+								String ilst = J.MailOnion2Inet(Config, lst, qfdn);
+								String srvd = J.MailOnion2Inet(Config, "server@"+Mid.Onion, qfdn);
+								HeadI.put("to", ilst);
+								HeadI.put("reply-to", ilst);
+								HeadI.put("list-id",ilst);
+								HeadI.put("x-mat",lst);
 								HeadI.put("message-id", J.RandomString(16)+"@"+qfdn);
-								HeadI.put("list-unsubscribe","<mailto:server."+Mid.Onion+"@"+qfdn+"?subject=LIST%3A%20"+lst+"%20UNSUBSCRIBE>");
-								HeadI.put("list-subscribe","<mailto:server."+Mid.Onion+"@"+qfdn+"?subject=LIST%3A%20"+lst+"%20SUBSCRIBE>");
-								HeadI.put("list-help","<mailto:server."+Mid.Onion+"@"+qfdn+"?subject=LIST%3A%20"+lst+"%20RULEZ>");
+								HeadI.put("list-unsubscribe","<mailto:"+srvd+"?subject=LIST%3A%20"+lst+"%20UNSUBSCRIBE>");
+								HeadI.put("list-subscribe","<mailto:"+srvd+"?subject=LIST%3A%20"+lst+"%20SUBSCRIBE>");
+								HeadI.put("list-help","<mailto:"+srvd+"?subject=LIST%3A%20"+lst+"%20RULEZ>");
 								
 							} else Config.GlobalLog(Config.GLOG_Event, Mid.Onion, "MailingList CFG QFDN=null");
-							
+									
 						Iter = List.GetIterator();
 						int ecx= Iter.Length();						
 						for (int eax=0;eax<ecx;eax++) {
@@ -404,18 +409,25 @@ public class MailingList {
 							MLUserInfo U = UnPackUser(by);
 							if (U==null) break;
 							if (U.Type==0) continue;
-							Head.put("envelope-to", U.Address);
-							Head.put("Date", Mid.TimeString());
 							MS.Rewind();
 										
 							try {
 								String Srv = J.getDomain(U.Address);
 								
 								if (Srv.compareTo(Mid.Onion)==0) {
+										Head.put("envelope-to", U.Address);
+										Head.put("Date", Mid.TimeString());
 										Mid.SendLocalMessage(J.getLocalPart(U.Address), Head,MS);
 										} else {
 										HashMap <String,String> HO;
-										if (U.Address.endsWith(".onion")) HO =Head; else HO=HeadI;
+										if (U.Address.endsWith(".onion")) {
+												HO =Head;
+												HO.put("envelope-to", U.Address);
+												} else {
+												HO=HeadI;
+												HO.put("envelope-to",J.MailOnion2Inet(Config, U.Address, qfdn));
+												}
+										HO.put("Date", Mid.TimeString());
 										Mid.SendRemoteSession(U.Address, lst, HO, MS);	
 										}
 								
@@ -430,5 +442,5 @@ public class MailingList {
 	
 	}
 
-	
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify	
 }

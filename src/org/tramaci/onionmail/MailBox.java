@@ -43,10 +43,11 @@ public class MailBox {
 
 	public Config Config=null;
 	public  Spam Spam;
-
+	public SrvIdentity SID = null; 
 	public HashMap <String,String> UserProp = new HashMap <String,String>();
 	
 	MailBox(SrvIdentity SE,String lp,String uindexf, PublicKey p) throws Exception {
+		SID=SE;
 		Config=SE.Config;
 		MailDir = SE.Maildir+"/inbox";
 		LocalPart = lp;
@@ -60,6 +61,7 @@ public class MailBox {
 	}
 	
 	MailBox(SrvIdentity SE, String lp,String uindexf, PublicKey p,PrivateKey h) throws Exception {
+		SID=SE;
 		Config=SE.Config;
 		MailDir =SE.Maildir+"/inbox";
 		LocalPart = lp;
@@ -80,8 +82,9 @@ public class MailBox {
 	
 	public void UpdateIndex() { List = Index.GetIndex(); }
 	
-	public String ProcSpam(int delf) throws Exception { return Spam.UsrProcList( LocalPart, delf);	}
-	public void SpamAdd(String spam) throws Exception { Spam.UsrAddList( LocalPart, spam); }
+	public String ProcSpam(int delf) throws Exception { return Spam.UsrProcList( LocalPart, delf); }
+	
+	public void SpamAdd(String spam) throws Exception { Spam.ProcList(LocalPart, new String[] { spam }, null); }
 	public void SpamClear() throws Exception { Spam.UsrCreateList(LocalPart); }
 	public boolean SpamLookup(String query) throws Exception { return Spam.isSpam(LocalPart, query); }
 	
@@ -169,7 +172,7 @@ public class MailBox {
 		String t0 = Long.toString(System.currentTimeMillis(),36)+"-"+Long.toString(i,36)+"-"+LocalPart;
 		M.ID = Stdio.md5(t0.getBytes());
 		M.Time = System.currentTimeMillis()/1000;
-		M.OpenW(MailDir+"/"+ID2Name(M.ID), KP);
+		M.OpenW(MailDir+"/"+ID2Name(M.ID), KP,SID);
 		M.Mode=1;
 		return M;
 	}
@@ -279,7 +282,7 @@ public class MailBox {
 		M.deleted = new File(M.FileName).exists() ? false: true;
 		
 		if (!M.deleted) {
-			M.OpenR(M.FileName, KS);
+			M.OpenR(M.FileName, KS,SID);
 			M.Mode=0;
 			}
 		return M;
@@ -322,4 +325,6 @@ public class MailBox {
 		}
 	
 	public void Log(String st) { Config.GlobalLog(Config.GLOG_Server+Config.GLOG_Event, "MailBox `"+LocalPart+"`", st); 	}
+
+protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

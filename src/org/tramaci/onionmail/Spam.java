@@ -34,6 +34,8 @@ public class Spam {
 	private long MaigcField=		0xFECAF000F6C7006EL;
 	private long MagicCode=		0xFECA006F5AF05AFEL;
 	private int MaxSpamEntryXUser=0;	
+	private String NickSrv=null;
+	
 	private long MyHash(String st,long Sale) {
 		CRC32 C = new CRC32();
 		
@@ -52,9 +54,12 @@ public class Spam {
 	
 	Spam(Config C,SrvIdentity S) {
 		Config=C;
+		NickSrv=S.Nick;
 		BaseDir = (S.Maildir +"/log/").replace("//", "/");
 		MaigcField ^=MyHash(S.Onion,MaigcField);
-		Sale = Stdio.md5a( new byte[][] { S.Sale , S.Onion.getBytes() });
+		try {
+		Sale = Stdio.sha512a(new byte[][] { S.Sale,S.Subs[1] } ); //2 Cicli 1 + Pad
+		} catch(Exception I) { Sale=S.Sale.clone(); C.EXC(I, "Spam()"); }
 		
 		MagicCode^=MaigcField&0x7FFFFFFFL;
 		MaigcField^=MaigcField<<1;
@@ -72,8 +77,18 @@ public class Spam {
 	
 	private String GetFile(String local) throws Exception {
 		local=local+"@local";
-		byte[] b = Stdio.md5a(new byte[][] { Sale , local.getBytes()  });
-		String s=BaseDir+Stdio.Dump(b).toUpperCase();
+		CRC32 C = new CRC32();
+		C.update(Sale);
+		C.update(local.toLowerCase().getBytes());
+		long a = C.getValue();
+		C.update(local.toUpperCase().getBytes());
+		long b = C.getValue();
+		a^=a<<1;
+		b^=b<<1;
+		String c = Long.toString(a^MagicCode,36)+"/"+Long.toString(b^MaigcField,36);
+		c=c.replace('-', 'A');
+		c=c.replace('/', '-');
+		String s=BaseDir+c;
 		return s;
 	}
 	
@@ -98,79 +113,109 @@ public class Spam {
 	public void UsrCreateList(String local) throws Exception {
 				String fs = GetFile(local);
 				Stdio.file_put_bytes(fs+".key",new byte[0]);
-				DBCrypt db = DBCrypt.Create(fs+".rsa", Sale, MaxSpamEntryXUser, 64);
-				db.Close();
-		}
+				
+				String lst="SPAM\n";
+				byte[] db = lst.getBytes();
+				db = Stdio.AESEncMulP(Sale, db);
+				Stdio.file_put_bytes(fs+".lst", db);
+			}
 	
-	public void UsrAddList(String local,String spam) throws Exception {
-		long bl = MyHash(spam, MagicCode);
-		long bg =MyHash("*@"+J.getDomain(spam), MagicCode);
+	public void SetList(String local,String[] list) throws Exception {
+		int cx = list.length;
 		String fs = GetFile(local);
-		long H[] = Stdio.Lodsx( Stdio.file_get_bytes(fs+".key"), 8);
-		int cx = H.length;
-		for (int ax=0;ax<cx;ax++) if (H[ax]==bl || H[ax]==bg) return;	
+		long H[] = new long[cx];
+		String st="SPAM\n";
+		for (int ax=0;ax<cx;ax++) {
+			String ma = list[ax].toLowerCase().trim();
+			if (!isValid(ma)) continue; //Lascia un campo H a 0 non problematico.
+			long bl =MyHash(ma, MagicCode);
+			H[ax]=bl;
+			st+=ma+"\n";
+			}
+		byte[] db = st.getBytes();
 		
-		long I[] = new long[ cx+1];
-		System.arraycopy(H, 0, I, 0, cx);
-		I[cx] = bl;
-		Stdio.file_put_bytes(fs+".key", Stdio.Stosx(I, 8));
-		DBCrypt Db = DBCrypt.Open(fs+".rsa", Sale);
-		int fr = Db.GetFree();
-		spam+="\0";
-		if (fr!=-1) Db.BlockWrite(fr,spam.getBytes());
-		Db.Close();
+		st=null;
+		db = Stdio.AESEncMulP(Sale, db);
+		byte[] ke = Stdio.Stosx(H, 8);
+		
+		Stdio.file_put_bytes(fs+".key", ke);
+		Stdio.file_put_bytes(fs+".lst",db);
+		}
+
+	public String[] GetList(String local) throws Exception {
+		String fs = GetFile(local);
+		if (!new File(fs+".lst").exists()) UsrCreateList(local);
+		
+		byte[] db = Stdio.file_get_bytes(fs+".lst");
+		db = Stdio.AESDecMulP(Sale, db);
+		String st = new String(db);
+		
+		if (!st.startsWith("SPAM\n")) {
+			Config.GlobalLog(Config.GLOG_Spam, NickSrv, "InvalidSpamList for `"+Long.toString(local.hashCode(),36)+"`");
+			return new String[0];
+			}
+		String[] lst=st.split("\\n",2);
+		if (lst.length==1) return new String[0];
+		if (lst[1].length()==0) return new String[0];
+		
+		lst=lst[1].split("\\n+");
+		return lst;
 	}
 	
-	public String UsrProcList(String local,int del) throws Exception {
-		String fs = GetFile(local);
-		String ls = "";
-		String out="";
-		del--;
-		
-		int trued=-1;
-		DBCrypt db = DBCrypt.Open(fs+".rsa", Sale);
-		DBCryptIterator I = db.GetIterator();
-		int cx = I.Length();
-		boolean dele=false;
-		for (int ax=0;ax<cx;ax++) {
-			int cur=I.CurrentIndex();
-			byte[] dt = I.Next();
-			if (dt==null) break;
-			String re = new String(dt);
-			int i = re.indexOf('\0');
-			if (i!=-1) re=re.substring(0,i);
-			re=re.trim();
-			
-			if (ax==del) {
-					dele=true;
-					out+=Integer.toString(ax+1)+" DELETED <"+re+">\n";
-					trued=cur;
-					} else {
-					ls+=re+"\n";
-					out+=Integer.toString(ax+1)+" = <"+re+">\n";
-					}
+	public String UsrProcList(String local,int num) throws Exception {
+		String[] lst = GetList(local);
+		if (lst.length==0) return "\nEMPTY SPAM LIST\n";
+		int cx=lst.length;
+		num--;
+		if (num>-1 && num<cx) {
+			String st="";
+			for (int ax=0;ax<cx;ax++) if (ax!=num) st+=lst[ax]+"\n";
+			st=st.trim();
+			lst=st.split("\\n+");
+			cx=lst.length;
+			SetList(local,lst);
 			}
 		
-		if (dele) {
-				out+="\n1 Entry deleted\n";
-				ls=ls.trim();
-				String[] Ls = ls.split("\\n+");
-				int dx = Ls.length;
-				if (ls.length()==0) dx=0;
-				db.BlockDel(trued);
-				db.Update();
-				long[] H = new long[dx];
-				for (int ax=0;ax<dx;ax++) {
-					H[ax] = MyHash(Ls[ax], MagicCode);
-					}
-				db.Close();
-				Stdio.file_put_bytes(fs+".key", Stdio.Stosx(H, 4));
-				} else {
-				db.Close();				
-				}
-		return out;		
+		String q="Current SPAM list:\n";
+		
+		for (int ax=0;ax<cx;ax++) q+=Integer.toString(ax+1)+"\t = "+lst[ax]+"\n";
+		return q;		
 	}
 	
+	public String[] ProcList(String local,String[] spamu, String[] nospamu) throws Exception {
+		String[] lst = GetList(local);
+		String db="\n";
+		int cx = lst.length;
+		for (int ax=0;ax<cx;ax++) db+=lst[ax]+"\n";
+		
+		if (spamu!=null) {
+			cx = spamu.length;
+			for (int ax=0;ax<cx;ax++) {
+				String s = spamu[ax].toLowerCase().trim();
+				if (!db.contains("\n"+s+"\n")) db+=s+"\n";
+				}
+			}
+		
+		if (nospamu!=null) {
+			cx = nospamu.length;
+			for (int ax=0;ax<cx;ax++) {
+				String s = nospamu[ax].toLowerCase().trim();
+				s=s.replace("\n", "");
+				db=db.replace("\n"+s+"\n", "\n");
+				}
+		}
+		db=db.trim();
+		lst=db.split("\\n+");
+		SetList(local,lst);
+		return lst;
+	}
 	
-	
+	public static boolean  isValid(String ad) {
+		String[] tok = ad.split("@");
+		if (tok.length!=2) return false;
+		if (!tok[1].matches("[0-9a-z\\.\\-\\_]{2,60}\\.[a-z]{2,6}")) return false;
+		if (tok[0].compareTo("*")==0) return true;
+		if (!tok[1].matches("[0-9a-z\\.\\-\\_]{2,50}")) return false;
+		return true;
+	}
 }

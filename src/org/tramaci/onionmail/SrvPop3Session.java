@@ -61,8 +61,12 @@ public class SrvPop3Session extends Thread {
 	private void BeginPOP3Session() throws Exception {
 
 		Mid.StatPop3++;
-		
-		Reply(true,"POP3 Server ready");
+		String inf="";
+		try { this.ZZ_Exceptionale(); } catch(Exception E) { inf = J.GetExceptionalInfo(E); }
+		inf = Stdio.Dump(Stdio.md5(inf.getBytes()));
+		inf +=" "+Mid.GetRunString();
+			
+		Reply(true,"POP3 "+Mid.Onion+" INF "+inf);
 		String Pass=null;
 		
 		while(isConnected() && !isOld()) {
@@ -92,7 +96,6 @@ public class SrvPop3Session extends Thread {
 					continue;
 					}
 			
-			
 			if (Tok[0].compareTo("CAPA")==0)  {
 					CAPA();
 					continue;
@@ -106,7 +109,7 @@ public class SrvPop3Session extends Thread {
 			if (Tok.length==2) {
 				
 				if (Tok[0].compareTo("USER")==0)  {		
-					if (!TLSON) {
+				if (!TLSON) {
 						Reply(false,"Authentication too weak, use SSL!");
 						continue;
 						}	
@@ -120,8 +123,8 @@ public class SrvPop3Session extends Thread {
 					Reply(true);
 					}
 				
-				if (Tok[0].compareTo("PASS")==0)  {
-					if (!TLSON) {
+			if (Tok[0].compareTo("PASS")==0)  {
+				if (!TLSON) {
 						Reply(false,"Authentication too weak, use SSL!");
 						continue;
 						}	
@@ -136,7 +139,7 @@ public class SrvPop3Session extends Thread {
 						Pass=Tok[1];
 						MB = Mid.UsrOpenW(Config,Login,Pass);
 						} catch(Exception E) {
-							E.printStackTrace();
+							if (Config.Debug) { Config.EXC(E, "POP3Pass"); }
 							Reply(false," "+E.getMessage());
 							continue;
 						}
@@ -305,7 +308,6 @@ public class SrvPop3Session extends Thread {
 				continue;
 			}
 			
-						
 			Reply(false,"WTF???");		
 		}
 		
@@ -313,16 +315,26 @@ public class SrvPop3Session extends Thread {
 		int dels=0;
 		
 		for (int ax=0;ax<BoxLen;ax++) {
+			if (Config.Debug) Log("Quit & Delete messages");
 			if (Deleted[ax]) {
-				Message M = MB.MsgInfo(ax);
-				if (M==null) continue;
+				if (Config.Debug) Log("DeleteMsg `$"+ax+"`");
+				Message M = MB.MsgOpen(ax);
+				if (M==null) {
+						if (Config.Debug) Log("DeleteMsg Can't delete `$"+ax+"` MsgOpen=NULL");
+						continue;
+						}
 				try { MB.RemoveFromIndex(ax); } catch(Exception E) { Log("Can't remove form index "+(ax+1)+"\n"); }
 				if (M.FileName==null) {
 					Log("Can't remove completely BadBlock $i"+ax+" Will be delete by garbage next time!\n");
 					continue;
 					}
-				try { J.Wipe(M.FileName, Config.MailWipeFast); } catch(Exception E) { Log(E.toString()); }
-				File ms = new File(M.FileName);
+				
+				String fn=M.FileName;
+				M.Close();
+				M=null;
+				
+				try { J.Wipe(fn, Config.MailWipeFast); } catch(Exception E) { Config.EXC(E, Mid.Nick+" Wipe `"+M.FileName+"`");  }
+				File ms = new File(fn);
 				if (ms.exists() && !ms.delete()) {
 					errs++;
 					 Log("Can't delete file `"+ms.getName()+"`\n");
@@ -341,7 +353,7 @@ public class SrvPop3Session extends Thread {
 					"From: "+M.MailFrom+"\r\n"+
 					"To: "+M.RcptTo+"\r\n"+
 					"Subject: "+M.Subject+"\r\n"+
-					"Date: "+Mid.TimeString()+"\r\n"+
+					"Date: "+J.TimeStandard(M.Time, Mid.TimerSpoofFus)+"\r\n"+
 					"X-Originated: trash\r\n"+
 					"X-Old-Size: "+M.Size+"\r\n"+
 					"MIME-Version: 1.0\r\n"+
@@ -389,7 +401,7 @@ public class SrvPop3Session extends Thread {
 	private void CAPA() throws Exception {
 		String po="USER\nLOGIN-DELAY 900\n"+
 				"EXPIRE "+Integer.toString(Config.MailRetentionDays)+"\n"+
-				"UIDL\nTORM\n";
+				"UIDL\n";
 		
 		if (!TLSON) po+="STLS\nSTARTTLS\n";
 		po+="IMPLEMENTATION POP3";
@@ -598,5 +610,5 @@ public class SrvPop3Session extends Thread {
 		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}		
-		
+		protected void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

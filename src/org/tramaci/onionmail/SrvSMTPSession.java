@@ -34,6 +34,7 @@ import java.util.HashMap;
 
 import javax.net.ssl.SSLSocket;
 
+import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
 import org.tramaci.onionmail.MailBox.Message;
 import org.tramaci.onionmail.MailingList.ListThread;
 import org.tramaci.onionmail.MailingList.MLUserInfo;
@@ -94,6 +95,8 @@ public class SrvSMTPSession extends Thread {
 	public String FromAliasUser=null;
 	public String ToAliasUser=null;
 	
+	public boolean PGPSession=false;
+	
 	SrvSMTPSession(Config C,SrvIdentity id,Socket s) throws Exception {
 		super();
 		Config=C;
@@ -129,8 +132,6 @@ public class SrvSMTPSession extends Thread {
 							}
 				}
 			
-			if (!IPisLocal) Mid.StatMsgInet++;
-			
 			BeginSMTPSession();
 			if (con.isConnected()) {
 				if (!con.isClosed()) Send("421 CRDM 1");
@@ -143,7 +144,7 @@ public class SrvSMTPSession extends Thread {
 			if (E instanceof PException) {
 					InetAddress sp = con.getInetAddress();
 					if (sp.getAddress()[0]!=127) try {
-						Log("Some SPAM Points for: `"+J.IP2String(sp)+"` <"+HelloData+">\n");
+						Log("Some SPAM Points for: `"+J.IP2String(sp)+"` HELO  `"+HelloData+"`\n");
 						if (Mid.BlackList!=null) Mid.BlackList.setIP(sp, 1);
 						} catch(Exception I) { Config.EXC(I, "AddSpamPoint"); }
 					Mid.StatSpam++;
@@ -347,7 +348,7 @@ public class SrvSMTPSession extends Thread {
 	int mtr=8;
 	int ax=0;
 	while(true) {
-			Tok = GetSMTPCommands(3,new String[] { "MAIL FROM:" , "RCPT TO:" ,"AUTH LOGIN","AUTH PLAIN","TORM K","TORM S","TORM IAM","TORM WHO","TORM DERK","TORM PUSH","DATA","STARTTLS","QUIT","HELO","EHLO","TKIM" },"503 WTF???",null);			
+			Tok = GetSMTPCommands(3,new String[] { "MAIL FROM:" , "RCPT TO:" ,"AUTH LOGIN","AUTH PLAIN","TORM K","TORM S","TORM IAM","TORM WHO","TORM DERK","TORM PUSH","TORM SRC", "DATA","STARTTLS","QUIT","HELO","EHLO","TKIM" },"503 WTF???",null);			
 			if (Tok==null) {
 				ax++;
 				if (ax>=mtr) throw new PException("@500 Too many errors in Header State");
@@ -400,11 +401,15 @@ public class SrvSMTPSession extends Thread {
 				continue;
 			}
 			
+			if (Tok[0].compareTo("TORM SRC")==0) {
+				Send("220 "+Main.CompiledBy+" "+Main.getVersion());
+				continue;
+			}
+			
 			if (Tok[0].compareTo("TORM PUSH")==0 && Tok.length>1) try {
 				if (!HelloData.matches("[a-z0-9]{16}\\.onion") && !HelloData.matches("[a-zA-Z0-9\\_\\-\\.]{2,64}\\.[a-zA-Z]{2,6}")) throw new PException("@550 Invalid HELO/EHLO Data for PUSH");
 				RemoteDerK RK =null;
 				if (Tok.length>1) {
-					
 					t0 = Tok[1].toLowerCase().trim();
 					if (t0.compareTo("new")==0) {
 						if (!KUKIAuth) {
@@ -424,7 +429,7 @@ public class SrvSMTPSession extends Thread {
 					Send("500 PUSH WTF???");
 					continue;
 					}
-				
+			
 				t0 = Tok[1].toLowerCase().trim();
 				String pw = Tok[2].trim();
 				RK= RemoteDerK.Load(Mid, HelloData.toLowerCase().trim());
@@ -434,12 +439,22 @@ public class SrvSMTPSession extends Thread {
 					continue;
 					}
 				
-				if (!RK.Logon(pw)) {
-					RK=null;
-					Send("550 Access Denied");
-					continue;
-					}
+				if (pw.startsWith("#")) {
+					
+						String s8 = pw.substring(1);
+						if (!RK.LogonSec(s8)) {
+							RK=null;
+							Send("550 Access Denied");
+							continue;
+							}
+					} else {
 				
+						if (!RK.Logon(pw)) {
+							RK=null;
+							Send("550 Access Denied");
+							continue;
+							}
+					}
 				
 				if (RK!=null && t0.compareTo("set")==0 && Tok.length==4) {
 					RK.setCredit(J.parseInt(Tok[3]));
@@ -448,6 +463,18 @@ public class SrvSMTPSession extends Thread {
 					Send("220 Ok");
 					continue;
 					}
+				
+				if (RK!=null && t0.compareTo("gets")==0) {
+					if (!TLSON || !KUKIAuth) {
+						Send("550 Only width TKIM and STARTTLS");
+						Log("Try to get DERK secret data in not auth mode by `"+HelloData+"`");
+						RK=null;
+						continue;
+						}
+					Send("220 "+RK.getInternal()); 
+					RK=null;
+					continue;
+					} 
 				
 				if (RK!=null && t0.compareTo("max")==0 && Tok.length==4) {
 					RK.setMaxCredit(J.parseInt(Tok[3]));
@@ -495,6 +522,13 @@ public class SrvSMTPSession extends Thread {
 					RK.Save();
 					RK=null;
 					Send("220 Ok");
+					continue;
+					}
+				
+				if (RK!=null && t0.compareTo("cnf")==0) {
+					String s = RK.getDesConf();
+					RK=null;
+					Send("220 "+s);
 					continue;
 					}
 				
@@ -797,6 +831,8 @@ public class SrvSMTPSession extends Thread {
 	if (Mid.Spam.isSpam(J.getLocalPart(MailTo.toLowerCase()), MailFrom.toLowerCase())) throw new PException("@503 FUCK OFF SPAMMER, YOU ARE BANNED!");
 	if (Mid.Spam.isSpam(J.getLocalPart(SrvIdentity.SpamList), MailFrom.toLowerCase())) throw new PException("@503 FUCK OFF SPAMMER, YOU ARE BANNED BY THE ENTIRE SERVER!");
 	
+	if (TypeFrom==XTypeInet) Mid.StatMsgInet++; else if (!IPisLocal) Mid.StatMsgInet++; 
+			
 	if (RouteTo == XRouteLocal)	BeginLocalDelivery();
 	if (RouteTo == XRouteServer) BeginServerDelivery();
 	if (RouteTo == XRouteRemote) BeginRemoteDelivery();
@@ -838,6 +874,8 @@ public class SrvSMTPSession extends Thread {
 	}
 		
 	private void BeginListDelivery() throws Exception {
+		Mid.StatMsgIn++;
+		
 		int cx = Main.ListThreads.length;
 		int fi=-1;
 		long tcr = System.currentTimeMillis();
@@ -871,6 +909,8 @@ public class SrvSMTPSession extends Thread {
 	}
 	
 	private void BeginLocalDelivery() throws Exception {
+		Mid.StatMsgIn++;
+		
 		String usr = J.getLocalPart(MailTo);
 		MailBox M = Mid.UsrOpenW(Config,usr);
 		int mi = M.Index.GetFree();
@@ -975,23 +1015,74 @@ public class SrvSMTPSession extends Thread {
 		
 		if (!Hldr.containsKey("subject")) throw new PException("@500 Subject required");
 		
+		//Ignore RE: RE: ....
+		
+		String st=Hldr.get("subject");
+		String[] dv = st.split("\\:");
+		int cx=dv.length;
+		int bx=-1;
+		for (int ax=0;ax<cx;ax++) {
+			dv[ax]=dv[ax].trim().toUpperCase();
+			if (dv[ax].compareTo("RE")==0 && dv.length>=(ax+1)) bx=ax+1;
+			}
+		
+		if (bx!=-1 && bx==cx-1) Hldr.put("subject", dv[bx].trim());
+		
+		
 		while(true) {
 			String li = I.readLine();
 			if (li==null) break;
 			li=li.trim();
-			if (MessageBytes>65536) throw new PException("@452 Message too long");
+			if (MessageBytes>256000) throw new PException("@452 Message too long");
 			if (isOld()) throw new PException("@452 Timeout");
 			MessageBytes+=li.length()+2;
 			if (li.compareTo(".")==0) break;
 			msg+=li+"\n";
 			}
 		
+		st=Hldr.get("subject");
+		if (st.compareToIgnoreCase("PGP")==0) {
+			String mykey = Mid.UserGetPGPKey(Const.SRV_PRIV);
+			if (mykey==null) throw new PException("@550 PGP Encrypted sessions not supported");
+			Log("Begin PGP ServerAction");
+			PGPSession=true;
+			msg=J.ParsePGPMessage(msg);
+			
+			byte[] msb = PGP.decrypt(msg.getBytes(),(InputStream) new ByteArrayInputStream( mykey.getBytes()) , Mid.PassPhrase.toCharArray());
+			msg=new String(msg);
+			msb=null;
+			mykey=null;
+			String[] li = msg.split("\\n");
+			st=li[0].trim();
+			msg="";
+			cx=li.length;
+			for (int ax=1;ax<cx;ax++) msg+=li[ax]+"\n";
+			Hldr.put("subject", st.trim());
+			}
+		
 		ServerAction(MailFrom,Hldr,msg.trim());		
+	}
+	
+	private void SA_MYKEY(String user,String msg) throws Exception {
+		String local = J.getLocalPart(user);
+		Mid.UserSetPGPKey(msg, local);
+		
+		msg = Mid.UserGetPGPKey("server");
+		if (msg!=null) {
+			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, user);
+			H.put("subject", Mid.Nick+"'s PGP Public Key");
+			Mid.SendMessage(user, H, msg);
+			}
+		
+		Send("220 Id=Nothing");
+		
 	}
 	
 	private void ServerAction(String MailFrom,HashMap<String,String> Hldr,String msg) throws Exception {
 		
-		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] { "IDENT","REBOUND HEADER", "LIST","RULEZ", "SET IS SPAM: ","SPAM LIST","EXIT","SETTINGS","SHOW W","STAT","PUSH"});
+		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0)) throw new PException(500,"Operation not permitted");
+		
+		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] { "NEWUSER", "IDENT","REBOUND HEADER", "LIST","RULEZ", "SET IS SPAM","SPAM LIST","EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY"});
 		if (Tok==null) throw new PException(503,"Unknown server action `"+Hldr.get("subject").trim()+"`");
 		
 		//////////////// All User Actions ////////////////////////////////
@@ -1004,28 +1095,24 @@ public class SrvSMTPSession extends Thread {
 				}
 		
 		Hldr = J.FilterHeader(Hldr);
+
+		if (Tok[0].compareTo("NEWUSER")==0) {
+				if (pa<2) throw new PException("@550 Parameter number error in subject");
+				SA_NEWUSER(Tok,msg);
+				return;
+				}
 		
-		if (Tok[0].compareTo("IDENT")==0 && pa==1) {
+		if (Tok[0].compareTo("IDENT")==0) {
+				if (pa!=1) throw new PException("@550 Parameter number error in subject");
 				SA_IDENT(MailFrom);
 				return;
 				}
 		
-		if (Tok[0].compareTo("RULEZ")==0 && pa==1) {
+		if (Tok[0].compareTo("RULEZ")==0) {
+				if (pa!=1) throw new PException("@550 Parameter number error in subject");
 				SA_RULEZ(MailFrom,null);
 				return;
 				}
-		
-		if (Tok[0].compareTo("PUSH")==0) {
-				String rs = Mid.SvcDoRemotePushArray(msg);
-				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
-				H.put("subject", "Remote PUSH operations");
-				rs=rs.replace("\n", "\r\n");
-				rs=rs.trim();
-				rs+="\r\n";
-				Mid.SendMessage(MailFrom, H, rs);
-				Send("250 Id=nothing");
-				return;
-			}		
 		
 		if (Tok[0].compareTo("LIST")==0) {
 				SA_List(Tok,MailFrom,Hldr,msg);
@@ -1044,7 +1131,7 @@ public class SrvSMTPSession extends Thread {
 					if (li==null) break;
 					li=li.replace("\r", "");
 					msg+=li+"\n";
-					} catch(Exception E) { E.printStackTrace(); break; }
+					} catch(Exception E) { Config.EXC(E, "SHOW W");  break; }
 					try {		h.close(); } catch(Exception I) {}
 					try {		i.close(); } catch(Exception I) {}
 				
@@ -1054,14 +1141,6 @@ public class SrvSMTPSession extends Thread {
 				Send("250 Id=nothing");
 				return;
 				}
-		
-		//////////////////////////// Local User Actions ////////////////////////////////
-		ChechkLocalSOper(MailFrom);
-				
-		if (Tok[0].compareTo("EXIT")==0) SA_Exit(Tok,MailFrom,msg);
-		if (Tok[0].compareTo("SET IS SPAM")==0 && pa==2) SA_AddSpam(Tok[1].trim().toLowerCase());
-		if (Tok[0].compareTo("SPAM LIST")==0) SA_SPAMLIST(MailFrom,Tok);
-		if (Tok[0].compareTo("SETTINGS")==0) SA_SETTINGS(MailFrom,Tok);
 		
 		if (Tok[0].compareTo("STAT")==0) {
 			Hldr = ClassicHeaders("server@"+Mid.Onion, MailFrom);
@@ -1080,13 +1159,69 @@ public class SrvSMTPSession extends Thread {
 			return;
 			}
 		
+		//////////////////////////// Local User Actions ////////////////////////////////
+		ChechkLocalSOper(MailFrom);
+				
+		if (Tok[0].compareTo("EXIT")==0) SA_Exit(Tok,MailFrom,msg);
+		if (Tok[0].compareTo("SET IS SPAM")==0 && pa==2) SA_AddSpam(Tok[1].trim().toLowerCase(),MailFrom);
+		if (Tok[0].compareTo("SPAM LIST")==0) SA_SPAMLIST(MailFrom,Tok);
+		if (Tok[0].compareTo("SPAM")==0) SA_SPAMOPT(MailFrom,Tok,msg);	
+		if (Tok[0].compareTo("SETTINGS")==0) SA_SETTINGS(MailFrom,Tok);
+		if (Tok[0].compareTo("MYKEY")==0) SA_MYKEY(MailFrom,msg);
+
 		String loc = J.getLocalPart(MailFrom);
 		if (loc.compareTo("sysop")!=0) return;
 		///////////////////////// SYSOP USER /////////////////////////////
 		
-		
+		if (Tok[0].compareTo("PUSH")==0) {
+				String rs = Mid.SvcDoRemotePushArray(msg);
+				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+				H.put("subject", "Remote PUSH operations");
+				rs=rs.replace("\n", "\r\n");
+				rs=rs.trim();
+				rs+="\r\n";
+				Mid.SendMessage(MailFrom, H, rs);
+				Send("250 Id=nothing");
+				return;
+			}		
+	
 	}
 
+	private void SA_NEWUSER(String[] tok,String msg) throws Exception {
+		Mid.CanAndCountCreateNewUser();
+		
+		if (tok[1].compareTo("ANONYMOUS")==0) tok[1]=""; else {
+			tok[1]=tok[1].trim().toLowerCase();
+			if (!tok[1].matches("[a-z0-9\\_\\-\\.]{3,40}")) throw new PException("@550 Invalid username in the subject of message");
+			}
+		
+		String q="";
+		String[] li = msg.split("\\n");
+		int cx = li.length;
+		int pgp = 0;
+		for (int ax=0;ax<cx;ax++) {
+			String s = li[ax].trim();
+			if (s.contains("---BEGIN PGP PUBLIC KEY BLOCK---")) {
+				if (pgp!=0) throw new PException("@550 Invalid PGP KEY block");
+				pgp=1;
+				}
+			if (pgp==1) q+=s+"\r\n";
+			if (s.contains("---END PGP PUBLIC KEY BLOCK---")) {
+				if (pgp!=1) throw new PException("@550 Invalid PGP KEY block"); else pgp=2;
+				} 
+		}
+	if (pgp!=2) throw new PException("@550 Can't read PGP KEY block correctly");
+	
+	DynaRes RE = Mid.CreaNewUserViaPGP(q, tok[1]);
+	HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+	
+		for (String k:new String[] { "subject", "content-type","content-transfer-encoding" }) if (RE.Head.containsKey(k)) H.put(k, RE.Head.get(k));
+			 
+	RE.Res=RE.Res.replace("\r\n", "\n");
+	Mid.SendMessage(MailFrom, H, RE.Res);
+	RE=null;
+	Send("250 Id=nothing");
+	}
 	
 	public boolean isOld() { return System.currentTimeMillis()> EndTime; }
 
@@ -1103,6 +1238,8 @@ public class SrvSMTPSession extends Thread {
 
 		for (int tr = 0 ;tr<=maxtry;tr++) { ////////////TODO ??? Delirio
 			String li = I.readLine();
+			if (li==null || !con.isConnected()) Log("Remote connection close!");
+			
 			if (!con.isConnected()) throw new Exception("@"+lasterr);
 			if (li==null)  throw new Exception("@"+lasterr);
 			li=li.trim();
@@ -1217,19 +1354,22 @@ public class SrvSMTPSession extends Thread {
 		
 	}
 	
-	private void SA_AddSpam(String chi) throws Exception {
+	private void SA_AddSpam(String chi,String fromuser) throws Exception {
 		String spam = J.getLtGt(chi);
+		if (fromuser!=null && fromuser.compareTo(SrvIdentity.SpamList)==0) throw new PException("@500 FUCK OFF");
+		if (fromuser==null) fromuser=SrvIdentity.SpamList;
+		
 		if (spam==null) throw new Exception("@500 Invalid mail address");
 		String lp = J.getLocalPart(spam);
 		if (lp.compareTo("server")==0) throw new Exception("@500 Can't ban a server. use *@"+J.getDomain(spam));
-		MailBox MB = Mid.UsrOpenW(Config,J.getLocalPart(MailFrom));
-		MB.Spam.UsrAddList( MB.LocalPart, spam);
+		MailBox MB = Mid.UsrOpenW(Config,J.getLocalPart(fromuser));
+		MB.Spam.ProcList(MB.LocalPart, new String[] { chi }, null);
 		if (Config.Debug) Log("spam add ["+chi+"]");
 		Log(Config.GLOG_Event,"SetSpam "+chi);
 		MB.Close();
 		Send("250 Id=nothing");
 	}
-
+	
 	private void  SA_SPAMLIST(String MailFrom,String[] Tok) throws Exception {
 		String local=J.getLocalPart(MailFrom);
 		int del=-1;
@@ -1246,12 +1386,88 @@ public class SrvSMTPSession extends Thread {
 		H.put("content-type", "text/plain; charset=iso-8859-1");
 		H.put("content-transfer-encoding", "8bit");
 		
-		txt="Spamlist user:\r\n"+txt;
-		
-			
 		Mid.SendLocalMessage(local, H, txt);
 		Send("250 Id=nothing");
 		
+	}
+	
+	private void SA_SPAMOPT(String usr,String[] Tok, String msg) throws Exception {
+		String local = J.getLocalPart(usr);
+		if (local==null || local.compareTo(SrvIdentity.SpamList)==0 || Tok.length==1) throw new PException("@550 Syntax error");
+		String cmd = Tok[1].trim().toLowerCase();
+		String rs=null;
+				
+		if (cmd.compareTo("del")==0 && Tok.length==3) {
+			if (!Mid.Spam.isValid(Tok[2])) throw new PException("@550 Invalid spammer address");
+			Mid.Spam.ProcList(local, null , new String[] { Tok[2] });
+			rs="The address `"+Tok[2]+"` is now removed from Spam list\n"+Mid.Nick+"\n";
+			}
+		
+		if (cmd.compareTo("set")==0) {
+			msg=msg.trim();
+			msg=msg.replace("\r\n", "\n");
+			String[] li = msg.split("\\n+");
+			rs="Parsing your SPAM List commands:\n";
+			int cx = li.length;
+			int dx=0;
+			String Add="";
+			String Del="";
+			for (int ax=0;ax<cx;ax++) {
+				String s = li[ax].trim();
+				String[] t = s.split("\\s+");
+				if (t.length==2) {
+					t[0]=t[0].trim();
+					t[1]=t[1].toLowerCase().trim();
+					s = t[0].toLowerCase();
+					if (s.compareTo("add")==0) {
+						if (!Spam.isValid(t[1])) {
+							rs+="Invalid Spammer address `"+t[1]+"`\n";
+							continue;
+							}
+						Add+=t[1]+"\n";
+						dx++;
+						}
+					
+					if (s.compareTo("del")==0) {
+						if (!Spam.isValid(t[1])) {
+							rs+="Invalid Spammer address `"+t[1]+"`\n";
+							continue;
+							}
+						Del+=t[1]+"\n";
+						dx++;
+						}		
+					}
+			}
+			
+		rs+="\n";
+		String[] AddA = null;
+		String[] DelA=null;
+		Add=Add.trim();
+		Del=Del.trim();
+		if (Add.length()>0) AddA=Add.split("\\n+");
+		if (Del.length()>0) DelA=Del.split("\\n+");
+		String[] lst = Mid.Spam.ProcList(local, AddA,DelA);
+		
+		rs+=dx+" Commands execued, ";
+		if (AddA!=null) rs+=AddA.length+" addresses added, ";
+		if (DelA!=null) rs+=DelA.length+" addresses removed, ";
+		cx = lst.length;
+		rs+=cx+" addresses in spam list.\n\nSpam List:\n";
+		for (int ax=0;ax<cx;ax++) rs+=lst[ax]+"\n";
+		rs+="\n";
+		}//set
+		
+		if (cmd.compareTo("clear")==0) {
+			Mid.Spam.UsrCreateList(local);
+			rs="Your spam list is now empty!\n"+Mid.Nick+"\n";
+		}
+		
+		if (rs==null) throw new PException("@550 Invalid anti SPAM operation");
+		HashMap <String,String> H =  ClassicHeaders("server@"+Mid.Onion,usr);
+		H.put("subject", "AntiSpam operation");
+		Mid.SendLocalMessage(local, H, rs);
+		
+		Send("250 Id=nothing");
 	}
 	
 	private String TMPPWL(byte[][] I) {
@@ -1347,6 +1563,8 @@ public class SrvSMTPSession extends Thread {
 		txt+="Onion: "+Mid.Onion+"\n";
 		txt+="Nick: "+Mid.Nick+"\n";
 		txt+="Server Sofrware: OnionMail Ver. "+Main.getVersion()+"\n";
+		txt+="Software source id: "+Main.CompiledBy+"\n";
+		txt+="RunString: "+Mid.GetRunString()+"\n";
 		txt+="\nCertificate SHA-1: "+LibSTLS.GetCertHash(Mid.MyCert)+"\n";
 		
 		txt+="---- Certificate dump ----\n";
@@ -1365,7 +1583,304 @@ public class SrvSMTPSession extends Thread {
 		Send("250 Id=Nothing");
 	}
 	
-	private void  SA_List(String[] Tok,String from, HashMap<String,String> Hldr,String msg) throws Exception {
+	private void SA_List(String[] Tok,String from, HashMap<String,String> Hldr,String msg) throws Exception {
+		// 0 x 1 list 2 cmd 3 subj
+		
+		
+		int le = Tok.length;
+		if (le<3) throw new PException(500,"Syntax error, see rulez!");
+		
+		String list = J.getMail(Tok[1], false);
+		if (list==null) throw new PException(500,"Invalid list address!");
+		
+		String domain = J.getDomain(Tok[1]);
+		list = J.getLocalPart(list);
+		if (domain.compareTo(Mid.Onion.toLowerCase())!=0) {
+			if (J.isMailOnionized(Tok[1])) {
+				Tok[1] = J.MailInet2Onion(Tok[1]);
+				domain = J.getDomain(Tok[1]);
+				if (domain.compareTo(Mid.Onion.toLowerCase())!=0) throw new PException(500,"Invalid list \"onioned\" for me!");
+				list = J.getLocalPart(Tok[1]);
+				} else  throw new PException(500,"Invalid list for me!");
+		}
+						
+		if (!list.endsWith(".list") || list.length()<8) throw new PException(500,"Invalid list name, see rulez!");
+		String cmd=Tok[2].toLowerCase();
+		if (!" subscribe unsubscribe rulez create destroy invite remove list token ".contains(" "+cmd+" ")) throw new PException(500,"Invalid list option");
+		if (" invite remove ".contains(" "+cmd+" ") && Tok.length<4 ) throw new PException(550,"Too few parameters");
+				
+		HashMap <String,String> Par = new HashMap <String,String>();
+		
+		if (Config.Debug) Log("ListOption `"+cmd+"`");
+				
+		if (cmd.compareTo("rulez")==0) {
+			if (!Mid.CheckMailingList(list)) throw new PException(503,"Unknown Mailing list!");
+			MailingList ML = Mid.OpenMailingList(list);
+			String fr = ML.GetRulezFile();
+			ML.Close();
+			SA_RULEZ(from,fr);
+			Send("250 Id=nothing");
+			return;
+			}
+		String Tmpp=null;
+		
+		//create
+		if (cmd.compareTo("create")==0) {
+			
+			if (Mid.CheckMailingList(list)) throw new PException(550,"List arleady exists");
+			
+			Tmpp = TMPPWL(new byte[][] { Mid.Sale ,list.getBytes(), Long.toString((int)(System.currentTimeMillis()/86400000L),36).getBytes()}) ;
+			boolean isLogged =  msg.contains(Tmpp);
+			String act= isLogged ? "do" : "req";
+			act="list-"+act+"-create";
+			
+			Par.put("token", Tmpp);
+			Par.put("nick", Mid.Nick);
+			Par.put("onion", Mid.Onion);
+			
+			Par.put("listmail",list+"@"+Mid.Onion);
+			String rs="";
+			
+			if (isLogged) {
+				Mid.CanAndCountCreateNewList();
+				String Pwl = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+				String title="";
+				if (Tok.length>4) title = Tok[4].trim();
+				MailingList ML = Mid.CreateMailingList(
+						list, title, from,
+						Pwl,
+						true,
+						false)
+						;
+				
+				Par.put("title",ML.Title);
+				Par.put("password",Pwl);
+				String[] li = msg.split("\\n+");
+				int cx = li.length;
+				int dx=0;
+				int ex=0;
+				for (int ax=0;ax<cx;ax++) {
+					String u = li[ax].trim().toLowerCase();
+					if (u.length()==0) continue;
+							
+					int typ = 0;
+					
+					String[] tm = u.split("\\s+");
+					if (tm.length!=2) {
+						ex++;
+						continue;
+						}
+					
+					if (tm[0].startsWith("user")) typ=MailingList.TYP_Usr;
+					if (tm[0].startsWith("admin")) typ=MailingList.TYP_Admin;
+					
+					if (typ==0) {
+							rs="Unknown Keyword: `"+tm[0]+"`\n";
+							continue;
+							}
+					
+					tm[1]=tm[1].trim();
+					u= J.getMail(tm[1], false);
+					if (u.compareTo(from)==0) continue;
+					
+					if (u!=null) {
+							if (!u.startsWith("sysop@") && J.isReserved(u, 0)) {
+								Log("Try reserved mailinglist `"+from+"` -> `"+u+"` List `"+list+"`");
+								ex++;
+								continue;
+								}
+							String Pass = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+							ML.SetUsr(ML.NewInfo(typ, u, Pass));
+							rs+= (typ==MailingList.TYP_Admin ? "ADMIN" : "USER")+"\t "+u+"\n";
+							dx++;
+							} 
+					}
+				
+				String Pass = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+				ML.SetUsr(ML.NewInfo(MailingList.TYP_Admin, from, Pass));
+				Par.put("admin", from);
+				Par.put("admin-password", Pass);
+				ML.Save();
+				ML.Close();
+				ML=null;
+				Par.put("users",Integer.toString(dx));
+				Par.put("error",Integer.toString(ex));
+				Log("New Mailinglist `"+list+"` by `"+from+"` User="+dx);
+				
+			}
+		
+			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
+			DynaRes Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+			Re.Par=Par;
+			Re.Res+="\n"+rs;
+			Re = Re.GetH(H);
+			Mid.SendMessage(from, Re.Head,Re.Res);
+			
+			Send("250 Id=Nothing");
+			return;
+		}
+		
+		if (!Mid.CheckMailingList(list))  throw new PException(503,"Unknown Mailing list!");
+		//subscribe check
+		MailingList ML = Mid.OpenMailingList(list);
+		MLUserInfo U = ML.GetUsr(from);
+		String Added="";
+		
+		if (U==null && !ML.isOpen) {
+			ML.Close();
+			throw new PException(503,"Unknown Mailing list!");
+			}
+		
+		String tmpus=from.toLowerCase();
+		if (U!=null) tmpus=U.Address.toLowerCase();
+				
+		Tmpp = TMPPWL(new byte[][] { Mid.Sale ,tmpus.toLowerCase().getBytes() , Long.toString((int)(System.currentTimeMillis()/86400000L),36).getBytes()}) ;
+				
+		Par.put("token", Tmpp);
+		Par.put("nick", Mid.Nick);
+		Par.put("onion", Mid.Onion);
+		Par.put("title",ML.Title);
+		Par.put("usermail",tmpus);
+		Par.put("listmail",list+"@"+Mid.Onion);
+		
+		if (cmd.compareTo("token")==0) {
+			ML.Close();
+			try {
+							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
+							DynaRes Re = DynaRes.GetHinstance(Config, "req-list-token", Mid.DefaultLang);
+							Re.Par=Par;
+							Re = Re.GetH(H);
+							Mid.SendMessage(from, Re.Head,Re.Res);
+					} catch(Exception E) { 
+							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
+							throw new PException("@550 List message error");
+					}
+			Send("250 Id=nothing");
+			return;	
+		}
+		
+		boolean isLogged =  msg.contains(Tmpp);
+		
+		if (!isLogged) {
+			String act="req-list-"+cmd;
+			try {
+							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
+							DynaRes Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+							Re.Par=Par;
+							Re = Re.GetH(H);
+							Mid.SendMessage(from, Re.Head,Re.Res);
+					} catch(Exception E) { 
+							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
+							throw new PException("@550 List message error");
+					}
+			Send("250 Id=nothing");
+			return;	
+			}
+		
+		String act="do-list-"+cmd;
+		DynaRes Re = null;
+		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
+		
+		if (cmd.compareTo("unsubscribe")==0) {
+			ML.DelUsr(from);
+			ML.Save();
+			ML.Close();
+			Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+			Re.Par=Par;
+			Re = Re.GetH(H);
+		}
+		
+		if (cmd.compareTo("subscribe")==0) {
+			if (J.isReserved(from,0)) throw new PException(500,"Invalid user");
+			String pal = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, from.toLowerCase(), pal));
+			ML.Save();
+			ML.Close();
+			Par.put("password", pal);
+			Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+			Re.Par=Par;
+			Re = Re.GetH(H);
+		}
+		
+	if (" destroy invite remove list ".contains(" "+cmd+" ")) {
+		if (U==null || U.Type != MailingList.TYP_Admin) throw new PException(500,"Operation not permitted");
+		}	
+	
+	MLUserInfo RU=null;
+	
+	if (" invite remove ".contains(" "+cmd+" ")) {
+		Par.put("usersub",Tok[3]);
+		
+		if (cmd.compareTo("remove")==0) {
+			RU = ML.GetUsr(Tok[3]);
+			if (RU==null) throw new Exception("@550 User not found in list");
+			ML.DelUsr(Tok[3]);
+			ML.Save();
+			ML.Close();
+			}
+		
+		if (cmd.compareTo("invite")==0) {
+			if (J.isReserved(Tok[3],0)) throw new PException(500,"Invalid user");
+			RU = ML.GetUsr(Tok[3]);
+			if (RU!=null) throw new Exception("@550 User arleady in list");
+			String pwl = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			RU = ML.NewInfo(MailingList.TYP_Usr, Tok[3], pwl);
+			Par.put("password",pwl);
+			Par.put("from", from);
+			try {
+				from = Tok[3];
+				H = ClassicHeaders("server@"+Mid.Onion,from);
+				Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+				Re.Par=Par;
+				Re = Re.GetH(H);
+				Mid.SendMessage(from, Re.Head,Re.Res);
+			} catch(Exception E) {
+				ML.DelUsr(Tok[3]);
+				ML.Save();
+				ML.Close();
+				
+				throw E;
+				}
+			ML.Save();
+			ML.Close();
+			Send("250 Id=Nothing");
+			return;
+			}
+		}
+		
+	if (cmd.compareTo("destroy")==0) {
+		ML.Destroy();
+		try { ML.Close(); } catch(Exception E) {}
+		}
+	
+	if (cmd.compareTo("list")==0) {
+		String st="";
+		DBCryptIterator Iter = ML.List.GetIterator();
+						int ecx= Iter.Length();						
+						for (int eax=0;eax<ecx;eax++) {
+							byte[] by = Iter.Next();
+							if (by==null) break;
+							U = ML.UnPackUser(by);
+							if (U==null) break;
+							if (U.Type==0) continue;
+						st+=U.Address+"\n";
+						}	
+		ML.Close(); 
+		Added+="\n"+st;
+		}
+	
+	//if (Re==null) throw new PException(500,"Invalid list option");
+	
+	Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
+	Re.Par=Par;
+	Re = Re.GetH(H);
+	Re.Res+=Added;
+	Mid.SendMessage(from, Re.Head,Re.Res);
+
+	Send("250 Id=Nothing");	
+	}
+	
+	private void  SA_ListOld(String[] Tok,String from, HashMap<String,String> Hldr,String msg) throws Exception {
 		
 		int le = Tok.length;
 		if (le<2) throw new PException(500,"Syntax error, see rulez!");
@@ -1384,6 +1899,12 @@ public class SrvSMTPSession extends Thread {
 			ML.Close();
 			throw new PException(503,"Unknown Mailing list!");
 			}
+		
+		
+			
+		
+		
+		
 		
 		if (cmd.compareTo("rulez")==0) {
 			
@@ -1536,6 +2057,10 @@ public class SrvSMTPSession extends Thread {
 		
 		Send("250 Id=nothing");
 	}
+		 
+	
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}
+		
+		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
