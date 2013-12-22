@@ -169,7 +169,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public String PGPEncryptedDataAlgoStr="DEFAULT";
 		public String[] PGPSpoofVer = null;
 		public String PGPRootUserPKeyFile = null;
-				
+		public boolean PGPStrictKeys = false;
+		
 		public int AESKeyRoundExtra = 0;
 		
 		public static void echo(String st) { System.out.print(st); }
@@ -604,6 +605,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						} else {
 						if (!F.isDirectory()) throw new Exception("Invalid file or directory `"+C.SMPTServer[ne].Maildir+"` please remove it!");
 						C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne]);
+						if (Main.SetPGPSrvKeys)	C.SMPTServer[ne].SrvSetPGPKeys();
 						}
 				} catch(Exception E) {
 					String ms = E.getMessage();
@@ -655,7 +657,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			STKbr[0]=br;
 						
 			String ConfList="\n"+filepath+"\n";
-								
+			
 			try {
 				while(true) {	
 							
@@ -694,6 +696,15 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									CPath = J.GetPath(tok[1]);
 									continue;							
 								}
+								
+								if (cmd.compareTo("path")==0) {
+									CPath = tok[1].trim()+"/";
+									CPath=CPath.replace("\\", "/");
+									CPath=CPath.replace("//", "/");
+									CPath=CPath.replace("//", "/");
+									File x = new File(CPath);
+									if (!x.exists() || !x.isDirectory() || !x.canRead()) throw new Exception("Path access error `"+CPath+"`");
+									}
 								
 								if (cmd.compareTo("dnsserver")==0) { fc=true; C.DNSServer = ParseIp(tok[1]); }
 								if (cmd.compareTo("torip")==0) { fc=true; C.TorIP = ParseIp(tok[1]); }
@@ -807,6 +818,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("passwordsize")==0) { fc=true; C.PasswordSize=Config.parseInt(tok[1],"Chars", 7, 256); }
 								if (cmd.compareTo("minbootderks")==0) { fc=true; C.MinBootDerks=Config.parseInt(tok[1],"Servers", 1, 16); }
 								if (cmd.compareTo("mailretentiondays")==0) { fc=true; C.MailRetentionDays=Config.parseInt(tok[1],"Days", 4, 365); }
+								if (cmd.compareTo("pgpstrictkeys")==0) { fc=true; C.PGPStrictKeys=Config.parseY(tok[1]); }
 								
 								if (cmd.compareTo("pgpencrypteddataalgo")==0) { 
 										fc=true;
@@ -1090,7 +1102,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		}
 	
 		
-		private static boolean parseY(String s) throws Exception {
+		static boolean parseY(String s) throws Exception {
 			s=s.trim();
 			s=s.toLowerCase();
 			if (s.compareTo("y")==0) return true;
@@ -1387,26 +1399,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							p0 = PGP.FilterPGPNSAsMarker(p0, spoof);
 							}
 						} catch(Exception E) { NewServer.Config.EXC(E, "PGP:SpoofNSA:2"); }
-		//TODO PGP
-				/*
-					Main.echo("\nDo you want to insert a PGP Public & Private key for server`"+NewServer.Nick+"`\n\tYes, No ?");
-					boolean re=false;
-					try { re = Config.parseY(In.readLine().trim()); } catch(Exception I) {}
-					if (re) try {
-						Main.echo("Enter the ASCII file name: >");
-						String Pat = In.readLine().trim();
-						Pat = new String(Stdio.file_get_bytes(Pat));
-						Main.echo("Enter the Passphrase: >");
-						String Pass = In.readLine().trim();
-						String Priv = J.ParsePGPPrivKey(Pat);
-						Pat = J.ParsePGPKey(Pat);
-						NewServer.UserSetPGPKey(Pat, "server");
-						NewServer.UserSetPGPKey(Priv, Const.SRV_PRIV);
-						byte[] b = Pat.getBytes("UTF-8");
-						b=Stdio.AESDecMulP(NewServer.Sale, b);
-						Stdio.file_put_bytes(NewServer.Maildir+"/header/hldr", b);
-						} catch(Exception EX) {}
-						*/	
+					
 				} catch(Exception E) { NewServer.Config.EXC(E, "PGP:Config.CreateServer"); }
 				 
 				Stdio.file_put_bytes(p2,p0.getBytes());

@@ -177,9 +177,7 @@ public class SrvIdentity {
 	public String StatFile=null;
 	
 	public String OnTheSameMachine=null;
-	
-	public String PassPhrase="";
-	
+		
 	public int Status = 0;
 	public static final int ST_NotLoaded=0;		//A
 	public static final int ST_Loaded=1;				//B
@@ -795,6 +793,40 @@ public class SrvIdentity {
 		String dom = J.getDomain(to);
 		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body);
 		}
+	
+	public String SrvPGPMessage(String tousr,HashMap <String,String> Hldr,String Body) throws Exception {
+		try {
+			String rkey = UserGetPGPKey(tousr);
+			if (rkey==null) {
+				Body+="\nPGP: NO PGP KEY\n";
+				return Body;
+				}
+			
+			Body=Hldr.get("subject")+":\n\n"+Body;
+			
+			byte[] rs = PGP.encrypt(Body.getBytes("UTF-8"), PGP.readPublicKey(new ByteArrayInputStream(rkey.getBytes())), null, true, true, new Date(Time()), Config.PGPEncryptedDataAlgo);
+			Hldr.put("subject", "RE: PGP");
+			Hldr.put("content-type", "text/plain; charset=UTF-8");
+			Body= new String(rs);
+			Body=Body.replace("\r\n", "\n"); //TODO levare!
+			Body=PGPSpoofNSA(Body, false); 
+			Body=Body.replace("\r\n", "\n");
+			return Body;
+			
+		} catch(Exception E) {
+			String ms= E.getMessage();
+			if (ms.startsWith("@")) {
+				ms=ms.substring(1);
+				Body+="\n\nPGP: "+ms+"\n";
+				Log("PGP: "+ms);
+				} else {
+				Config.EXC(E, "PGP:RE");
+				Body+="\n\nPGP: Global Error\n";
+				}
+			return Body;
+		}
+			
+	}
 	
 	public void SendLocalMessage(String LocalPart,HashMap <String,String> Hldr,String Body) throws Exception {
 		StatMsgIn++;
@@ -1908,8 +1940,6 @@ public class SrvIdentity {
 			}
 			return pw;
 		}
-		
-
 	
 		public void ChechPendingSSL(HashMap <String,String> hls,String[] SrvA) throws Exception { //TODO Da usare!
 			int scx=SrvA.length;
@@ -2811,13 +2841,15 @@ byte[][] Cobj = new byte[][] {
 		
 		public boolean UserHasPGP(String user) throws Exception { return new File(PGPKeyFile(user)).exists(); }
 		
-		public DynaRes UserSetPGPKey(String PGPKey,String user) throws Exception {
+		public DynaRes UserSetPGPKey(String PGPKey,String user,boolean norep) throws Exception {
+
 			String fs = PGPKeyFile(user);
-			PGPKey=J.ParsePGPKey(PGPKey);
-			byte[] K = Stdio.sha256a(new byte[][] { Sale, user.getBytes()} );
+			if (!norep) PGPKey=J.ParsePGPKey(PGPKey);
+			byte[] K = Stdio.sha512a(new byte[][] { Sale, user.getBytes()} );
 			byte[] b = PGPKey.getBytes();
 			b=Stdio.AESEncMulP(K, b);
 			Stdio.file_put_bytes(fs, b);
+			if (norep) return null;
 			DynaRes Re = DynaRes.GetHinstance(Config, "mykey", DefaultLang);
 			Re.Par.put("user", user);
 			return Re;
@@ -2825,14 +2857,18 @@ byte[][] Cobj = new byte[][] {
 		
 		public String UserGetPGPKey(String user) throws Exception {
 			String fs = PGPKeyFile(user);
-			if (new File(fs).exists()) return null;
+			
+			if (!new File(fs).exists()) return null;
 			String PGPKey=null;
 			try {
-				byte[] K = Stdio.sha256a(new byte[][] { Sale, user.getBytes()} );
+				byte[] K = Stdio.sha512a(new byte[][] { Sale, user.getBytes()} );
 				byte[] b = Stdio.file_get_bytes(fs);
 				b=Stdio.AESDecMulP(K, b);
 				PGPKey = new String(b);
-				if (!PGPKey.contains(" PGP ") && !PGPKey.contains(" KEY ")) return null;
+				if (!PGPKey.contains(" PGP ") && !PGPKey.contains(" KEY ")) {
+					Log("UserGetPGPKey: Crypt Key Error");
+					return null;
+					}
 			} catch(Exception E) {
 				Config.EXC(E, "UserGetPGPKey");
 				return null;
@@ -2970,6 +3006,56 @@ byte[][] Cobj = new byte[][] {
 				}
 		
 		// Log functions
+
+		public void SrvSetPGPKeys() {
+			Main.echo("\nDo you want to insert a PGP Public & Private key for server`"+Nick+"`\n\tYes, No ?");
+					boolean re=false;
+					BufferedReader In = J.getLineReader(System.in);
+					
+					try { re = Config.parseY(In.readLine().trim().toLowerCase()); } catch(Exception I) { Main.echo("NO\n"); }
+					if (re) try {
+						Main.echo("Enter the ASCII file name: >");
+						String Pat = In.readLine().trim();
+						Pat = new String(Stdio.file_get_bytes(Pat));
+						Main.echo("Enter the Passphrase: >");
+						String Pass = In.readLine().trim();
+						String Priv = J.ParsePGPPrivKey(Pat);
+						Pat = J.ParsePGPKey(Pat);
+						UserSetPGPKey(Pat, "server",true);
+						UserSetPGPKey(Priv, Const.SRV_PRIV,true);
+						byte[] b = Pass.getBytes("UTF-8");
+						b=Stdio.AESEncMulP(Sale, b);
+						Stdio.file_put_bytes(Maildir+"/head/hldr", b);
+						Main.echo("PGP Keys for `"+Nick+"` is set!\n");
+						} catch(Exception EX) {
+							String ms = EX.getMessage();
+							Main.echo("Error: "+ms+"\n");
+							Log(Config.GLOG_Server, "Can't set GPG Keys: "+ms);
+							if (Config.Debug) EX.printStackTrace();
+						}
+		}
+		
+		public String GetPassPhrase() throws Exception {
+			byte[] b = Stdio.file_get_bytes(Maildir+"/head/hldr");
+			b=Stdio.AESDecMulP(Sale, b);
+			return new String(b,"UTF-8");
+		}
+		
+		public String PGPSpoofNSA(String armor,boolean crlf)  {
+			if (Config.PGPSpoofVer!=null) try {
+				int cx = Config.PGPSpoofVer.length;
+				if (cx!=0) {
+					int r = 1;
+					if (cx>1) r = (int) ((0x7FFFFFFFFFFFFFFFL & Stdio.NewRndLong()) % cx);
+					String spoof = Config.PGPSpoofVer[r];
+					String armor2=armor.replace("\r\n", "\n");
+					armor=PGP.FilterPGPNSAsMarker(armor2, spoof);
+					armor2=null;
+					if (crlf) armor=armor.replace("\n", "\r\n");
+					}
+				} catch(Exception E) { Config.EXC(E, "PGPSpoofNSA"); }
+			return armor;
+		}
 		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server, Nick, st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server, Nick, st); 	}

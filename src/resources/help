@@ -4,7 +4,8 @@ Use:
 		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp]
 		
 	onionmail [-q] --gen-passwd 
-	onionmail [-q] --gen-servers [-sp] -f <config file> [--pgp]
+	onionmail [-q] --gen-servers [-sp] -f <config file> [--pgp] [--set-pgp]
+	onionmail [-q] --set-pgp
 	onionmail [-q] --stop -f <config file>
 	onionmail [-q] --gen-keyfile <file> <bits>
 	onionmail [-q] --gen-keyfile <file> <bits> --show-passwd
@@ -48,5 +49,8 @@ Use:
 	--gen-keyfile	Generate new global salt Keyfile.
 	--show-passwd	Show current password generated.
 	--reboot	Reboot server via remote network seed/push keys.
+	--set-pgp	Set manually the server's PGP private key.
+			Require some input files width ASCII PGP keys and
+			passphrases.
 	--kctl		Show the KCTL remote menù to manage remote seeds of 
 			keys.

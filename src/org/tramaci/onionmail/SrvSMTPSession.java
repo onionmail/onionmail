@@ -1040,16 +1040,24 @@ public class SrvSMTPSession extends Thread {
 			msg+=li+"\n";
 			}
 		
+		String ctyp = null;
+		if (Hldr.containsKey("content-transfer-encoding")) ctyp=Hldr.get("content-transfer-encoding").toLowerCase();
+		if (ctyp.compareTo("quoted-printable")==0) msg=J.MQuotedDecode(msg);
+		if (ctyp.compareTo("base64")==0) msg=J.MBase64Decode(msg);
+		
+		//TODO Multipart Boundary
+		
 		st=Hldr.get("subject");
-		if (st.compareToIgnoreCase("PGP")==0) {
+		if (st.compareToIgnoreCase("PGP")==0) try {
 			String mykey = Mid.UserGetPGPKey(Const.SRV_PRIV);
-			if (mykey==null) throw new PException("@550 PGP Encrypted sessions not supported");
+			if (mykey==null) throw new PException("@550 PGP Encrypted sessions are not supported");
 			Log("Begin PGP ServerAction");
 			PGPSession=true;
 			msg=J.ParsePGPMessage(msg);
+			msg=msg.trim();
 			
-			byte[] msb = PGP.decrypt(msg.getBytes(),(InputStream) new ByteArrayInputStream( mykey.getBytes()) , Mid.PassPhrase.toCharArray());
-			msg=new String(msg);
+			byte[] msb = PGP.decrypt(msg.getBytes(),(InputStream) new ByteArrayInputStream( mykey.getBytes()) , Mid.GetPassPhrase().toCharArray());
+			msg=new String(msb);
 			msb=null;
 			mykey=null;
 			String[] li = msg.split("\\n");
@@ -1058,23 +1066,36 @@ public class SrvSMTPSession extends Thread {
 			cx=li.length;
 			for (int ax=1;ax<cx;ax++) msg+=li[ax]+"\n";
 			Hldr.put("subject", st.trim());
+			} catch(Exception E) {
+				String ms = E.getMessage()+"";
+				if (ms.startsWith("@")) {
+					ms=ms.substring(1);
+					throw new PException(550,ms);
+					}
+				Config.EXC(E, "PGP(`"+Mid.Nick+"`)");
+				throw new PException(550,"PGP Error");
 			}
 		
 		ServerAction(MailFrom,Hldr,msg.trim());		
 	}
 	
 	private void SA_MYKEY(String user,String msg) throws Exception {
-		String local = J.getLocalPart(user);
-		Mid.UserSetPGPKey(msg, local);
+		if (user.compareTo("server")==0 || user.compareTo(Const.SRV_PRIV)==0) throw new PException(500,"KEY Operation not permitted");
+
+		if (Config.PGPStrictKeys && !J.PGPVerifyKey(msg, user)) throw new PException(550,"The key is not for `"+user+"`");
 		
+		Mid.UserSetPGPKey(msg, user,false);
+		msg = msg.replace("\r\n", "\n");
 		msg = Mid.UserGetPGPKey("server");
+		msg = Mid.PGPSpoofNSA(msg,false);
+		msg = msg.replace("\r\n", "\n");
 		if (msg!=null) {
 			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, user);
 			H.put("subject", Mid.Nick+"'s PGP Public Key");
 			Mid.SendMessage(user, H, msg);
 			}
 		
-		Send("220 Id=Nothing");
+		Send("250 Id=Nothing");
 		
 	}
 	
@@ -1136,7 +1157,7 @@ public class SrvSMTPSession extends Thread {
 					try {		i.close(); } catch(Exception I) {}
 				
 				msg=msg.replace("%%VER%%", Main.getVersion());
-					
+				if (PGPSession) msg=Mid.SrvPGPMessage(MailFrom,Hldr,msg);	
 				Mid.SendMessage(MailFrom, Hldr, msg);	 
 				Send("250 Id=nothing");
 				return;
@@ -1154,6 +1175,7 @@ public class SrvSMTPSession extends Thread {
 					"\nErrors: "+Mid.StatError +
 					"\nExceptions: "+Mid.StatException +
 					"\nUpTime: "+Mid.StatHcount+"\n";
+			if (PGPSession) msg=Mid.SrvPGPMessage(MailFrom,Hldr,msg);	
 			Mid.SendMessage(MailFrom, Hldr, msg);	 
 			Send("250 Id=nothing");
 			return;
@@ -1180,6 +1202,7 @@ public class SrvSMTPSession extends Thread {
 				rs=rs.replace("\n", "\r\n");
 				rs=rs.trim();
 				rs+="\r\n";
+				if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
 				Mid.SendMessage(MailFrom, H, rs);
 				Send("250 Id=nothing");
 				return;
@@ -1334,6 +1357,7 @@ public class SrvSMTPSession extends Thread {
 		txt+="\n";
 		
 		H.put("subject","User configuration");
+		if (PGPSession) txt=Mid.SrvPGPMessage(mlp+"@"+Mid.Onion,H,txt);	
 		Mid.SendLocalMessage(mlp, H, txt);
 		Send("250 Id=nothing");
 	}
@@ -1385,7 +1409,7 @@ public class SrvSMTPSession extends Thread {
 		H.put("date", Mid.TimeString());
 		H.put("content-type", "text/plain; charset=iso-8859-1");
 		H.put("content-transfer-encoding", "8bit");
-		
+		if (PGPSession) txt=Mid.SrvPGPMessage(local+"@"+Mid.Onion,H,txt);	
 		Mid.SendLocalMessage(local, H, txt);
 		Send("250 Id=nothing");
 		
@@ -1465,6 +1489,7 @@ public class SrvSMTPSession extends Thread {
 		if (rs==null) throw new PException("@550 Invalid anti SPAM operation");
 		HashMap <String,String> H =  ClassicHeaders("server@"+Mid.Onion,usr);
 		H.put("subject", "AntiSpam operation");
+		if (PGPSession) rs=Mid.SrvPGPMessage(local+"@"+Mid.Onion,H,rs);	
 		Mid.SendLocalMessage(local, H, rs);
 		
 		Send("250 Id=nothing");
@@ -1476,7 +1501,7 @@ public class SrvSMTPSession extends Thread {
 		H[0] &=0x7FFFFFFFFFFFFFFFL;
 		return Long.toString(H[0],36);
 		}
-	
+
 	private void ConfirmMsg(String to,String Tmpp,String subject,String title,String verb) throws Exception {
 		HashMap <String,String> H =  ClassicHeaders("server@"+Mid.Onion,to);
 		
@@ -1521,12 +1546,17 @@ public class SrvSMTPSession extends Thread {
 			
 		if (RL.isEmpty()) {
 					H.put("subject", "No exit route");
-					Mid.SendLocalMessage(mlp, H,"No SMTP Exit/Enter route available");
+					String qq="No SMTP Exit/Enter route available";
+					if (PGPSession) qq=Mid.SrvPGPMessage(mlp+"@"+Mid.Onion,H,qq);	
+					Mid.SendLocalMessage(mlp, H,qq);
 					Send("250 Id=Nothing");
 					return;
 					}
+		
 			H.put("subject", "Exit/Enter Route list");
-			Mid.SendLocalMessage(mlp, H,"Exit/Enter Route list:\n"+RL.toString());
+			String qq="Exit/Enter Route list:\n"+RL.toString();
+			if (PGPSession) qq=Mid.SrvPGPMessage(mlp+"@"+Mid.Onion,H,qq);	
+			Mid.SendLocalMessage(mlp, H,qq);
 			Send("250 Id=Nothing");
 			return;
 			}
@@ -1544,6 +1574,7 @@ public class SrvSMTPSession extends Thread {
 			H.put("subject", "Set Exit/Enter route");
 			String txt="Now your exit/enter mail address is "+J.MailOnion2Inet(Config, from,dom)+"\n";
 			txt+="\nAvailable Exit/Enter route:\n"+RL.toString()+"\n";
+			if (PGPSession) txt=Mid.SrvPGPMessage(mlp+"@"+Mid.Onion,H,txt);	
 			Mid.SendLocalMessage(mlp, H,txt);
 			Send("250 Id=Nothing");
 			RL=null;
@@ -1567,6 +1598,14 @@ public class SrvSMTPSession extends Thread {
 		txt+="RunString: "+Mid.GetRunString()+"\n";
 		txt+="\nCertificate SHA-1: "+LibSTLS.GetCertHash(Mid.MyCert)+"\n";
 		
+		String mykey = Mid.UserGetPGPKey("server");
+		if (mykey!=null) {
+			mykey=Mid.PGPSpoofNSA(mykey,false);
+			mykey=mykey.replace("\r\n", "\n");
+			txt+="\nThis is my GPG Public Key:\n"+mykey+"\n";
+			mykey=null;
+		} else txt+="\nNO PGP KEY\n";
+		
 		txt+="---- Certificate dump ----\n";
 		String[] t0=Mid.MyCert.toString().split("\n");
 		String t2="";
@@ -1578,6 +1617,7 @@ public class SrvSMTPSession extends Thread {
 		for(String dc:t0) txt+=dc+"\n";
 		t2=null;
 		txt+="---- END ----\n";
+		if (PGPSession) txt=Mid.SrvPGPMessage(from,H,txt);	
 		Mid.SendMessage(from, H, txt);
 		txt=null;
 		Send("250 Id=Nothing");
@@ -1714,6 +1754,7 @@ public class SrvSMTPSession extends Thread {
 			Re.Par=Par;
 			Re.Res+="\n"+rs;
 			Re = Re.GetH(H);
+			if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 			Mid.SendMessage(from, Re.Head,Re.Res);
 			
 			Send("250 Id=Nothing");
@@ -1750,6 +1791,7 @@ public class SrvSMTPSession extends Thread {
 							DynaRes Re = DynaRes.GetHinstance(Config, "req-list-token", Mid.DefaultLang);
 							Re.Par=Par;
 							Re = Re.GetH(H);
+							if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 							Mid.SendMessage(from, Re.Head,Re.Res);
 					} catch(Exception E) { 
 							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
@@ -1768,7 +1810,8 @@ public class SrvSMTPSession extends Thread {
 							DynaRes Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
 							Re.Par=Par;
 							Re = Re.GetH(H);
-							Mid.SendMessage(from, Re.Head,Re.Res);
+							if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
+							Mid.SendMessage(from, Re.Head,Re.Res);	
 					} catch(Exception E) { 
 							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
 							throw new PException("@550 List message error");
@@ -1833,6 +1876,7 @@ public class SrvSMTPSession extends Thread {
 				Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
 				Re.Par=Par;
 				Re = Re.GetH(H);
+				if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 				Mid.SendMessage(from, Re.Head,Re.Res);
 			} catch(Exception E) {
 				ML.DelUsr(Tok[3]);
@@ -1875,106 +1919,10 @@ public class SrvSMTPSession extends Thread {
 	Re.Par=Par;
 	Re = Re.GetH(H);
 	Re.Res+=Added;
+	if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 	Mid.SendMessage(from, Re.Head,Re.Res);
 
 	Send("250 Id=Nothing");	
-	}
-	
-	private void  SA_ListOld(String[] Tok,String from, HashMap<String,String> Hldr,String msg) throws Exception {
-		
-		int le = Tok.length;
-		if (le<2) throw new PException(500,"Syntax error, see rulez!");
-		String list = J.getMail(Tok[1], true);
-		if (list==null || J.getDomain(list).compareTo(Mid.Onion.toLowerCase())!=0) throw new PException(500,"Invalid list for me!");
-		list = J.getLocalPart(list);
-		if (!list.endsWith(".list") || list.length()<8) throw new PException(500,"Invalid list name, see rulez!");
-		String cmd=Tok[2].toLowerCase();
-
-		if (!Mid.CheckMailingList(list)) throw new PException(503,"Unknown Mailing list!");
-		
-		MailingList ML = Mid.OpenMailingList(list);
-		MLUserInfo U = ML.GetUsr(from);
-		
-		if (U==null && !ML.isOpen) {
-			ML.Close();
-			throw new PException(503,"Unknown Mailing list!");
-			}
-		
-		
-			
-		
-		
-		
-		
-		if (cmd.compareTo("rulez")==0) {
-			
-			String fr = ML.GetRulezFile();
-			ML.Close();
-			SA_RULEZ(from,fr);
-			Send("250 Id=nothing");
-			return;
-			}
-				
-		if (cmd.compareTo("unsubscribe")==0) {
-			String Tmpp = TMPPWL(new byte[][] { Mid.Sale , U.Address.toLowerCase().getBytes() , Long.toString((int)(System.currentTimeMillis()/86400000L),36).getBytes()}) ;
-			if (msg.contains(Tmpp)) {
-				ML.DelUsr(from);
-				ML.Save();
-				ML.Close();
-				
-				try {
-							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
-							H.put("subject", "Mailing List Unsubscribe completed");
-							Mid.SendMessage(from, H, "Your subscription to `"+list+"@"+Mid.Onion+"` is now deleted!\n");
-					} catch(Exception E) { 
-							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
-					}
-				
-				Send("250 Id=nothing");
-				return;
-				
-				} else {
-				ML.Close();
-				ConfirmMsg(from, Tmpp,"LIST "+list+"@"+Mid.Onion+" UNSUBSCRIBE","Mailing List Unsubscribe verification","unsubscribe to te mailing list `"+list+"@"+Mid.Onion+"`");
-				Send("250 Id=nothing");
-				return;
-				}
-		}		
-				
-		if (cmd.compareTo("subscribe")==0) {
-			String Tmpp = TMPPWL(new byte[][] { Mid.Sale , from.toLowerCase().getBytes() , Long.toString((int)(System.currentTimeMillis()/86400000L),36).getBytes()}) ;
-			if (msg.contains(Tmpp)) {
-				String pal = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
-				ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, from.toLowerCase(), pal));
-				
-				ML.Save();
-				ML.Close();
-				
-				try {
-							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
-							H.put("subject", "Mailing List Subscribe completed");
-							Mid.SendMessage(from, H, 
-										"Your subscription to `"+list+"@"+Mid.Onion+"` is now enabled!\n"+
-										"Your password for the terminal's operation is:\n"+
-										pal+"\n"+
-										"Thank you, by "+Mid.Nick+"\n") ;
-							
-					} catch(Exception E) { 
-							Log("List subscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
-					}
-				Send("250 Id=nothing");
-				return;
-				} else {
-				ML.Close();
-				ConfirmMsg(from, Tmpp,"LIST "+list+"@"+Mid.Onion+" SUBSCRIBE","Mailing List Subscribe verification","subscribe to te mailing list `"+list+"@"+Mid.Onion+"`");
-				Send("250 Id=nothing");
-				return;
-				}
-		}		
-		
-		
-		throw new PException(500,"Unsupported list operation `"+cmd+"`");
-		
 	}
 	
 	private void SA_RULEZ(String da,String per) throws Exception {
@@ -2038,6 +1986,8 @@ public class SrvSMTPSession extends Thread {
 							l.close();
 							r.close();
 							}
+						
+						if (PGPSession) msg=Mid.SrvPGPMessage(da,H,msg);	
 						Mid.SendMessage(da, H, msg);
 						msg=null;
 						Send("250 Id=nothing");
@@ -2057,7 +2007,6 @@ public class SrvSMTPSession extends Thread {
 		
 		Send("250 Id=nothing");
 	}
-		 
 	
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}

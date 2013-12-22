@@ -32,24 +32,29 @@ public class DynaRes {
 		public String Res = "";
 		private boolean Default=false;
 		
+		private static InputStream GetInputST(Config C,String st) throws Exception {
+			if (C.ResPath!=null) {
+				String f = J.MapPath(C.ResPath,st);
+				if (new File(f).exists()) return (InputStream) new FileInputStream(f);
+				}
+			InputStream I=  DynaRes.class.getResourceAsStream("/resources/"+st);
+			return I;
+		}
+		
 		public static DynaRes GetHinstance(Config C,String rs,String lang) throws Exception {
 			if (!rs.matches("[0-9A-Za-z\\-\\_]{1,32}")) throw new Exception("Invalid resource file");
 			lang=lang.toLowerCase().trim();
 			if (!lang.matches("[a-z\\-]{2,5}")) throw new Exception("Invalid resource lang");
 			
-			if (C.ResPath!=null) {
-				String f = J.MapPath(C.ResPath, rs+"-"+lang+".tex");
-				if (new File(f).exists()) return new DynaRes(Stdio.file_get_bytes(f));
-				}
-			
-			InputStream I=  DynaRes.class.getResourceAsStream("/resources/"+rs+"-"+lang+".tex");
+			InputStream I = GetInputST(C,rs+"-"+lang+".tex");
+			if (I==null) I = GetInputST(C,rs+".tex");
 			if (I==null) {
-				
-					if (C.ResPath!=null) {
-						String f = J.MapPath(C.ResPath, rs+".tex");
-						if (new File(f).exists()) return new DynaRes(Stdio.file_get_bytes(f));
-						}
-					I=  DynaRes.class.getResourceAsStream("/resources/"+rs+".tex");
+				int cx = rs.lastIndexOf('-');
+				if (cx!=-1) {
+					rs=rs.substring(0,cx-1);
+					 I = GetInputST(C,rs+"-"+lang+".tex");
+					 if (I==null) I = GetInputST(C,rs+".tex");
+					}
 				}
 			
 			if (I==null) {
@@ -60,7 +65,6 @@ public class DynaRes {
 					return D;
 				}
 			return new DynaRes(I);
-			
 		}
 		
 		DynaRes() {}

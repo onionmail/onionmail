@@ -1,0 +1,21 @@
+Subject: Creating mailinglist %listmail%
+
+title: !
+
+To create this new mailing list send a message to server server@%onion% 
+with subject:
+LIST %listmail% CREATE
+
+Put this code into the body of the message:
+%token%
+
+To add and invite some users put the addresses, one per line.
+The keyword USER allow the user in mailinglist.
+The keyword ADMIN set the user as admin.
+
+Example:
+%token%
+USER mailaddress
+ADMIN mailaddress
+
+Server %nick%

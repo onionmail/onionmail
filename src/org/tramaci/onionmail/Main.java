@@ -41,9 +41,9 @@ import javax.crypto.SecretKey;
 public class Main {
 	Config Config = new Config();
 	
-	public static final long VersionID = 0x0000_0001_002F_00A1L;
-	public static final String Version="0.2.47B";
-	public static final String VersionExtra="dev~rc0.3";
+	public static final long VersionID = 0x0001_0000_0030_00A1L;
+	public static final String Version="1.0.48B";
+	public static final String VersionExtra="";
 	
 	public static DNSServer DNSServer=null;
 	public static OnionRouter Router = null;
@@ -80,11 +80,13 @@ public class Main {
 	public static String SetPass=null;
 	public static boolean CmdRunBoot=false;
 	public static boolean CmdDaemon=false;
+	public static boolean SetPGPSrvKeys = false;
 	
 	private static PrintWriter out=null;
 	private static String OutFile="onionstart.log";
 	
 	public static String CompiledBy = null;
+	public static String ProgPath=".";
 	
 	public void SelfTest() throws Exception {
 		int cx= SMTPS.length;
@@ -503,7 +505,12 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-						
+			File X = new File(".");
+			ProgPath = X.getAbsolutePath().toString();
+			ProgPath=ProgPath.replace("\\", "/");
+			if (ProgPath.endsWith("/.")) ProgPath=ProgPath.substring(0,ProgPath.length()-1);
+			if (!ProgPath.endsWith("/")) ProgPath+="/"; //Non avverà mai!
+			
 			String fc=null;
 			for(String x:new String[] { "etc/config.conf", "onionmail.conf" , "/etc/onionmail/config.conf"} ) if (new File(x).exists()) fc = x;
 												
@@ -597,6 +604,11 @@ public static void main(String args[]) {
 						SelPass=true; 
 						fm=true; 
 						}
+				
+				if (cmd.compareTo("--set-pgp")==0) {
+					fm=true;
+					SetPGPSrvKeys=true;
+				}
 				
 				if (cmd.compareTo("-q")==0) fm=true; 
 								

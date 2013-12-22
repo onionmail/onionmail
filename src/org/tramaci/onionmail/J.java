@@ -20,6 +20,7 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -41,6 +42,7 @@ import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
+import org.bouncycastle.openpgp.PGPUtil;
 
 
 public class J {
@@ -713,28 +715,44 @@ public class J {
 		}
 	
 	public static String MapPath(String path,String file) throws Exception {
+		boolean xk=false;
+		if (file.startsWith("$")) {
+				file = Main.ProgPath+file.substring(1);
+				file=file.replace("\\", "/");
+				file=file.replace("//", "/");
+				xk=true;
+				}
 		if (file.contains("/../") || file.contains("/./") || file.startsWith("../") || file.startsWith("./")) throw new Exception("Ugly file name `"+file+"`");
 		if (file.indexOf('/')==0) return file;
-		if (path.endsWith("/")) file=path+file; else file=path+"/"+file;
+		if (!xk) {
+				if (path.endsWith("/")) file=path+file; else file=path+"/"+file;
+				}
 		file=file.replace("//", "/");
 		return file;
 	}
 	
 	public static String GetPath(String aq) throws Exception {
+		if (aq.startsWith("$")) {
+				aq = Main.ProgPath+aq.substring(1);
+				aq=aq.replace("\\", "/");
+				aq=aq.replace("//", "/");
+				}	
+			
 		if (aq.contains("/../") || aq.startsWith("../") || aq.startsWith("./")) {
 			String qaq =new File(aq).getCanonicalPath().replace('\\', '/');
 			if (qaq.endsWith("/")) qaq=qaq.substring(0,qaq.length()-1);
-			if (qaq.contains("/../") || qaq.contains("/./") || qaq.startsWith("../") || qaq.startsWith("./")) throw new Exception("Ugly path `"+aq+"`");
+			if (qaq.contains("/../") || qaq.contains("/./") || qaq.startsWith("../") || qaq.startsWith("./")) throw new Exception("Ugly path `"+aq+"` 1");
 			aq=qaq;
 			}		
 		int qx = aq.lastIndexOf('/');
 		if (qx==-1) {
 			String qaq =new File(".").getCanonicalPath().replace('\\', '/');
+			
 			if (!qaq.endsWith("/")) qaq+="/";
 			return qaq;
 		}
 		String pa = aq.substring(0,qx);
-		if (aq.contains("/../") || aq.contains("/./") || aq.startsWith("../") || aq.startsWith("./")) throw new Exception("Ugly path `"+aq+"`");
+		if (aq.contains("/../") || aq.contains("/./") || aq.startsWith("../") || aq.startsWith("./")) throw new Exception("Ugly path `"+aq+"` 2");
 		return pa+"/";
 	}
 	
@@ -1191,64 +1209,83 @@ public class J {
 						
 		}
 
-	public static String ParsePGPKey(String msg) throws Exception {
+	public static String ParsePGPObj(String msg,String MARKER) throws Exception {
 		String q="";
 		String[] li = msg.split("\\n");
 		int cx = li.length;
 		int pgp = 0;
+	
 		for (int ax=0;ax<cx;ax++) {
 			String s = li[ax].trim();
-			if (s.contains("---BEGIN PGP PUBLIC KEY BLOCK---")) {
-				if (pgp!=0) throw new PException("@550 Invalid PGP KEY block");
+			
+			if (s.contains("---BEGIN "+ MARKER+"---")) {
+				if (pgp!=0) throw new PException("@550 Invalid "+ MARKER);
 				pgp=1;
 				}
 			if (pgp==1) q+=s+"\r\n";
-			if (s.contains("---END PGP PUBLIC KEY BLOCK---")) {
-				if (pgp!=1) throw new PException("@550 Invalid PGP KEY block"); else pgp=2;
+			if (s.contains("---END "+ MARKER+"---")) {
+				if (pgp!=1) throw new PException("@550 Invalid "+ MARKER); else {
+						pgp=2;
+						break;
+						}
 				} 
 		}
-	if (pgp!=2) throw new PException("@550 Can't read PGP KEY block correctly");
+	
+		if (pgp!=2) throw new PException("@550 Can't read "+ MARKER+" correctly");
 	return q;
 	}
 	
-	public static String ParsePGPPrivKey(String msg) throws Exception {
-		String q="";
-		String[] li = msg.split("\\n");
-		int cx = li.length;
-		int pgp = 0;
-		for (int ax=0;ax<cx;ax++) {
-			String s = li[ax].trim();
-			if (s.contains("---BEGIN PGP PRIVATE KEY BLOCK---")) {
-				if (pgp!=0) throw new PException("@550 Invalid PRIVATE KEY block");
-				pgp=1;
-				}
-			if (pgp==1) q+=s+"\r\n";
-			if (s.contains("---BEGIN PGP PRIVATE KEY BLOCK---")) {
-				if (pgp!=1) throw new PException("@550 Invalid PRIVATE KEY block"); else pgp=2;
-				} 
-		}
-	if (pgp!=2) throw new PException("@550 Can't read PRIVATE KEY block correctly");
-	return q;
+	public static String ParsePGPKey(String msg) throws Exception { return ParsePGPObj(msg,"PGP PUBLIC KEY BLOCK"); }
+	public static String ParsePGPPrivKey(String msg) throws Exception { return ParsePGPObj(msg,"PGP PRIVATE KEY BLOCK"); }
+	public static String ParsePGPMessage(String msg) throws Exception { return ParsePGPObj(msg,"PGP MESSAGE"); }
+	
+	public static boolean PGPVerifyKey(String ascii,String mail) throws Exception {
+		ascii = ParsePGPKey(ascii);
+		InputStream in = PGPUtil.getDecoderStream(new ByteArrayInputStream(ascii.getBytes()));
+		int cx = in.available();
+		byte[] dat = new byte[cx];
+		in.read(dat);
+		in.close();
+		in=null;
+		ascii=new String(dat);
+		int m = (int)(dat[0]&255);
+		if (
+				m!=0x98 &&
+				m!=0x99 &&
+				m!=0x9A &&
+				m!=0xC6 ) throw new PException(550,"Invalid KEYRING file");
+				
+		mail=mail.toLowerCase();
+		ascii=ascii.toLowerCase(); // Auguri!!!
+		if (ascii.contains("<"+mail+">")) return true;
+		return false;
 	}
 	
-	public static String ParsePGPMessage(String msg) throws Exception {
+	public static String MQuotedDecode(String in) {
 		String q="";
-		String[] li = msg.split("\\n");
-		int cx = li.length;
-		int pgp = 0;
+		in=in.replace("=\r\n", "");
+		in=in.replace("=\n", "");
+		int cx=in.length();
 		for (int ax=0;ax<cx;ax++) {
-			String s = li[ax].trim();
-			if (s.contains("---BEGIN PGP MESSAGE---")) {
-				if (pgp!=0) throw new PException("@550 Invalid PGP MESSAGE");
-				pgp=1;
-				}
-			if (pgp==1) q+=s+"\r\n";
-			if (s.contains("---END PGP MESSAGE---")) {
-				if (pgp!=1) throw new PException("@550 Invalid PGP MESSAGE"); else pgp=2;
-				} 
+			char c = in.charAt(ax);
+			if (c=='=') {
+				String h = in.substring(ax+1, ax+3);
+				ax+=2;
+				int hi=63;
+				try { hi = Integer.parseInt(h.toLowerCase(),16); } catch(Exception E) {}
+				q+=(char) hi;
+			} else q+=c;
 		}
-	if (pgp!=2) throw new PException("@550 Can't read PGP MESSAGE correctly");
-	return q;
+		return q;
+	}
+	
+	public static String MBase64Decode(String in) {
+		in=in.trim();
+		in=in.replace("\r", "");
+		in=in.replace("\n", "");
+		in=in.replace("\t", "");
+		in=in.replace(" ", "");
+		return new String(J.Base64Decode(in));
 	}
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify

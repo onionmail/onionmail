@@ -57,13 +57,17 @@ public class PGP {
 	public static byte[] decrypt(byte[] encrypted, InputStream keyIn, char[] password) throws Exception {
         InputStream inb = new ByteArrayInputStream(encrypted);
         InputStream in = PGPUtil.getDecoderStream(inb);
-        
+              
         try {
 	        PGPObjectFactory pgpF = new PGPObjectFactory(in);
 	        PGPEncryptedDataList enc = null;
 	        Object o = pgpF.nextObject();
-	
+	        if (o==null) throw new Exception("@550 No data in message");
+	        
 	        if (o instanceof PGPEncryptedDataList)  enc = (PGPEncryptedDataList) o; else enc = (PGPEncryptedDataList) pgpF.nextObject();
+	        
+	        if (o==null) throw new Exception("@550 No dataList in message");
+	        
 	        Iterator it = enc.getEncryptedDataObjects();
 	        PGPPrivateKey sKey = null;
 	        PGPPublicKeyEncryptedData pbe = null;
