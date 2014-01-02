@@ -138,7 +138,7 @@ public class DynaRes {
 			for(String K:Head.keySet()) {
 				String v = Head.get(K);
 				if (v.contains("%")) {
-					for(String K1:Par.keySet()) if (K1.startsWith("h_")) v=v.replace("%"+K1+"%",Par.get(K1));
+					for(String K1:Par.keySet()) v=v.replace("%"+K1+"%",Par.get(K1));
 					}
 				H.put(K, v);
 				}

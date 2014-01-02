@@ -189,12 +189,43 @@ public class Stdio {
 		return x509EncodedKeySpec.getEncoded();
 		
 	}
-	
+		
 	protected static KeyPair RSAKeyGen(int bits) throws Exception {
-		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-		keyGen.initialize(bits);
+		
+		KeyPairGenerator keyGen;
+		if (Main.RSAGenBC) keyGen = KeyPairGenerator.getInstance("RSA","BC"); else keyGen = KeyPairGenerator.getInstance("RSA");
+		if (Main.RandomHeart!=null) keyGen.initialize(bits,Stdio.getRandom()); else keyGen.initialize(bits);
+		
 		KeyPair me = keyGen.genKeyPair();
 		return me;
+	}
+	
+	private static byte[] Seeder =  null;	
+	
+	protected static SecureRandom getRandom() throws Exception {
+		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+		long x=System.currentTimeMillis();
+		if (Seeder==null) {
+			long t = System.currentTimeMillis()+500+random.nextInt(500);
+			if (new File(Main.RandomHeart).exists()) Seeder=Stdio.file_get_bytes(Main.RandomHeart); 
+			if (Seeder==null || Seeder.length<1023) {
+				Seeder= new byte[1024];
+				random.nextBytes(Seeder);
+				}
+			while(x<t) {
+				byte[] b = Stdio.sha512a(new byte[][] {Seeder,Long.toString(x,36).getBytes() });
+				x=System.currentTimeMillis();
+				random.setSeed(b);
+				random.setSeed(Seeder);
+				random.nextBytes(Seeder);
+				}
+			Stdio.file_put_bytes(Main.RandomHeart, Seeder);
+			}
+		byte[] b = Stdio.sha512a(new byte[][] {Seeder,Long.toString(x,36).getBytes() });
+		random.setSeed(b);
+		random.setSeed(Seeder);
+		random.nextBytes(Seeder);
+		return random;
 	}
 	
 	protected static long NewRndLong() {
@@ -209,8 +240,22 @@ public class Stdio {
 	
 	protected static void NewRnd(byte[] rnd) {
 		try {
-		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");		
-		random.nextBytes(rnd);
+		SecureRandom random;
+		if (Main.RandomHeart!=null) {
+			random = Stdio.getRandom();
+			long x=System.currentTimeMillis();
+			byte[] b = Stdio.sha512a(new byte[][] {Seeder,Long.toString(x,36).getBytes() });
+			random.setSeed(b);
+			random.setSeed(Seeder);
+			int cx=rnd.length;
+			b = new byte[cx];
+			random.nextBytes(b);
+			random.nextBytes(rnd);
+			for (int ax=0;ax<cx;ax++) rnd[ax]^=b[ax];
+			} else {
+				random = SecureRandom.getInstance("SHA1PRNG");
+				random.nextBytes(rnd);
+			}
 		} catch(Exception E) {}
 		
 	}

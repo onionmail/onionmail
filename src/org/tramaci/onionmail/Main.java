@@ -41,8 +41,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	Config Config = new Config();
 	
-	public static final long VersionID = 0x0001_0000_0030_00A1L;
-	public static final String Version="1.0.48B";
+	public static final long VersionID = 0x0001_0001_0031_00A2L;
+	public static final String Version="1.1.49B";
 	public static final String VersionExtra="";
 	
 	public static DNSServer DNSServer=null;
@@ -86,7 +86,9 @@ public class Main {
 	private static String OutFile="onionstart.log";
 	
 	public static String CompiledBy = null;
-	public static String ProgPath=".";
+	public static String ProgPath="./";
+	public static String RandomHeart=null;
+	public static boolean RSAGenBC = false;
 	
 	public void SelfTest() throws Exception {
 		int cx= SMTPS.length;
@@ -517,7 +519,7 @@ public static void main(String args[]) {
 			int cx = args.length;
 			boolean fp=true;
 			if (cx>0 && args[0].compareTo("-q")==0) fp=false;
-			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013 by Tramaci.org\n\tSome rights reserved\n\n");
+			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\tSome rights reserved\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;
@@ -792,3 +794,4 @@ public static void main(String args[]) {
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
+//NTRU ???

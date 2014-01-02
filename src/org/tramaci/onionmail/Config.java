@@ -32,6 +32,7 @@ import java.net.InetAddress;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Date;
@@ -170,7 +171,6 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public String[] PGPSpoofVer = null;
 		public String PGPRootUserPKeyFile = null;
 		public boolean PGPStrictKeys = false;
-		
 		public int AESKeyRoundExtra = 0;
 		
 		public static void echo(String st) { System.out.print(st); }
@@ -589,6 +589,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				C.SMPTServer[ne].ExitEnterPolicyBlock=P;	
 				if (Main.OnlyLoad) return line;
 				
+				if (Main.RandomHeart!=null) {
+					Main.echo("\t  + Initialize RandomHeart ... ");
+					SecureRandom rnd = Stdio.getRandom();
+					long x= rnd.nextLong();
+					Main.echo("\t"+J.Spaced(Long.toHexString(x),16)+" Ok\n");
+				}
+				
 				try {
 					File F = new File(C.SMPTServer[ne].Maildir);
 					if (!F.exists() || !C.SMPTServer[ne].CheckServerPresent()) {
@@ -800,6 +807,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("ssljavahasbug")==0) { fc=true; C.SSLJavaHasBug=Config.parseY(tok[1]); }								
 								if (cmd.compareTo("usebootsequence")==0) { fc=true; C.UseBootSequence=Config.parseY(tok[1]); }
 								if (cmd.compareTo("aeskeyroundextra")==0) { fc=true; C.AESKeyRoundExtra=Config.parseInt(tok[1],"Round", 0, 15); }		
+								if (cmd.compareTo("rsakeygenbc")==0) { fc=true; Main.RSAGenBC=Config.parseY(tok[1]); }
+								if (cmd.compareTo("randomheart")==0) { fc=true; Main.RandomHeart=J.MapPath(CPath, tok[1]); }
 								
 								if (cmd.compareTo("dnssotimeout")==0) { fc=true; C.DNSSoTimeout=Config.parseInt(tok[1],"milliseconds timeout",2000); }
 								if (cmd.compareTo("maxsmtpsession")==0) { fc=true; C.MaxSMTPSession=Config.parseInt(tok[1],"smtp connections value",512); }

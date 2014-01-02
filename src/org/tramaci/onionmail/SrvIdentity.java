@@ -1901,7 +1901,7 @@ public class SrvIdentity {
 		byte[] in = Stdio.file_get_bytes(fn);
 		in = Stdio.AES2Dec(X[0], X[0], in);
 		LibSTLS.VerifyChain (in,C,host);
-		if (Config.Debug) Log("SSL OK For `"+host+"` Hash `"+Stdio.Dump(LibSTLS.CertHash(C, host))+"`");	
+		if (Config.Debug) Log("SSL OK For `"+host+"` CryptHash `"+Stdio.Dump(LibSTLS.CertHash(C, host))+"`");	
 		}
 		
 		//////////////

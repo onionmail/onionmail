@@ -34,7 +34,9 @@ import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.TreeMap;
 
 import javax.crypto.SecretKey;
 import javax.net.ssl.KeyManagerFactory;
@@ -401,8 +403,8 @@ public class LibSTLS {
 		for (int ax=0;ax<cx;ax++) P[ax]=Stdio.Arr2Public(key[ax], new String(fmt[ax]));
 		return P;
 	}
-	
-	public static void VerifyChain (byte[] in,javax.security.cert.X509Certificate[] C,String host) throws Exception {
+	/*
+	public static void VerifyChainOld (byte[] in,javax.security.cert.X509Certificate[] C,String host) throws Exception {
 		byte[][]	key= Stdio.MxDaccuShifter(in, Const.MX_CertChain);
 		byte[][]	fmt= Stdio.MxDaccuShifter(key[1], 2);
 						key= Stdio.MxDaccuShifter(key[0],1);
@@ -421,12 +423,77 @@ public class LibSTLS {
 				}
 			}
 		}
+	*/
+	public static boolean CmpsbAB(byte[][] A,byte[][] B) throws Exception {
+		int cax = A.length;
+		int cbx = B.length;
+		if (cbx!=cax) return false;
+		boolean[] cmp = new boolean[cax];
+		for (int ax=0;ax<cax;ax++) {
+			if (!cmp[ax]) for (int bx=0;bx<cbx;bx++) {
+				cmp[ax]|= Arrays.equals(A[ax], B[bx]);
+				if (cmp[ax]) break;
+				}
+			}
+	cbx=0;
+	for (int ax=0;ax<cax;ax++) if (cmp[ax]) cbx++;
+	return cbx==cax;
+	}
+	
+	public static void VerifyChain (byte[] in,javax.security.cert.X509Certificate[] C,String host) throws Exception {
+		byte[][]	key= Stdio.MxDaccuShifter(in, Const.MX_CertChain);
+	//	byte[][]	fmt= Stdio.MxDaccuShifter(key[1], 2);
+						key= Stdio.MxDaccuShifter(key[0],1);
+						
+		int cx = key.length;
+		if (cx!=C.length) throw new Exception("@500 SSL_CERT: Chain length not equal for `"+host+"`");
+		byte[][] crt = new byte[cx][];
+		int stat=0;
+		for (int ax=0;ax<cx;ax++) {
+			try {
+				PublicKey P = C[ax].getPublicKey();
+				stat=1;
+				C[ax].verify(P,"BC");
+				stat=2;
+				C[ax].checkValidity();
+				stat=3;
+				crt[ax]=Stdio.Public2Arr(P);
+						//Stdio.Arr2Public(key[ax], new String(fmt[ax]));				
+				} catch(Exception E) {
+					E.printStackTrace();
+					String m = E.getMessage();
+					throw new Exception("@500 SSL_CERT: "+m+" for `"+host+"` ST=`"+stat+"`");
+				}
+			}
+		
+		if (!CmpsbAB(key,crt)) throw new Exception("@500 SSL_CERT: Public Keys do not match for `"+host+"`");
+		
+		}
+		
+	
 	
 	public static byte[] CertHash(javax.security.cert.X509Certificate[] C,String Host) throws Exception {
+		if (C.length==0) {
+			return Stdio.sha1a(new byte[][] {
+					Host.toLowerCase().getBytes()		,
+					C[0].getEncoded()							})
+					;
+			
+			}
+		
+		TreeMap<String, byte[]> XY = new TreeMap<String, byte[]>();
 		int cx = C.length;
+		for (int ax=0;ax<cx;ax++) {
+			byte[] raw= C[ax].getEncoded();
+			byte[] id = Stdio.md5(raw);
+			XY.put(Stdio.Dump(id), raw);
+			}
+		
 		byte[][] raw = new byte[cx+1][];
 		raw[0] = Host.toLowerCase().getBytes();
-		for (int ax=0;ax<cx;ax++) raw[ax+1] = C[ax].getEncoded();
+		int ax=1;
+		for (String K:XY.descendingKeySet()) raw[ax++] = XY.get(K);
+		XY=null;
 		byte[] rs = Stdio.sha1a(raw);
 		raw = null;
 		return rs;

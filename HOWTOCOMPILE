@@ -1,0 +1,15 @@
+ 
+ How to compile OnionMail:
+ 
+ 1) Downlaod the complete JAVA SE 7.1 library with patch.
+ 	This enables the all modes SSL. There are some limitations. 
+        JAVA SSL BUG: JDK-7044060 Update your JDK!
+        This may be a NSA's limitation.
+        
+ 2) Replace the content of jce_policy-6.zip in your JDK library.
+ 	Remove some USA & NSA's limitations.
+
+ 3) Add some bouncy Castle libray jars:
+	bcprov-ext-jdk15on-149.jar
+	bcpg-jdk15on-150.jar
+	 
