@@ -25,11 +25,13 @@ public class Const {
 		public static final int MX_HashMap = 		0x1A03;
 		public static final int MX_Server_Conf=	0x1A04;
 		public static final int MX_DBTrust=			0x1A08;
-		public static final int MX_ListExit=				0x1A09;
+		public static final int MX_ListExit=				0x1A29;
 		public static final int MX_CertChain=		0x1A0A;
 		public static final int MX_Friends=				0x1A0B;
 		public static final int MX_Alias=					0x1A0C;
+		public static final int MX_RVMAT=				0x1A0D;
 		public static final int MX_DERK=				0x7310;
+		public static final int MX_ExitRouterInfo=0x1A0E;
 		
 		public static final int MX_E_Boot=				0x7C01;
 		public static final int MX_1_Boot=				0x7C00;
@@ -51,7 +53,7 @@ public class Const {
 		
 		public static final String KD_ExitList="OnionMail.ExitList("+Long.toString(0x13c03c0942942dc8L,36)+")";
 		public static final String Manifest_Splitter="-:-";
-		public static final String TormVer="1.0";
+		public static final String TormVer="1.5, VMAT, MX, MF2";
 		
 		public static final String ASC_KB_KCTL = "KCTL";
 		public static final String SRV_PRIV="#Server/Private#";

@@ -45,6 +45,19 @@ public class SMTPServer extends Thread {
 		start();
 		}
 	
+	SMTPServer(Config C,SrvIdentity serv,int port) throws Exception {
+		super();
+		Config = C;
+		Identity = serv;
+		running=false;
+		if (serv.EnterRoute) srv = new ServerSocket(port); else srv = new ServerSocket(port,0,Identity.LocalIP);
+				
+		running=true;
+		Connection = new SrvSMTPSession[Config.MaxSMTPSession];
+		Identity.Spam = new Spam(Config,Identity);
+		start();
+		}
+	
 	public void Garbage() {	
 		int cx = Connection.length;
 		for (int ax=0;ax<cx; ax++) {
@@ -76,10 +89,12 @@ public class SMTPServer extends Thread {
 		Socket con=null;
 		
 		long tcr = System.currentTimeMillis();
+		
 		while(running) {
 			Garbage();	
 			int cx = Connection.length;
 			int si=-1;
+			int numTask=0;
 			for (int ax=0;ax<cx;ax++) {
 				if (Connection[ax]!=null && (!Connection[ax].isConnected() || tcr>Connection[ax].EndTime)) {
 					Connection[ax].End();
@@ -90,7 +105,10 @@ public class SMTPServer extends Thread {
 						break;
 						}
 			}
+			for (int ax=0;ax<cx;ax++) if (Connection[ax]!=null) numTask++;
+			Identity.statsRunningSMTPSession=numTask;
 			
+			if (numTask>Identity.statsMaxRunningSMTPSession) Identity.statsMaxRunningSMTPSession=numTask;	
 			try {
 					con = srv.accept();
 					if (Identity.BlackList!=null) {
@@ -122,7 +140,7 @@ public class SMTPServer extends Thread {
 			
 			if (Config.Debug) Log("SMTP Connection: "+con.getRemoteSocketAddress().toString()+"\n");
 			try {
-					Connection[si] = new SrvSMTPSession(Config,Identity,con);
+					Connection[si] = new SrvSMTPSession(Config,Identity,con,this);
 					} catch(Exception E) {
 					Log("SMTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n");
 					try { con.close(); } catch(Exception N) {}

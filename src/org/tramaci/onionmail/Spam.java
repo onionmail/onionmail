@@ -72,7 +72,7 @@ public class Spam {
 	
 	public boolean exists(String local) throws Exception {
 		String fs = GetFile(local);
-		return new File(fs+".key").exists() && new File(fs+".rsa").exists();
+		return new File(fs+".key").exists() && new File(fs+".lst").exists();
 		}
 	
 	private String GetFile(String local) throws Exception {
@@ -98,7 +98,7 @@ public class Spam {
 			if (!new File(fs+".key").exists()) return false;
 			
 			long bl =MyHash(query, MagicCode);
-			long bg =MyHash("*@"+J.getDomain(query), MagicCode);
+			long bg =MyHash("*@"+J.getDomain(query), MagicCode); 
 			long H[] = Stdio.Lodsx(Stdio.file_get_bytes(fs+".key"), 8);
 			int cx=H.length;
 			for (int ax=0;ax<cx;ax++) if (H[ax]==bl || H[ax]==bg) return true;
@@ -113,7 +113,6 @@ public class Spam {
 	public void UsrCreateList(String local) throws Exception {
 				String fs = GetFile(local);
 				Stdio.file_put_bytes(fs+".key",new byte[0]);
-				
 				String lst="SPAM\n";
 				byte[] db = lst.getBytes();
 				db = Stdio.AESEncMulP(Sale, db);
@@ -142,9 +141,9 @@ public class Spam {
 		Stdio.file_put_bytes(fs+".lst",db);
 		}
 
-	public String[] GetList(String local) throws Exception {
+	public String[] GetList(String local) throws Exception { 
 		String fs = GetFile(local);
-		if (!new File(fs+".lst").exists()) UsrCreateList(local);
+		if ( !new File(fs+".key").exists() || !new File(fs+".lst").exists()) return new String[0];
 		
 		byte[] db = Stdio.file_get_bytes(fs+".lst");
 		db = Stdio.AESDecMulP(Sale, db);
@@ -213,8 +212,8 @@ public class Spam {
 	public static boolean  isValid(String ad) {
 		String[] tok = ad.split("@");
 		if (tok.length!=2) return false;
-		if (!tok[1].matches("[0-9a-z\\.\\-\\_]{2,60}\\.[a-z]{2,6}")) return false;
 		if (tok[0].compareTo("*")==0) return true;
+		if (!tok[1].matches("[0-9a-z\\.\\-\\_]{2,60}\\.[a-z]{2,6}")) return false;
 		if (!tok[1].matches("[0-9a-z\\.\\-\\_]{2,50}")) return false;
 		return true;
 	}

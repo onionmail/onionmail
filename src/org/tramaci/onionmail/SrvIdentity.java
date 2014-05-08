@@ -130,6 +130,10 @@ public class SrvIdentity {
 	
 	public IPList BlackList=null;
 	
+	public VirtualMAT VMAT = null;
+	public String EnabledVMAT= null;
+	public String DisabledVMAT= null;
+	
 	public HashMap <String,Integer> ExitEnterPolicyBlock = null;
 	public static final int EXP_NoEntry = 1;
 	public static final int EXP_NoExit = 2;
@@ -149,22 +153,41 @@ public class SrvIdentity {
 	public volatile int StatCurrentM=0;
 	public volatile int LastDoFriend = 0;
 	
+	public volatile long StatSendMSGBytes = 0; 
+	public volatile long StatRecvMSGBytes = 0;
+	public String binaryStatsFile=null; 
+	public int StatCurrentHour=0;
+	
 	public boolean NewUsrEnabled = false;
 	public int NewUsrMaxXDay = 0;
 	public int NewUsrMaxXHour = 0;
 	public int NewUsrLastDay = 0;
-	public int NewUsrLastDayCnt = 0;
+	public volatile int NewUsrLastDayCnt = 0;
 	public int NewUsrLastHour = 0;
-	public int NewUsrLastHourCnt = 0;
+	public volatile int NewUsrLastHourCnt = 0;
 	
 	public boolean NewLstEnabled = false;
 	public int NewLstMaxXDay = 0;
 	public int NewLstMaxXHour = 0;
 	public int NewLstLastDay = 0;
-	public int NewLstLastDayCnt = 0;
+	public volatile int NewLstLastDayCnt = 0;
 	public int NewLstLastHour = 0;
-	public int NewLstLastHourCnt = 0;
+	public volatile int NewLstLastHourCnt = 0;
 	public long TimeSpoofSubRandom = 0;
+	
+	public String ExitGood = null;
+	public String ExitBad=null;
+	//public String ExitCurrent = null;
+		
+	public String IdentText=null;
+	
+	public String LogVoucherTo=null;
+	public int VoucherLength=0;
+	public int MultiDeliverMaxRCPTTo=10;
+	public int ExitAltPort = 10025;		
+	public boolean ExitNotMultipleServerDelivery = false; 
+	
+	public HashMap <String,Application> Applications = null;
 	
 //	public HashMap <String,String> NextCheck = new HashMap<String,String>();
 	public HashMap <String,String> ManifestInfo = new HashMap <String,String>();
@@ -177,7 +200,13 @@ public class SrvIdentity {
 	public String StatFile=null;
 	
 	public String OnTheSameMachine=null;
-		
+	public boolean AutoDeleteReadedMessages=true;	
+	
+	public volatile int statsRunningSMTPSession = 0; //TODO SaveStats
+	public volatile int statsMaxRunningSMTPSession = 0;
+	public volatile int statsRunningPOP3Session = 0;
+	public volatile int statsMaxRunningPOP3Session = 0;
+	
 	public int Status = 0;
 	public static final int ST_NotLoaded=0;		//A
 	public static final int ST_Loaded=1;				//B
@@ -189,15 +218,17 @@ public class SrvIdentity {
 	public static final int ST_Error=64;				//H
 	public static final int ST_Ok=128;					//I
 	
+	private static final int Loop_Stats = 0x2e27810; // stats by base36.
+	
 	public String getStatus() {
 		String st="";
 		for (int ax=0;ax<8;ax++) if ((Status & 1<<ax)!=0) st+=Integer.toString(10+ax,36);
 		return st;
 	} 
 	
-	public void SaveStat() throws Exception {
+	public void SaveStat(boolean resetH) throws Exception {
 			StatHcount++;
-							
+			try {				
 				byte[] c = Stdio.Stosxi(new int[] {
 							StatMsgIn,
 							StatMsgOut,
@@ -217,38 +248,112 @@ public class SrvIdentity {
 			c=Stdio.MxAccuShifter(new byte[][] { c }, 0xf385);
 			Stdio.file_put_bytes(Maildir+"/stats", c);
 			c=null;
+			} catch(Exception E) { Log(Config.GLOG_Server, "Stat: error on `/stats` "+E.getMessage()); }
 			
-			if (StatFile==null) return;
-			int tcr = (int)((System.currentTimeMillis()+Config.TimeSpoof)/1000L);
-			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(StatFile, true)));
-			out.println(
-					tcr+";"+
-					StatHcount+";"+
-					StatMsgIn +";"+
-					StatMsgOut+";"+
-					StatMsgInet+";"+
-					StatError+";"+
-					StatException+";"+
-					StatSpam+";"+
-					StatPop3+";"+
-					StatTor2TorBy+";"+
-					StatTor2InetBy+";"+
-					StatInet2TorBy+";"+
-					StatCurrentM )
-					;
-			out.close();
-			
+			if (StatFile!=null) try {
+				int tcr = (int)((System.currentTimeMillis()+Config.TimeSpoof)/1000L);
+				PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(StatFile, true)));
+				out.println(
+						tcr+";"+
+						StatHcount+";"+
+						StatMsgIn +";"+
+						StatMsgOut+";"+
+						StatMsgInet+";"+
+						StatError+";"+
+						StatException+";"+
+						StatSpam+";"+
+						StatPop3+";"+
+						StatTor2TorBy+";"+
+						StatTor2InetBy+";"+
+						StatInet2TorBy+";"+
+						StatCurrentM+";"+
+						StatRecvMSGBytes+";"+
+						StatSendMSGBytes+";"+
+						statsMaxRunningSMTPSession+";"+
+						statsMaxRunningPOP3Session+";"+
+						Main.statsMaxThread+";"+
+						Main.statsPercThread	)
+						;
+				out.close();
+				} catch(Exception E) { Log(Config.GLOG_Server, "Stat: error on `"+StatFile+"` "+E.getMessage()); }
+		
 		GregorianCalendar  q = new GregorianCalendar();
-    	int ab = q.get(Calendar.MONTH);
-    	ab^= q.get(Calendar.YEAR)<<6;
-		ab^= ((int)255& this.Sale[0])<<22;
-		ab^=ab>>1;
-		if (ab!=StatCurrentM) {
-			StatCurrentM=ab;
-			StatTor2TorBy=0;
-			StatTor2InetBy=0;
-			StatInet2TorBy=0;
+		
+		if (binaryStatsFile!=null) try {
+			long[] dta = new long[] {
+					((System.currentTimeMillis()+Config.TimeSpoof)/1000L) ,
+					StatMsgIn,
+					StatMsgOut,
+					StatMsgInet,
+					StatError,
+					StatException,
+					StatSpam,
+					StatPop3,
+					StatTor2TorBy,
+					StatTor2InetBy,
+					StatInet2TorBy,
+					StatRecvMSGBytes,
+					StatSendMSGBytes,
+					statsMaxRunningSMTPSession,
+					statsMaxRunningPOP3Session,
+					Main.statsMaxThread,
+					Main.statsPercThread
+					}
+					;
+			
+			int[] fmt= new int[] {
+					4,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					4,
+					4,
+					2,
+					2,
+					2,
+					1}
+					;
+			
+			J.LoopFileInit(binaryStatsFile, Loop_Stats, 744, 63);
+			J.LoopFileWrite(binaryStatsFile, dta, fmt);
+			
+			} catch(Exception E) { Log(Config.GLOG_Server, "Stat: error on `"+binaryStatsFile+"` "+E.getMessage()); }		
+	 	
+		
+		int hour = (int) Math.floor(System.currentTimeMillis()/60000);
+		
+		if (StatCurrentHour==0) {
+				StatCurrentHour=hour;
+				return;
+				}
+		
+		if (StatCurrentHour!=hour) {
+				StatMsgIn=0;
+				StatMsgOut=0;
+				StatMsgInet=0;
+				StatError=0;
+				StatException=0;
+				StatSpam=0;
+				StatPop3=0;
+				StatTor2TorBy=0;
+				StatTor2InetBy=0;
+				StatInet2TorBy=0;
+				StatRecvMSGBytes=0;
+				StatSendMSGBytes=0;
+				statsMaxRunningSMTPSession=0;
+				statsMaxRunningPOP3Session=0;
+				Main.statsMaxThread=0;
+				Main.statsPercThread=0;
+				StatCurrentHour=hour;
 			}
+		
 		}
 		
 	
@@ -260,7 +365,8 @@ public class SrvIdentity {
 			Config=C;
 			Spam= null; // new Spam(C,this);
 			ManifestInfo.put("info", "1.0");
-			
+			VMAT = new VirtualMAT(this);
+						
 	}
 	
 	private void StartProcs() throws Exception {
@@ -285,7 +391,7 @@ public class SrvIdentity {
 									FriendOk=true;
 									LastDoFriend=(int)(System.currentTimeMillis()/1000);
 									}
-							try { SearchExit(); } catch(Exception EX) { Log(Config.GLOG_Bad,"SearchExit: "+EX.getMessage()); }
+							try { SearchExit(); } catch(Exception EX) { Log(Config.GLOG_Bad,"SearchExit: "+EX.getMessage()); EX.printStackTrace(); }
 							
 							if (Main.Oper==0 && Config.UseBootSequence && !new File(Maildir+"/head/boot").exists() && CVMF3805TMP!=null) try {
 									CreateBoot();
@@ -293,7 +399,7 @@ public class SrvIdentity {
 										if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
 										CVMF3805TMP=null;
 										String ms = EX.getMessage();
-										if (ms.startsWith("@")) Log(Config.GLOG_Server,ms.substring(1)); else Config.EXC(EX, "SCBF2`"+Onion+"`"); 
+										if (ms.contains("@")) Log(Config.GLOG_Server,ms.substring(1)); else Config.EXC(EX, "SCBF2`"+Onion+"`"); 
 										}
 							
 							if (BlackList!=null) try { BlackList.AutoSave(); } catch(Exception EX) { Log(Config.GLOG_Bad,"BlackList AutoSave: "+EX.getMessage()); }
@@ -309,12 +415,22 @@ public class SrvIdentity {
 			Runnable StatOp = new Runnable() {
 				public void run() {
 					try { 
-							SaveStat();
+							SaveStat(true);
 							} catch(Exception E) { Config.EXC(E, "StatOp"); }
+					
+					if (BlackList!=null) try { 
+							BlackList.Garbage();
+							BlackList.AutoSave();
+							} catch(Exception E) { Config.EXC(E, "IPGrarbage"); }
 					}
-				};
+				} ;
 				
 			StatRun.scheduleAtFixedRate(StatOp, 1 ,60, TimeUnit.MINUTES);
+			if (binaryStatsFile!=null) try { 
+					J.LoopFileInit(binaryStatsFile, Loop_Stats, 744, 31);
+					} catch(Exception E) { 
+						Log(Config.GLOG_Server,"BinaryStat: Error on `"+binaryStatsFile+"` "+E.getMessage()); 
+					} 
 	}
 	
 	public static byte[][] CreateSK(String onion) throws Exception {
@@ -337,7 +453,7 @@ public class SrvIdentity {
 		File F = new File(Maildir);
 		if (!F.exists()) F.mkdirs();
 			
-		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed","head" }) {
+		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed","head","net" }) {
 			F = new File(Maildir+"/"+p);
 			F.mkdir();
 			F.setExecutable(true, true);
@@ -384,6 +500,24 @@ public class SrvIdentity {
 					, 0x13c03c09) ;
 	
 		Stdio.file_put_bytes(Maildir+"/server.bin", sh);
+		String s = "ver: OnionMail "+Main.getVersion()+
+				"\nvid: "+Long.toHexString(Main.VersionID)+
+				"\nextra: "+Main.VersionExtra+
+				"\ncomp: "+Main.CompiledBy+
+				"\ntorm: V="+Const.TormVer+
+				"\nmig: 0"+
+				"\nvid_b: ";
+		
+		long bx = Main.VersionID;
+		for (int ax=0;ax<4;ax++) {
+				s+=Integer.toString((int)(bx&255));
+				if (ax!=3) s+=",";
+				bx>>=8;
+				}
+		
+		s+="\nhash: "+Long.toHexString(s.hashCode())+"\n";
+				
+		Stdio.file_put_bytes(Maildir+"/server.tex",s.getBytes() );
 		
 	}
 	
@@ -453,9 +587,12 @@ public class SrvIdentity {
 		if (!F.exists()) throw new Exception("Maildir doesn't exist: `"+Maildir+"`");
 		for (String p : new String[] {  "usr" , "inbox" , "keys" , "log", "feed","head" }) {
 			F = new File(Maildir+"/"+p);
-			if (!F.exists()) throw new Exception("Can' open path `"+Maildir+"/"+p+"`");
+			if (!F.exists()) throw new Exception("Can't open path `"+Maildir+"/"+p+"`");
 			}
 		
+		 F = new File(Maildir+"/net");
+		 if (!F.exists()) if (!F.mkdir()) throw new Exception("Can't create path `"+Maildir+"/net`");
+		 		
 		if (Config.UseBootSequence && !new File(Maildir+"/head/boot").exists()) CVMF3805TMP = sk.clone(); else CVMF3805TMP=null; 
 		
 		byte[][] Head = new byte[1][];
@@ -791,7 +928,11 @@ public class SrvIdentity {
 		to = J.getMail(to, false);
 		if (to==null) throw new PException(503,"Inalid mail address");
 		String dom = J.getDomain(to);
-		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body);
+		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
+		if (!Hldr.containsKey("delivery-date")) Hldr.put("delivery-date", TimeString());
+		if (!Hldr.containsKey("message-id")) Hldr.put("message-id", "<"+J.RandomString(16)+"@"+ ((this.EnterRoute && !to.endsWith(".onion")) ? ExitRouteDomain : Onion)+">");
+			
+		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body,null);
 		}
 	
 	public String SrvPGPMessage(String tousr,HashMap <String,String> Hldr,String Body) throws Exception {
@@ -808,7 +949,7 @@ public class SrvIdentity {
 			Hldr.put("subject", "RE: PGP");
 			Hldr.put("content-type", "text/plain; charset=UTF-8");
 			Body= new String(rs);
-			Body=Body.replace("\r\n", "\n"); //TODO levare!
+			Body=Body.replace("\r\n", "\n"); //XXX levare!
 			Body=PGPSpoofNSA(Body, false); 
 			Body=Body.replace("\r\n", "\n");
 			return Body;
@@ -828,10 +969,41 @@ public class SrvIdentity {
 			
 	}
 	
+	public void SendLocalMessageStream(String MailTo,HashMap <String,String> Hldr,BufferedReader Ms,MailBoxFile Mb) throws Exception {
+		String usr = J.getLocalPart(MailTo);
+		MailBox M = UsrOpenW(Config,usr);
+		int mi = M.Index.GetFree();
+		if (mi==-1) {
+			M.Close();
+			throw new PException("@452  Mailbox full!");
+			}
+		
+		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());	
+			long MessageBytes=0;
+		Message MS = M.MsgCreate();
+
+		MS.SetHeaders(Hldr);
+		while(true) {
+			String li;
+			if (Ms!=null) li = Ms.readLine(); else li = Mb.ReadLn();
+		
+			MessageBytes+=li.length()+2;
+			if (MessageBytes>MaxMsgSize) {
+				MS.Close();
+				throw new PException("@452 Message too big");
+				}
+			if (li.compareTo(".")==0) break;
+			MS.WriteLn(li);
+			}
+		MS.End();
+	}
+	
+	
 	public void SendLocalMessage(String LocalPart,HashMap <String,String> Hldr,String Body) throws Exception {
 		StatMsgIn++;
 		if (Config.Debug) Log("LocalMessage "+Nick);
-				
+		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
+		
 		MailBox M = UsrOpenW(Config,LocalPart);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
@@ -910,11 +1082,282 @@ public class SrvIdentity {
 			}
 		MS.End();
 	}
+			
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,MailBoxFile MBF,String VMATTO) throws Exception { 									RawRemoteSend2(MailFrom,MailTo, Hldr, MBF,null,  null , null ,VMATTO);	}
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,String Msg,String VMATTO) throws Exception { 											RawRemoteSend2(MailFrom,MailTo,Hldr, null, Msg, null,null,VMATTO); 		}
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,BufferedReader I, OutputStream O,String VMATTO) throws Exception { 	RawRemoteSend2(MailFrom,MailTo, Hldr,null,null,   I,  O,VMATTO); 				}
+		
+	private  void RawRemoteSend2(String MailFrom,String MailTo,HashMap <String,String> Hldr,final MailBoxFile MBF,final String MSG, final BufferedReader I,final OutputStream O,String VmatToX) throws Exception {
+		ExitRouterInfo ex=null;
+		String t0=null;
+		String tlp = J.getLocalPart(MailTo);
+		String tdm = J.getDomain(MailTo);
+		if (tlp.endsWith(".onion")) throw new PException("@500 Can't send MAT address into the RawSend Routine");
+		boolean toTor = tdm.endsWith(".onion");
+		boolean RVMATLookup=false;
+		boolean putNotice=false;
+		String Tag="Tor";
+		String Server=tdm;
+		String VmatTo = null;
+		
+		if (Hldr!=null) {
+			if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
+			if (!Hldr.containsKey("delivery-date")) Hldr.put("delivery-date", TimeString());
+			if (!Hldr.containsKey("message-id")) Hldr.put("message-id", "<"+J.RandomString(16)+"@"+ ((this.EnterRoute && !MailTo.endsWith(".onion")) ? ExitRouteDomain : Onion)+">");
+			}
+		
+		if (VmatToX!=null && !MailTo.endsWith(".onion")) throw new Exception("@500 Can't use VmatToX to iNetMailAddress");
+		
+		if (!toTor) {
+						
+			VirtualRVMATEntry VM = VMAT.SenderVirtualRVMATEntryLoad(MailTo);
+			if (Config.Debug) Log("Lookup for VMAT="+ (VM==null  ? "NULL":"RVMAT")); 
+			if (VM!=null) {
+				Server = VM.server;
+				VmatTo=MailTo;
+				MailTo = VM.onionMail;
+				tlp = J.getLocalPart(MailTo);
+				tdm = J.getDomain(MailTo);
+				toTor=true;
+				Tag+="-RVMAT";
+				} else RVMATLookup = !tdm.endsWith(".onion");
+						
+			}
+		
+		if (RVMATLookup) Tag+="-LK";
+		
+		if (!toTor) {//sent via inet
+					if (EnterRoute) {
+					//MAT / VMAT (without RVMAT)
+					//send via inet
+					Tag+="-nEX";
+					
+					VirtualMatEntry VM = VMAT.loadVmat(MailFrom, true);
+					if (VM!=null) { //VMAT
+						Tag+="-VMAT";
+						t0=VM.localPart+"@"+ExitRouteDomain;
+						for (String k:Hldr.keySet()) {
+							String a = Hldr.get(k);
+							if (a.contains(MailFrom)) {
+								a=a.replace(MailFrom, t0);
+								Hldr.put(k, a);
+								}
+							}
+						Hldr.put("from", t0);
+						Hldr.put("x-vmat-from", MailFrom);
+						MailFrom = t0;
+						putNotice=ExitNoticeE;
+						} else { //MAT
+							Tag+="-MAT";
+							String flp = J.getLocalPart(MailFrom);
+							String fdo = J.getDomain(MailFrom);
+							t0 = flp+"."+fdo+"@"+ExitRouteDomain;
+							
+							for (String k:Hldr.keySet()) {
+							String a = Hldr.get(k);
+							if (a.contains(MailFrom)) {
+								a=a.replace(MailFrom, t0);
+								Hldr.put(k, a);
+								}
+							}
+							
+							Hldr.put("from", t0);
+							Hldr.put("x-mat-from", MailFrom);
+							putNotice=ExitNoticeE;
+							MailFrom = t0;
+						}
+					} else {
+						//Send via Exit
+						//Select Exit from settings
+						Tag+="-Exit";
+						String dou=null;
+						
+						if (J.getDomain(MailFrom).compareTo(Onion)==0) ex =selectExit4User(J.getLocalPart(MailFrom)); 
+						if (ex==null) {
+							ExitRouteList RL= GetExitList();
+							ex = RL.selectBestExit();
+							if (ex==null) ex=RL.selectAnExit();
+							}
+						
+						if (ex==null) throw new Exception("@503 No exit/enter route available!");
+						dou = ex.onion;
+						Server=dou; 
+						toTor=true;
+					}
+			}
+		
+		MXRecord[] MX=null;
+		//GET MX RECORD
+		boolean toInet=false;
+		if (EnterRoute && !toTor) {
+			Tag+="-Inet";
+			MX = Main.DNSCheck.getMX(Server);
+				if (MX==null || MX.length==0) throw new Exception("@500 SMTP Server not found `"+Server+"` (No MX record)");
+				MXRecord.MXSort(MX); 
+				toInet=true;
+				} else {
+				MX = new MXRecord[] { new MXRecord(1,Server) };
+				}
+		
+		if (MX==null || MX.length==0) throw new Exception("@500 Can't find any MX record on `"+Server+"`");
+		Server = MX[0].Host;
+		
+		Hldr=J.AddMsgID(Hldr, toInet ? ExitRouteDomain : Onion);
+		if (VmatToX!=null) if (VmatTo==null) VmatTo=VmatToX; else throw new PException("@500 R6008X1 Bad usage of VmatToX/VmatTo");
+		
+		final HashMap <String,String> Hldr3 = J.FilterHeader(Hldr);
+		final String MailTo2 = MailTo;
+		final String MailFrom2 = MailFrom;
+		final boolean RVMATLookup2=RVMATLookup;
+		final String VmatTo2=VmatTo;
+		final boolean putNotice2=putNotice;
 				
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,MailBoxFile MBF) throws Exception { 									RawBeginRemoteSession(new SMTPOutSession(null,MailTo,MailFrom,Hldr,MBF,null,null, null));	}
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,String Msg) throws Exception { 											RawBeginRemoteSession(new SMTPOutSession(null,MailTo,MailFrom,Hldr,null,Msg,null, null)); 	}
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,BufferedReader I, OutputStream O) throws Exception { 	RawBeginRemoteSession(new SMTPOutSession(null,MailTo,MailFrom,Hldr,null,null,I, O)); 				}
+		SrvAction A = new SrvAction(this,MX,"Send-"+Tag) {
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					HashMap <String,String> Hldr2 = Hldr3;
+					SMTPReply Re;
+					long MessageBytes=0;
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"MAIL FROM: "+MailFrom2);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/from)"); 
+					
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"RCPT TO: "+MailTo2);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/to)"); 
+					
+					if (SupVMAT) {
+					
+						if (RVMATLookup2) {
+							Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT LOOKUP");
+							if (Config.Debug) Log("Lookup in progress");
+							if (Re.Code==250) {
+								String OnionMail = J.getMail(Re.Msg[0], true);
+								if (OnionMail!=null) try { //Save Lookup
+									VirtualRVMATEntry MT = new VirtualRVMATEntry();
+									MT.server = J.getDomain(OnionMail);
+									MT.onionMail = OnionMail;
+									MT.mail = MailTo2;
+									VMAT.SenderRVMATSave(MT);
+									} catch(Exception E) {
+										this.Mid.Config.EXC(E, "RVMAT_Lookup `"+this.Mid.Nick+"` on `"+this.Server+"`");
+									}
+								}
+							} else {
+								if (VmatTo2!=null)  {
+									Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT TO: "+VmatTo2);
+									if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/vmat)");
+								}
+							}
+					 	} else {
+					 		if (RVMATLookup2) {
+					 				Log("NO VMAT: `"+Server+"` Can't Lookup `"+Long.toString(MailTo2.hashCode(),36)+"`");
+					 				} else if(VmatTo2!=null) Log("NO VMAT: `"+Server+"` Can't VMAT TO `"+Long.toString(VmatTo2.hashCode(),36)+"`");
+					 	}
+					
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"DATA");
+					if (Re.Code<300 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote/data)");
+					
+					if (I!=null && O!=null) {
+						O.write("354 Enter message, ending with \".\" on a line by itself\r\n".getBytes());
+						HashMap <String,String> rh = ParseHeaders(I);
+						rh = J.FilterHeader(rh);
+						for (String j:Hldr2.keySet()) rh.put(j, Hldr2.get(j));
+						Hldr2 = rh;						
+						}
+										
+					Hldr2.put("sender", MailFrom2);
+					Hldr2.put("envelope-to", MailTo2);
+					Hldr2.put("delivery-date", TimeString());
+					if (Hldr2.containsKey("date")) Hldr2.put("date", TimeString());	
+					Hldr2.put("x-ssl-transaction", this.SupTLS ? "YES" : "NO" );
+					Hldr2.put("message-id", "<"+
+							J.GenPassword(10, 0).toLowerCase()+"-"+
+							J.GenPassword(8, 0).toLowerCase()+"@"+HostName+">")
+							;
+					
+					if (this.InternetConnection && putNotice2) { 
+								String sr;
+								sr = "server."+Onion+"@"+this.Mid.ExitRouteDomain;
+								String st=sr;
+								if (ExitNotice==null) {
+								st = "This is an OnionMail message. See http://onionmail.info and <mailto:${SERVER}?subject=RULEZ> for details";
+								st=st.replace("${SERVER}", sr);
+								} else {
+								st = ExitNotice.replace("${SERVER}", sr);
+								}
+								
+						Hldr2.put("x-notice", st);
+						}
+					
+					String t0 = J.CreateHeaders(Hldr2);
+					t0=t0.trim();
+					t0+="\r\n\r\n";
+					RO.write(t0.getBytes());
+					long TimeOut = System.currentTimeMillis()+Config.MaxSMTPSessionTTL;
+					int Modo=0;
+					
+					String[] Text=null;
+					int TextLength=0;
+					int TextLine=0;
+					
+					if (MBF!=null) Modo=1;
+					if (MSG!=null) {
+							Modo=2;
+							Text=MSG.replace("\r\n", "\n").split("\\n");
+							TextLength=Text.length;
+							}
+					if (I!=null && O!=null) Modo=3;
+					
+					if (Modo==0) throw new Exception("@500 Nothing to send");
+					
+					while(true) {
+						String line=null;
+						if ( System.currentTimeMillis()>TimeOut) throw new Exception("@500 Timeout");
+						if (Modo==1) {
+							line = MBF.ReadLn();
+							if (line==null) break;
+							}
+						
+						if (Modo==2) {
+							if (TextLine==TextLength) break;
+							line=Text[TextLine++];
+							}
+						
+						if (Modo==3) {
+							line = I.readLine();
+							if (line==null) break;
+							}
+						
+						line=line.replace("\r", "");
+						line=line.replace("\n", "");
+						if (line.compareTo(".")==0) break;
+						line+="\r\n";
+						RO.write(line.getBytes());
+						MessageBytes+=line.length()+2;
+						if (MessageBytes>=MaxMsgSize) throw new PException("@500 Message too big");
+						}
+					RO.write(".\r\n".getBytes());
+					Re = new SMTPReply(RI);
+					if (Modo==3) Re.Send(O);
+					RES[0] = MessageBytes;
+					}//session
+			
+			};//doAction
+		A.RES = new Long[1];
+		A.DoInSSL=true;
+		A.DoInTKIM = !toInet;
+		A.ForceSSL= !toInet;
+		A.ForceTKIM = false;
+		A.HostName = toInet ? ExitRouteDomain : Onion;
+		A.InternetConnection = toInet;
+		A.currentExit=ex;
+		A.Do();
+		
+		StatMsgOut++;
+		if (Server.endsWith(".onion")) StatTor2TorBy++; else StatTor2InetBy++;
+		StatSendMSGBytes+=(long) A.RES[0];
+				
+	}
 	
+	/*
 	private void SetExitQFDN(String qfdn,SMTPOutSession SO) throws Exception {
 		SO.QFDN = qfdn.toLowerCase().trim();
 		SO.convExit=true;
@@ -935,162 +1378,9 @@ public class SrvIdentity {
 		SO.Hldr = J.AddMsgID(H, SO.QFDN);
 		SO.Hldr.put("x-mat-from", SO.OriginalFrom);
 		
-	}
-	
-	private void RawBeginRemoteSession(SMTPOutSession SO) throws Exception {
-		StatMsgOut++;	
-		
-		if (ExitEnterPolicyBlock!=null && !SO.MailTo.endsWith(".onion")) {
-			if (!CanEnterExit(SO.MailTo, false)) throw new PException(503,"Address rejected by the exit policy");
-			StatMsgInet++;
-			}
-		
-		String Server = J.getDomain(SO.MailTo);
-		String LocalTo = J.getLocalPart(SO.MailTo);
-		if (LocalTo.endsWith(".onion")) throw new PException(503,"Onion2Mail not allowed to OnionMail destination!");
-		//XXX ^ Vedere!
-		
-		boolean ToOnion = Server.endsWith(".onion");
-		if (!ToOnion) {
-			if (EnterRoute) { 
-				SetExitQFDN(ExitRouteDomain, SO);
-				SO.HostName=Server;
-				} else {
-				String dou=null;
-				if (J.getDomain(SO.MailFrom).compareTo(Onion)==0) {
-						HashMap <String,String> Conf = UsrGetConfig(J.getLocalPart(SO.MailFrom));
-						if (Conf!=null && Conf.containsKey("exitdomain")) dou=Conf.get("exitdomain");
-						}
-					
-				ExitRouteList RL= GetExitList();
-				dou = RL.SelectOnion(dou);
-				if (dou==null) throw new Exception("@503 No exit/enter route available!");
-				Server=RL.GetDomain(dou);
-				RL=null;
-				//SetExitQFDN(dou, SO);
-				SO.QFDN = dou;
-				if (Config.Debug) Log("Indirect `"+dou+"` > `"+Server+"`");
-				ToOnion=true;
-				SO.HostName=dou;
-				}
-		} else SO.HostName=Server;
-		
-		if (ToOnion) RawConnectOnion(SO); else RawConnectInet(SO);
-		RawHeaders(SO);
-		if (SO.DirectMode) RawOnionData(SO); else RawNormalData(SO);
-		SO.Close();
-	
-	}
-	
-	private void RawConnectOnion(SMTPOutSession SO) throws Exception {
-		
-			Log("RemoteSendOnion  "+SO.HostName);
-			
-			XOnionParser tor = XOnionParser.fromString(Config,SO.HostName);
-			try {
-				try {
-					SO.RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, tor.Onion,25);
-					SO.RO = SO.RS.getOutputStream();
-					SO.RI  =J.getLineReader(SO.RS.getInputStream());
-					} catch(Exception E) {
-								if (Config.Debug) Log("Can't connect in SMTP "+tor.Onion);
-								throw new Exception("@503 Connection error `"+SO.HostName+"` "+E.getMessage());
-								}
+	}*/
 
-				SO.HostName = tor.Onion;
-				SO.isTor=true;
-				} catch(Exception E) {
-					SO.Close();
-					SO=null;
-					throw E;
-				}
-	}
-	
-	
-	
-	///////////////////////// RAW SESSION /////////////////////
-		
-	private void RawHeaders(SMTPOutSession SO) throws Exception {
-		
-		SO.SupTLS=false;
-		SO.SupTorm=false;
-		SMTPReply Re = null;
-		
-		Re = new SMTPReply(SO.RI);
-		if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-		
-		Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"EHLO "+ (SO.isTor ? Onion : ExitRouteDomain));
-		if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-			
-		SO.SupTLS = SrvSMTPSession.CheckCapab(Re,"STARTTLS");		
-		if (SO.isTor) {
-				SO.SupTorm = SrvSMTPSession.CheckCapab(Re,"TORM");
-				SO.SupTKIM = SrvSMTPSession.CheckCapab(Re,"TKIM");
-				}
-				
-		boolean usalo = true;
-		if (Config.SSLJavaHasBug && !SO.SupTorm) {
-				usalo=false;
-				Log("JavaBug evasion `"+SO.HostName+"`");
-				}
-		
-		if (SO.SupTLS && usalo) { //TODO CHECKSSLNonTorM
-				if (Config.Debug) Log("SSL Connect to `"+SO.HostName+"` -> `"+SO.RS.getInetAddress().toString()+"`");
-				Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"STARTTLS");
-				if (Re.Code>199 || Re.Code<300) {
-					SSLSocket SS = LibSTLS.ConnectSSL(SO.RS, SSLClient,SO.HostName);
-					CheckSSL(SS, SO.HostName,"RH1");
-					SO.RO = null;
-					SO.RO = SS.getOutputStream();
-					SO.RI=null;
-					SO.RI=J.getLineReader(SS.getInputStream());
-					SO.RS=SS;					
-					
-					Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"EHLO "+ (SO.isTor ? Onion : ExitRouteDomain));
-					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-					
-					} else SO.SupTLS=false;
-				}
-		
-		SO.Hldr.put("x-ssl-transaction", SO.SupTLS ? "YES":"NO");
-		
-		if (SO.SupTorm && !HaveManifest(SO.HostName)) {
-						Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"TORM IAM iam.onion");
-						if (Re.Code>199 && Re.Code<300) ReceiveManifest(Re, SO.HostName);
-						}
-				
-		Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"MAIL FROM: <"+SO.MailFrom+">");
-		if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-		
-		Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"RCPT TO: <"+SO.MailTo+">");
-		if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-		
-		if (SO.SupTKIM) try {
-			Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"TKIM");
-			if (Re.Code<299 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)"); //chkkk
-			byte[] rnd = Re.getData();
-			try { rnd = Stdio.RSASign(rnd, SSK); } catch(Exception E) { 
-					Config.EXC(E, "TKIM.RSASign(`"+SO.HostName+"`)");
-					rnd = new byte[0];
-					}
-			SMTPReply.Send(SO.RO,220,J.Data2Lines(rnd, "TKIM/1.0 REPLY"));
-			Re = new SMTPReply(SO.RI);
-			if (Re.Code<200 || Re.Code>299) Log(Config.GLOG_Event,"TKIM: `"+SO.HostName+"` Error: "+Re.toString().trim());
-			} catch (Exception EK) {
-				Config.EXC(EK, "TKIM `"+SO.HostName+"`");
-			}
-	
-		}
-	
-	
-	
-	private void RawNormalData(SMTPOutSession SO) throws Exception {
-		SMTPReply Re = null;
-		Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"DATA");
-		if (Re.Code<300 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-		RawSMTPDATA (SO);
-	}
-	
+
 	private HashMap<String,String> ParseHeaders(BufferedReader I) throws Exception {
 		String in="";
 		for (int ax=0;ax<SrvSMTPSession.MaxHeaderLine;ax++) {
@@ -1105,152 +1395,7 @@ public class SrvIdentity {
 		throw new PException("@500 Too many mail headers");
 	} 	
 	
-	private void RawOnionData(SMTPOutSession SO) throws Exception {
-		SMTPReply Re = null;
-		Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"DATA");
-		if (Re.Code<300 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)");
-		
-		//X\XX FATTO Aggiungere controllo invio dati su DATA
-				
-		SO.Send("354 Enter message, ending with \".\" on a line by itself");
-		SO.Hldr = ParseHeaders(SO.I);
-		RawSMTPDATA (SO);
-	}
 	
-	
-	private void RawSMTPDATA (SMTPOutSession SO) throws Exception {
-	
-		int Modo=0;
-		if (SO.MBF!=null) Modo=0;
-		if (SO.Msg!=null) Modo=1;
-		if (SO.I!=null) Modo=2;
-		SMTPReply Re = null;
-		
-		SO.Hldr = J.FilterHeader(SO.Hldr);
-		if (SO.HelloData!=null) {
-				SO.Hldr.put("received", "from "+J.IPFilter(SO.HelloData)+" by "+Onion+" ("+Nick+") [0.0.0.0] "+TimeString());
-				SO.Hldr.put("x-hellotype", SO.HelloMode==1 ? "HELO" : "EHLO");
-				}
-		SO.Hldr.put("sender", SO.MailFrom);
-		SO.Hldr.put("envelope-to", SO.MailTo);
-		SO.Hldr.put("delivery-date", TimeString());
-		if (!SO.Hldr.containsKey("date")) SO.Hldr.put("date", TimeString());
-		if (!SO.Hldr.containsKey("delivery-date")) SO.Hldr.put("delivery-date", TimeString());
-		SO.Hldr.put("x-ssl-transaction", SO.SupTLS ? "YES" : "NO" );
-		String ST;
-				
-		if (SO.convExit) { SetExitHeaders(SO); ST=SO.QFDN; } else ST=Onion;
-		if (SO.isInternet && ExitNoticeE) { 
-					String sr;
-					sr = "server."+Onion+"@"+SO.QFDN;
-					String st=sr;
-					if (ExitNotice==null) {
-					st = "This is an OnionMail message. See http://onionmail.info and <mailto:${SERVER}?subject=RULEZ> for details";
-					st=st.replace("${SERVER}", sr);
-					} else {
-					st = ExitNotice.replace("${SERVER}", sr);
-					}
-					
-			SO.Hldr.put("x-notice", st);
-			}
-		
-		SO.Hldr=J.AddMsgID(SO.Hldr, ST);
-			
-		String t0 = J.CreateHeaders(SO.Hldr);
-			t0=t0.trim();
-			t0+="\r\n\r\n";
-			SO.RO.write(t0.getBytes());
-			t0=null;
-			long MessageBytes=0;
-			long TimeOut = System.currentTimeMillis()+Config.MaxSMTPSessionTTL;
-			int ecx = 0;
-			String[] Arr=null;
-			
-			if (Modo==1) {
-				Arr = SO.Msg.split("\\n");
-				ecx=Arr.length;
-				}
-			
-			int eax=0;
-						
-			while(true) {
-				if ( System.currentTimeMillis()>TimeOut) throw new Exception("@500 Timeout");
-				if (Modo==1) {
-					if (eax==ecx) break;
-					t0 = Arr[eax++].replace("\r", "");
-					}
-				
-				if (Modo==2) t0 = SO.I.readLine();
-				if (Modo==0) t0 = SO.MBF.ReadLn().replace("\r\n", "");
-				
-				MessageBytes+=t0.length()+2;
-				if (MessageBytes>=MaxMsgSize) throw new PException("@500 Message too big");
-							
-				t0+="\r\n";
-				if (t0.compareTo(".\r\n")==0) break;
-				SO.RO.write(t0.getBytes());
-				}
-			SO.RO.write(".\r\n".getBytes());
-			Re = new SMTPReply(SO.RI);
-			if (Modo==2) Re.Send(SO.O);
-			
-			try {
-				Re = SrvSMTPSession.RemoteCmd(SO.RO,SO.RI,"QUIT");
-				SO.Close();
-				} catch(Exception Ii) {}
-		
-			if (Modo!=2 && (Re.Code<200 || Re.Code>299)) throw new Exception("@"+Re.Code+" "+Re.Msg[0]);
-			
-			///if (SO.DirectMode) SO.Send("250 Id="+J.getLocalPart(SO.Hldr.get("message-id")));
-			
-	}
-		
-	private void RawConnectInet(SMTPOutSession SO) throws Exception {
-			StatMsgInet++;
-			String Server = J.getDomain(SO.MailTo).toLowerCase();
-			String MXServer=Server;
-			if (Config.Debug) Log("RemoteSendInet `"+Server+"`");
-			
-			MXRecord[] MX = Main.DNSCheck.getMX(Server);
-			if (MX==null) throw new Exception("@500 SMTP Server not found `"+Server+"` (No MX record)");
-			SO.isInternet=true;
-			
-			int cx = MX.length-1;
-				for (int ax=0;ax<=cx;ax++) {
-						try {
-							SO.RS =  new Socket(MX[ax].getAddress(),25); 
-							MXServer=MX[ax].Host;
-							break;
-							} catch(Exception II) {
-								Log(Config.GLOG_Event,"Can't connect to "+J.IP2String(MX[ax].getAddress()));
-								try { SO.RS.close(); } catch(Exception III) {}
-								SO.RS=null;
-							}
-					}
-			if (SO.RS==null) throw new Exception("@500 Can't connect to "+MXServer);
-			
-			SO.RO = SO.RS.getOutputStream();
-			SO.RI  =J.getLineReader(SO.RS.getInputStream());
-			
-			try {
-				if (SO.MailFrom.endsWith(".onion")) {
-					String OriginalFrom = SO.MailFrom;
-					SO.MailFrom = J.MailOnion2Inet(Config, SO.MailFrom, ExitRouteDomain);
-					HashMap <String,String> Oh = new HashMap <String,String> ();
-					for (String k:SO.Hldr.keySet()) Oh.put(k, SO.Hldr.get(k).replace(OriginalFrom, SO.MailFrom));
-					Oh.put("subject", SO.Hldr.get("subject"));
-					Oh = J.AddMsgID(Oh, ExitRouteDomain);
-					SO.Hldr=Oh;
-					}
-				
-				SO.isTor=false;
-				SO.HostName = MXServer;
-				} catch(Exception E) {
-					SO.Close();
-					throw E;	
-				}
-	}
-
 	private String GetFNName(String O) {
 		try {
 			return Maildir+"/feed/"+ J.md2st(Stdio.md5a(new byte[][] { Sale, O.toLowerCase().getBytes(),"Manifest2".getBytes() }));
@@ -1260,10 +1405,10 @@ public class SrvIdentity {
 				}
 	}
 	
-	public String CreateManifest() throws Exception {
+	public String CreateManifest(boolean newManifest) throws Exception {
 		HashMap <String,String> H = new HashMap <String,String>();
-		H.put("manifest", "1.1");
-		H.put("ver",Main.getVersion());
+		H.put("manifest", newManifest ? "2.0" : "1.1");
+		H.put("ver","TORM V="+Const.TormVer);
 		String a="";
 		if (OnlyOnionFrom || OnlyOnion || OnlyOnionTo || !CanRelay) a+="R";
 		if (EnterRoute) a+="X";
@@ -1277,6 +1422,7 @@ public class SrvIdentity {
 		H.put("date", (int)(Time()/1000L)+"");
 		H.put("lang", DefaultLang);
 		H.put("exit",EnterRoute ? "1":"0");
+		H.put("port", Integer.toString(ExitAltPort));
 		
 		if (ExitEnterPolicyBlock!=null) {
 			String s="";
@@ -1295,8 +1441,14 @@ public class SrvIdentity {
 		try {
 			s+="\r\n"; 
 			ExitRouteList RL = GetExitList();
-			for (String k:RL.keySet()) s+=k+": "+RL.get(k)+"\r\n";
-			
+			ExitRouterInfo[] ex = RL.getAll();
+			int cx = ex.length;
+			if (newManifest) {
+					for (int ax=0;ax<cx;ax++) s+=ex[ax].toString()+"\r\n";
+				} else {
+					for (int ax=0;ax<cx;ax++) s+=ex[ax].domain+": "+ex[ax].onion+"\r\n";
+				}
+						
 			s+="\r\n";
 			for (String k:ManifestInfo.keySet()) s+=k.toLowerCase()+": "+ManifestInfo.get(k)+"\r\n";
 			
@@ -1318,7 +1470,7 @@ public class SrvIdentity {
 			SSLVerify(C,O);
 		} catch(Exception E) {
 			if (Config.Debug) Config.EXC(E, "CheckSSL "+cod);
-			String msg=E.getMessage();
+			//XXX ??? String msg=E.getMessage();
 			throw new Exception(E+" COD="+cod);
 		}
 	}
@@ -1398,6 +1550,8 @@ public class SrvIdentity {
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 					SupTLS = SrvSMTPSession.CheckCapab(Re,"STARTTLS");
 					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
+					boolean mf2 = SrvSMTPSession.CheckTormCapab(Re, "MF2");
+					
 					if (!SupTLS) throw new Exception("Doesn't support STARTTLS");
 					if (!SupTORM) throw new Exception("Doesn't support TORM");
 					
@@ -1415,7 +1569,7 @@ public class SrvIdentity {
 						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)");
 						
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM iam.onion");
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM iam.onion" +( mf2 ? "V2.0" : ""));
 						if (Re.Code>199 &&  Re.Code<300) ReceiveManifest(Re,remo);
 						
 						try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
@@ -1429,6 +1583,7 @@ public class SrvIdentity {
 					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
 					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
 					Log("Friend `"+remo+"` Error: "+E.toString().replace("@", ""));
+					if (Config.Debug) E.printStackTrace();
 					return;
 				}
 			
@@ -1454,6 +1609,7 @@ public class SrvIdentity {
 		
 		public SrvManifest  ReceiveManifest(SMTPReply Re,String remo) throws Exception {
 			SrvManifest m = new SrvManifest(Re,remo);
+						
 			byte[] dta=m.getBytes();
 			byte[] iv = Stdio.md5a( new byte[][] { Sale , "Manifest".getBytes() }) ; 		
 			SecretKey K = Stdio.GetAESKey(iv);
@@ -1477,7 +1633,118 @@ public class SrvIdentity {
 			return new SrvManifest(b);		
 		}
 		
-		public int VerifyExit(String InedDom,String oni,int port)   {
+		public boolean VerifyExit(ExitRouterInfo e)   {
+			e.lastCHK=System.currentTimeMillis()/1000;
+			
+			if (Config.Debug) Log("Verify `"+e.domain+"`");
+			if (e.domain.compareTo(ExitRouteDomain)==0 && e.onion.compareTo(Onion)==0) {
+				e.Goods=100;
+				e.Bads=0;
+				e.isDown=false;
+				e.isLegacy=false;
+				e.isExit = EnterRoute;
+				e.isTrust=true;
+				e.canMX=EnterRoute;
+				e.canVMAT=EnterRoute;
+				return true;
+				}
+			Socket	RS=null;
+			OutputStream RO=null;
+			BufferedReader RI=null;
+			SMTPReply Re=null;
+			boolean SupTLS=false;
+			boolean SupTORM=false;
+			try {
+				try {
+					try {
+						if (Config.ExitCheckViaTor) {
+								if (Config.Debug) Log("Verify `"+e.domain+"` via TOR/SMTP");
+								RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, e.onion,25); 
+								} else {
+								if (Config.Debug) Log("Verify `"+e.domain+"` via "+ (e.isLegacy ? "SMTP" : "ExitAltPort"));
+								RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, e.domain,e.isLegacy ? 25 :  e.port);
+								}
+										
+						} catch(Exception ef) {
+						Log("Can't connect via TOR->Inet to `"+e.domain+"` Exit policy?");
+						RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, e.domain, e.port);
+						if (Config.Debug) Log("Verify `"+e.domain+"` via ExitAltPort");
+						if (e.isLegacy) Log("Server `"+e.domain+"`could be a legacy hybrid server");
+						//e.setResult(false);
+						}
+					 	} catch(Exception ie) {
+						 RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, e.onion,25);
+						 if (Config.Debug) Log("Verify `"+e.domain+"` via TOR");
+					 }
+				if (Config.Debug) Log("Verifying `"+e.domain+"`");
+				
+				RO = RS.getOutputStream();
+				RI  =J.getLineReader(RS.getInputStream());
+				RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+				Re = new SMTPReply(RI);
+				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" `"+e.onion+"`"); 
+			
+				Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
+				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " `"+e.onion+"`");
+				SupTLS = SrvSMTPSession.CheckCapab(Re,"STARTTLS");
+				SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
+				if (!SupTORM || !SupTLS) {
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT");
+					try { RS.close(); } catch(Exception IE) {}
+					//modevd Log(Config.GLOG_Event,"Checking `"+oni+"` is  not an OnionMail compatible server!");
+					if (Config.Debug) Log("Server `"+e.onion+"` doesn't support STARTTLS, TORM, TKIM");
+					e.isBad=true;
+					e.setResult(false);
+					return false;
+					}
+				
+				e.canMX = SrvSMTPSession.CheckTormCapab(Re, "MX");
+				e.canVMAT = SrvSMTPSession.CheckTormCapab(Re, "VMAT");
+				if (e.canMX || e.canVMAT) e.isLegacy=false;
+				
+			
+				
+				Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
+				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " `"+e.onion+"`");
+				
+				byte[] pk = Re.getData();
+				byte[][] sd =LoadCRT(e.onion.toLowerCase());
+				if (sd==null) {
+					Log(Config.GLOG_Event,"Checking `"+e.onion+"` exit without SSL Certificate in cache!");
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT");
+					try { RS.close(); } catch(Exception IE) {}
+					e.setResult(false);
+					return false;
+					} /// Perchè???? else e.isBad=false;
+				
+				if (!Arrays.equals(pk, sd[0])) {
+					Log(Config.GLOG_Event,"Checking `"+e.domain+"` Invalid exit key!");
+					e.isBad = true;
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT");
+					try { RS.close(); } catch(Exception IE) {}
+					return false;
+					}
+				
+				Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT");
+				try { RS.close(); } catch(Exception IE) {}
+				e.isDown=false;
+				e.setResult(true);
+				if (Config.Debug) Log("Exit `"+e.domain+"` verified");
+				return true;
+			} catch(Exception EE) {
+				if (RS!=null) try { RS.close(); } catch(Exception IE) {}
+				e.setResult(false);
+				e.isDown=true;
+				Log(Config.GLOG_Event,"Checking `"+e.onion+"` Error: "+EE.getMessage());
+				return false;
+			}
+		} 
+		
+		
+		/*
+		public int VerifyExit_old(String InedDom,String oni,int port,ExitRouterInfo inf)   {
+			inf.lastCHK=System.currentTimeMillis()/1000;
+			
 			if (Config.Debug) Log("Verify `"+InedDom+"`");
 			if (InedDom.compareTo(ExitRouteDomain)==0 && oni.compareTo(Onion)==0) return 1;
 			Socket	RS=null;
@@ -1487,8 +1754,12 @@ public class SrvIdentity {
 	//		boolean SupTLS=false;
 			boolean SupTORM=false;
 			try {
-				
-				RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, InedDom,port);
+				try {
+					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, InedDom,port);
+					 } catch(Exception ie) {
+						 Log("Can't connect via TOR to `"+InedDom+"` Exit policy?");
+						 RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,port);
+					 }
 				RO = RS.getOutputStream();
 				RI  =J.getLineReader(RS.getInputStream());
 				RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
@@ -1505,6 +1776,8 @@ public class SrvIdentity {
 					//modevd Log(Config.GLOG_Event,"Checking `"+oni+"` is  not an OnionMail compatible server!");
 					return 2;
 					}
+				inf.canMX = SrvSMTPSession.CheckTormCapab(Re, "MX");
+				inf.canVMAT = SrvSMTPSession.CheckTormCapab(Re, "VMAT");
 				
 				Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
 				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " `"+oni+"`");
@@ -1535,6 +1808,7 @@ public class SrvIdentity {
 				return 0;
 			}
 		} 
+		*/
 		
 		public SrvManifest DoFriend(String FriendServer) throws Exception {
 			SrvManifest M=null;
@@ -1565,6 +1839,7 @@ public class SrvIdentity {
 					SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
 					if (!SupTLS) throw new Exception("Doesn't support STARTTLS");
 					if (!SupTORM) throw new Exception("Doesn't support TORM");
+					boolean newManifest = SrvSMTPSession.CheckTormCapab(Re, "MF2");
 					
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"STARTTLS");
 					if (Re.Code>199 || Re.Code<300) {
@@ -1580,7 +1855,7 @@ public class SrvIdentity {
 						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 					
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM "+Onion);
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM "+Onion+ (newManifest ? " V2.0":""));
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 						M = ReceiveManifest(Re,FriendServer);
 						} else  throw new Exception("@"+Re.toString().trim()+ " (remote)");
@@ -1594,6 +1869,7 @@ public class SrvIdentity {
 					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
 					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
 					Log("Friend `"+FriendServer+"` Error: "+E.toString().replace("@", ""));
+					if (Config.Debug) E.printStackTrace();
 				}
 				return M;
 		}
@@ -1610,11 +1886,15 @@ public class SrvIdentity {
 				if (FriendServer[ax].compareToIgnoreCase(Onion)==0) continue;
 				M = DoFriend(FriendServer[ax]);
 				if (M==null) continue;
+				HashMap <String,String> N = M.getHashMap(ExitRouteList.FLT_TRUST);
+				if (N.size()<3) N.putAll(M.getHashMap(ExitRouteList.FLT_VMAT));
+				if (N.size()<6) N.putAll(M.getHashMap(ExitRouteList.FLT_OK));
+				if (N.size()<27) N.putAll(M.getHashMap(ExitRouteList.FLT_ALL));
 				
-				if (M.N.size()!=0) {
-					for (String K:M.N.keySet()) {
+				if (N.size()!=0) {
+					for (String K:N.keySet()) {
 						if (net.containsKey(K)) {
-							String c = M.N.get(K);
+							String c = N.get(K);
 							if (net.get(K).compareTo(c)!=0) {
 								String st = net.get(K).trim()+"\n";
 								if (!("\n"+st).contains("\n"+c+"\n")) {
@@ -1622,7 +1902,7 @@ public class SrvIdentity {
 									net.put(K, st.trim());
 									}
 								}
-							} else net.put(K, M.N.get(K));
+							} else net.put(K,N.get(K));
 						}
 					if (net.containsKey(FriendServer[ax])) net.remove(FriendServer[ax]);
 					}
@@ -1660,7 +1940,7 @@ public class SrvIdentity {
 			
 			String[] lst = ib.list(esf);
 			int cx = lst.length;
-			HashMap <String,String> ExitList = new HashMap <String,String>();
+			ExitRouteList  ExitList = new ExitRouteList();
 			String nonlist="";
 			String onioned="\n";
 			for (int ax=0;ax<cx;ax++) {
@@ -1673,14 +1953,14 @@ public class SrvIdentity {
 						continue;
 					}
 				
-				if (!onionlist.contains("\n"+M.Onion)) onionlist+=M.Onion+"\n";
-				if (!M.exit) continue;
+				if (!onionlist.contains("\n"+M.my.onion)) onionlist+=M.my.onion+"\n";
+				if (!M.my.isExit) continue;
 				
-				String qfdn = M.ExitDomain.toLowerCase().trim();
-				String oni = M.Onion.toLowerCase().trim();
+				String qfdn = M.my.domain.toLowerCase().trim();
+				String oni = M.my.onion.toLowerCase().trim();
 				if (qfdn.endsWith(".onion")) continue;
 					
-				if (ExitList.containsKey(qfdn)) {
+				if (ExitList.containsDomain(qfdn)) {
 					Log(Config.GLOG_Event,"Duplicate Manifest for D=`"+qfdn+"` O=`"+oni+"`");
 					nonlist+=qfdn+"\n";
 					onioned+=oni+"\n";
@@ -1694,8 +1974,8 @@ public class SrvIdentity {
 					}
 				
 				onioned+=oni+"\n";
-				ExitList.put(qfdn, oni);
-			}
+				ExitList.addRouter(M.my);
+				}
 			
 			onionlist=onionlist.trim();
 			String[] tl =onionlist.split("\\n+");
@@ -1715,54 +1995,68 @@ public class SrvIdentity {
 			onioned=null;
 			nonlist=nonlist.trim();
 			tl= nonlist.split("\\n+");
-			for(String K:tl) ExitList.remove(K);
+			for(String K:tl) ExitList.removeServerByDomain(K);
 			
-			String rme="";
+		
 			Log("Verifying Exit Scan");
-			for (String K:ExitList.keySet()) {
-				int rs = VerifyExit(K,ExitList.get(K),25);
-				if (rs==2) {
-						rs = VerifyExit(K,ExitList.get(K),10025);
-						if (rs==2) Log(Config.GLOG_Event,"Checking `"+ExitList.get(K)+"` is  not an OnionMail compatible server!");
-						if (rs==1) Log("Verify `"+ExitList.get(K)+"` is an Hybrid OnionMail Server");
-						}
-				if (rs==0||rs==2) {
-						rme+=K+"\n"; 
-						if (Config.Debug) Log("Verify `"+ExitList.get(K)+"`=`"+rs+"`");
-						} else if (Config.Debug) Log("Verify `"+ExitList.get(K)+"` Ok");
-				}
-			rme=rme.trim();
-				if (rme.length()>0) {
-				String[] rmea=rme.split("\\n+");
-				cx = rmea.length;
-				for (int ax=0;ax<cx;ax++) {
-					ExitList.remove(rmea[ax]);
-					Log(Config.GLOG_Event,"Exit/Enter server error `"+rmea[ax]+"`");
-					}
-				}
+			ExitList.applyServerPolicy(this);
+			ExitRouterInfo[] el = ExitList.getAll();
+			el = ExitRouteList.queryFLTArray(el, ExitRouteList.FLT_ALL);
+			cx=el.length;
+			for (int ax=0;ax<cx;ax++) {
+				boolean rs = VerifyExit(el[ax]);
+				if (!rs)	{
+							String bc = "";
+							if (el[ax].isBad) bc="is bad\n";
+							if (el[ax].isDown) bc+="is down\n";
+							if (el[ax].isLegacy) bc+="is legacy\n";
+							if (!el[ax].isExit) bc+="is not exit\n";
+							bc=bc.trim();
+							bc=bc.replace("\n", ", ");
+							if (bc.length()==0) bc="i can!";
+							Log("Exit not accepted `"+el[ax].domain+"` because "+bc);
+							} else if (Config.Debug) Log("Server `"+el[ax].domain+"` is an exit OnionMail router in list.");
+				} //
+			
+			el= ExitRouteList.queryFLTArray(el, ExitRouteList.FLT_ALL);
+			
+			ExitList = new ExitRouteList();
+			ExitList.addRouters(el);
 			
 			byte[][] Ks = J.DerAesKey(Sale, Const.KD_ExitList);
-			cx = ExitList.size();
-			byte[] b = J.HashMapPack(ExitList);
+
+			byte[] b =ExitList.getBytes();
 			b = Stdio.AESEnc(Stdio.GetAESKey(Ks[0]), Ks[1], b);
-			Stdio.file_put_bytes(Maildir+"/feed/inet",b);
+			Stdio.file_put_bytes(Maildir+"/feed/network",b);
 			b=null;
 			J.WipeRam(Ks);
 			Ks=null;
 			System.gc();
-			Log("Search Exit End, "+cx+" node found");
-			
+			int dx= ExitList.Length();
+			Log("Search Exit End, "+dx+" node found," +J.sPercMax(dx, cx, 100, 2)+"% of list");
+			setExitList(ExitList);
 			}
 		
+		private ExitRouteList ExitListCache=null;
+		private long ExitRouteListTCR=0;
+		
 		public ExitRouteList GetExitList() throws Exception {
-			if (!new File(Maildir+"/feed/inet").exists()) return new ExitRouteList();
+			if (ExitListCache==null)	 ExitListCache = LoadExitListS(); 
+			return ExitListCache;
+			}
+		
+		public synchronized ExitRouteList LoadExitListS() throws Exception { return LoadExitList(); }
+		
+		public synchronized void setExitList(ExitRouteList x) {  ExitListCache = x;  }
+		
+		public ExitRouteList LoadExitList() throws Exception {
+			if (!new File(Maildir+"/feed/network").exists()) return new ExitRouteList();
 			byte[][] Ks = J.DerAesKey(Sale, Const.KD_ExitList);
-			byte[] b = Stdio.file_get_bytes(Maildir+"/feed/inet");
+			byte[] b = Stdio.file_get_bytes(Maildir+"/feed/network");
 			b = Stdio.AESDec(Stdio.GetAESKey(Ks[0]), Ks[1], b);
 			J.WipeRam(Ks);
 			Ks=null;
-			ExitRouteList r = ExitRouteList.fromHashMap(J.HashMapUnPack(b));
-			
+			ExitRouteList r = ExitRouteList.fromBytes(b);
 			b=null;
 			System.gc();
 			return r;
@@ -1802,17 +2096,24 @@ public class SrvIdentity {
 			
 			if (par.compareTo("exitdomain")==0) {
 				ExitRouteList RL = GetExitList();
-				String sv = RL.SelectOnion(v);
+				String sv = RL.getOnion(v);
 				
 				if (sv==null && EnterRoute) {
 					H.put("exitdomain", ExitRouteDomain);
 					H.put("exitonion", Onion);
 					} else if (sv!=null) {
-					v = RL.GetDomain(sv);
-					H.put("exitdomain", v);
-					H.put("exitonion", sv);
+					v = RL.onion2Domain(sv);
+					if (v!=null) {
+						ExitRouterInfo i = RL.getByDomain(v);
+						if (i.isBad) throw new Exception("@550 This exit domain is a bad server `"+val+"`");
+						if (i.isDown) throw new Exception("@550 This exit domain is now down `"+val+"`");
+						H.put("exitdomain", v);
+						H.put("exitonion", sv);
+						} else  throw new Exception("@500 Can't set this exit domain `"+val+"`");
 					} else throw new Exception("@500 Can't set exit domain `"+val+"`");
 				}
+			
+			
 			
 			UsrSetConfig(local, H);
 			String txt="";
@@ -1842,6 +2143,11 @@ public class SrvIdentity {
 			String fn = GetFNName(host)+".crth";
 			if (!new File(fn).exists()) return null;
 			return Stdio.file_get_bytes(fn);
+			}
+		
+		public boolean SSLHasHash(String host) throws Exception {
+			String fn = GetFNName(host)+".crth";
+			return new File(fn).exists();
 			}
 		
 		public byte[][] LoadCRT(String host) throws Exception {
@@ -1940,7 +2246,7 @@ public class SrvIdentity {
 			}
 			return pw;
 		}
-	
+	/*
 		public void ChechPendingSSL(HashMap <String,String> hls,String[] SrvA) throws Exception { //TODO Da usare!
 			int scx=SrvA.length;
 			HashMap <String,HashMap <String,Integer>> shp = new HashMap <String,HashMap <String,Integer>>();
@@ -1984,7 +2290,8 @@ public class SrvIdentity {
 			X=null;
 			rs=null;
 		}
-		
+		*/
+		/*
 		private String[] GetRightSSLH(String oni,HashMap <String,String> hls,HashMap <String,HashMap <String,Integer>> shp) throws Exception {
 			
 			String k=null;
@@ -2022,6 +2329,7 @@ public class SrvIdentity {
 			return null;
 		}
 		
+		 */
 		
 		public int GetSSLHashToServer(HashMap <String,String>  lst,String oni,HashMap <String,HashMap <String,Integer>> shp) throws Exception {
 			int sslerr=0;
@@ -2247,7 +2555,7 @@ public class SrvIdentity {
 						int cx= slist.length;
 						for (int ax=0;ax<cx;ax++) {
 								String fn="\n"+slist[ax].toLowerCase().trim()+"\n";
-								/*		if (!OnTheSameMachine.contains(fn) && s0.contains(fn)) */ s0+=slist[ax].toLowerCase().trim()+"\n"; //TODO RIABILITA!
+										if (!Config.NoBootFromSameMachine ||  (!OnTheSameMachine.contains(fn) && s0.contains(fn)))  s0+=slist[ax].toLowerCase().trim()+"\n"; //XXX RIABILITA!
 								}
 											
 						s0=s0.trim();
@@ -2328,9 +2636,9 @@ public class SrvIdentity {
 									//On error wipe the KeyBlock
 									if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
 									CVMF3805TMP=null;
-									Config.EXC(EX, "SCBF`"+Onion+"`"); 
+									String ab = EX.getMessage();
+									if (ab!=null && ab.contains("@")) Log(Config.GLOG_Server,ab.replace('@', ' ')); else Config.EXC(EX, "SCBF`"+Onion+"`"); 
 						}		
-			
 		}
 		
 		/**
@@ -2695,7 +3003,7 @@ byte[][] Cobj = new byte[][] {
 			BufferedReader RI=null;
 			SMTPReply Re=null;
 			boolean SupTORM=false;
-			byte[] dta=null;
+		//	byte[] dta=null;
 			
 			try {
 			
@@ -2954,7 +3262,7 @@ byte[][] Cobj = new byte[][] {
 		}
 		
 		public void CanAndCountCreateNewUser() throws Exception {
-			if (!NewUsrEnabled) throw new Exception("@550 Operation not permitted");
+			if (!NewUsrEnabled) throw new Exception("@550 SR6003 Operation not permitted");
 			int tcr = (int) Math.floor((System.currentTimeMillis()+TimeSpoofSubRandom) / 1000L);
 			int day =(int) Math.floor(tcr / 86400);
 			int hour = (int) Math.floor(tcr / 3600);
@@ -2977,7 +3285,7 @@ byte[][] Cobj = new byte[][] {
 			}
 		
 		public void CanAndCountCreateNewList() throws Exception {
-			if (!NewLstEnabled) throw new Exception("@550 Operation not permitted");
+			if (!NewLstEnabled) throw new Exception("@550 SR6004 Operation not permitted");
 			int tcr = (int) Math.floor((System.currentTimeMillis()+TimeSpoofSubRandom) / 1000L);
 			int day =(int) Math.floor(tcr / 86400);
 			int hour = (int) Math.floor(tcr / 3600);
@@ -3057,8 +3365,411 @@ byte[][] Cobj = new byte[][] {
 			return armor;
 		}
 		
+		public VirtualRVMATEntry VMATRegister(String vmat,final String localpart) throws Exception {
+			if (VMAT==null) throw new Exception("VMATRegister: VMAT Disabled");
+			
+			final String vmatLocal = J.getLocalPart(vmat);
+			final String vmatDom=J.getDomain(vmat);
+			if (vmatLocal==null || vmatDom==null) throw new Exception("@500 Invalid VMAT address `"+vmat+"`");
+			ExitRouteList RL= GetExitList();
+			String Server = RL.getOnion(vmatDom);
+			if (Server==null) throw new Exception("@500 Can't find exit `"+vmatDom+"`");
+			
+			SrvAction A = new SrvAction(this,Server,"VMATRegister") {
+				
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					if (!this.SupVMAT) throw new Exception("@500 VMAT is not supported by `"+this.Server+"`");
+					VirtualRVMATEntry M=null;
+					SMTPReply Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT REGISTER "+vmatLocal+" "+localpart);
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+					if (Re.Msg.length<3) throw new Exception("@500 Invalid VMAT REGISTER reply");
+					M=new VirtualRVMATEntry();
+					M.mail=J.getMail(Re.Msg[0], false);
+					M.onionMail=J.getMail(Re.Msg[1],true);
+					M.passwd=Re.Msg[2];
+					
+					if (M.mail==null || !M.mail.contains("@"+vmatDom)) throw new Exception("@500 Invalid VMAT address in reply `"+M.mail+"`");
+					if (M.onionMail==null || M.onionMail.compareTo(localpart+"@"+Onion)!=0) new Exception("@500 Invalid mail address in reply `"+M.onionMail+"`");
+					if (M.passwd.length()==0) throw new Exception("@500 Invalid password in VMAT reply");
+					this.RES = new Object[] { M };
+					}
+			} ;
+			A.DoInSSL=true;
+			A.DoInTKIM=true;
+			A.Do();
+
+			if (A.RES==null) throw new Exception("@500 No VMAT[0] Data");
+			VirtualRVMATEntry M =(VirtualRVMATEntry) A.RES[0];
+			if (M==null) throw new Exception("@500 No VMAT Data");
+			VMAT.recipientSetRVMAT(localpart, M.mail);
+			return M;
+		}		
+		
+		public void VMATEnable(String vmat,String localpart,final String passwd,final boolean stat) throws Exception {
+			if (VMAT==null) throw new Exception("VMATEnable: VMAT Disabled");
+			
+			final String vmatLocal = J.getLocalPart(vmat);
+			final String vmatDom=J.getDomain(vmat);
+			if (vmatLocal==null || vmatDom==null) throw new Exception("@500 Invalid VMAT address `"+vmat+"`");
+			ExitRouteList RL= GetExitList();
+			String Server = RL.getOnion(vmatDom);
+			if (Server==null) throw new Exception("@500 Cant' find exit `"+vmatDom+"`");
+			
+			SrvAction A = new SrvAction(this,Server,"VMATEnable") {
+				
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					if (!this.SupVMAT) throw new Exception("@500 VMAT is not supported by `"+this.Server+"`");
+					VirtualRVMATEntry M=null;
+					SMTPReply Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT CHG "+vmatLocal+" "+passwd+" "+(stat ? "TRUE":"FALSE"));
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+					}
+			} ;
+			A.DoInSSL=true;
+			A.DoInTKIM=true;
+			A.Do();
+
+			if (stat) VMAT.recipientSetRVMAT(localpart, vmat); else VMAT.recipientDeleteRVMAT(localpart, vmat);
+			
+		}		
+		
+		public void VMATDelete(String vmat,String localpart,final String passwd) throws Exception {
+			if (VMAT==null) throw new Exception("VMATDelete: VMAT Disabled");
+			
+			final String vmatLocal = J.getLocalPart(vmat);
+			final String vmatDom=J.getDomain(vmat);
+			if (vmatLocal==null || vmatDom==null) throw new Exception("@500 Invalid VMAT address `"+vmat+"`");
+			ExitRouteList RL= GetExitList();
+			String Server = RL.getOnion(vmatDom);
+			if (Server==null) throw new Exception("@500 Cant' find exit `"+vmatDom+"`");
+			
+			SrvAction A = new SrvAction(this,Server,"VMATDelete") {
+				
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					if (!this.SupVMAT) throw new Exception("@500 VMAT is not supported by `"+this.Server+"`");
+					SMTPReply Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT CHG "+vmatLocal+" "+passwd+" DELETE");
+					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+					}
+			} ;
+			A.DoInSSL=true;
+			A.DoInTKIM=true;
+			A.Do();
+			VMAT.recipientDeleteRVMAT(localpart, vmat);
+			
+		}		
+		
+		private volatile int[] RMXCacheS = new int[128];
+		private volatile int[] RMXCacheT=new int[128];
+		private volatile boolean[] RMXCacheB = new boolean[128];
+		private volatile  int RMXCacheTTL = 10;
+		
+		public void setRMXCache(int sz,int ttl) {
+			RMXCacheTTL=ttl;
+			RMXCacheS = new int[sz];
+			RMXCacheT=new int[sz];
+			RMXCacheB = new boolean[sz];
+			}
+		
+		public int RMXCacheGet(String versrc) {
+			int cx = RMXCacheS.length;
+			int tcr = (int) System.currentTimeMillis()/60000;	
+			int chk = versrc.hashCode();
+			
+			for (int ax=0;ax<cx;ax++) {
+				if (RMXCacheS[ax]==chk) {
+					RMXCacheT[ax] = tcr + RMXCacheTTL;
+					return RMXCacheB[ax] ? 3 : 2;
+					}
+				
+				if (tcr>RMXCacheT[ax]) {
+						RMXCacheT[ax]=0;
+						RMXCacheS[ax]=0;
+						}
+			}
+			return 0;
+		}
+		
+		public void RMXCacheSet(String versrc,boolean ok) {
+			int tcr = (int) System.currentTimeMillis()/60000;	
+			int cx = RMXCacheS.length;
+			int chk = versrc.hashCode();
+			int oldT = tcr;
+			int oldI=-1;
+			int zeroI=-1;
+			for (int ax=0;ax<cx;ax++) {
+				if (RMXCacheS[ax]==chk) {
+					RMXCacheT[ax] = tcr + RMXCacheTTL;
+					RMXCacheB[ax]=ok;
+					return;
+					}
+			if (tcr>RMXCacheT[ax]) {
+					RMXCacheT[ax]=0;
+					RMXCacheS[ax]=0;
+					}
+			
+			if (zeroI==-1 && RMXCacheS[ax]==0) zeroI=ax;
+			if (RMXCacheT[ax]<oldT) {
+				oldT=RMXCacheT[ax];
+				oldI=ax;
+				}
+			}
+		
+		if (zeroI==-1) zeroI=oldI;
+		if (zeroI==-1) zeroI=0;
+		
+		RMXCacheS[zeroI]=chk;
+		RMXCacheB[zeroI]=ok;
+		RMXCacheT[zeroI]=tcr+RMXCacheTTL;
+		}
+		
+		public boolean VerifySMTPInetTest(String versrc) throws Exception {
+			
+		int ch = RMXCacheGet(versrc);	
+		if (ch!=0) {
+				if (Config.Debug) Log("RMX by cache");
+				return (ch&1)!=0;
+				}
+		
+		 ExitRouteList el = GetExitList();
+		 ExitRouterInfo ex = el.selectExit(true);
+		 
+		 if (ex==null) {
+			 	Log("Can't verify `"+versrc+"` no MX available");
+			 	return true;
+		 		}
+		 
+		 try {
+			 MXRecord[] mx = remoteSMTPTest(ex.onion,versrc);
+			 ex.setResult(true);
+			 boolean bit;
+			 if (mx==null || mx.length==0) bit=false; else bit=true;
+			 RMXCacheSet(versrc, bit);
+			 return bit;
+		 	} catch(Exception E) {
+		 	Log("VerifySMTPInetTest Error: "+E.getMessage());
+		 	ex.setResult(false);
+		 	return true;
+		 	}
+		
+		}
+		
+		public MXRecord[] remoteSMTPTest(String server,final String verify) throws Exception {
+			SrvAction A = new SrvAction(this,server,"Remote VRFY `"+verify+"`") {
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					if (!this.SupTORM) throw new Exception("@550 Server doesn't support TORM `"+this.Server+"`");
+					if (!this.SupMX) throw new Exception("@550 Server doesn't support MX `"+this.Server+"`");
+					SMTPReply Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM MX "+verify);
+					if (Re.Code<200 || Re.Code>299) this.RES=null; else this.RES = Re.Msg;
+					}
+				};
+			
+			A.DoInSSL=false;
+			A.DoInTKIM=false;
+			
+			A.Do();
+			if (A.RES==null || A.RES.length==0) return null;
+			int cx = A.RES.length;
+			MXRecord[] MX = new MXRecord[cx];
+			for (int ax=0;ax<cx;ax++) {
+					String s = (String) A.RES[ax];
+					s=s.toLowerCase().trim();
+					String[] tok = s.split("\\s+");
+					if (tok.length<2) return null;
+					MX[ax] = new MXRecord(Config.parseIntS(tok[0]),tok[1]);
+					}
+			MXRecord.MXSort(MX);
+			return MX;
+		}
+		
+		public String VoucherCreate(int DynaScanMins) throws Exception {
+			byte[] a = new byte[14];
+			Stdio.NewRnd(a);
+			if (DynaScanMins<1) DynaScanMins=VoucherLength;
+			
+			int ts = DynaScanMins!=0 ? (int)(DynaScanMins+((System.currentTimeMillis()+Config.TimeSpoof)/60000L)) : 0;
+			
+			Log("ts "+ts+" "+Long.toHexString(ts));
+			byte[] cod = Stdio.md5a(new byte[][] { Sale, Subs[7&a[13]] , Subs[7&a[12]] });
+			
+			for (int ax=0;ax<4;ax++) {
+				a[ax] = (byte) (255&ts);
+				a[ax]^=cod[ax];
+				a[ax]^=cod[15&cod[ax^15]];
+				ts=ts>>8;
+				}
+			 				
+			byte[] b = Stdio.md5a(new byte[][] { a , Sale });
+			byte[] c = new byte[30];
+			System.arraycopy(a, 0, c, 0, 14);
+			System.arraycopy(b, 0, c, 14, 16);
+			
+			return J.Base64Encode(c);
+			}
+		
+		public static final int VOUCHER_UNKNOWN=0;
+		public static final int VOUCHER_OK=1;
+		public static final int VOUCHER_USED=-1;
+		public static final int VOUCHER_OLD=-2;
+		
+		public synchronized int VoucherTest(String vc,boolean save) throws Exception {
+			byte[] c = J.Base64Decode(vc);
+			if (c.length!=30) return 0;
+			byte[] a = new byte[14];
+			byte[] b = new byte[16];
+			System.arraycopy(c, 0, a, 0, 14);
+			System.arraycopy(c, 14, b, 0, 16);
+			byte[] v = Stdio.md5a(new byte[][] { a , Sale });
+			if (!Arrays.equals(b, v)) return VOUCHER_UNKNOWN;
+					
+			int ts=0;
+			byte[] cod = Stdio.md5a(new byte[][] { Sale, Subs[7&a[13]] , Subs[7&a[12]] });
+			for (int ax=3;ax>-1;ax--) {
+				ts=ts<<8;
+				byte by = a[ax];
+				by^=cod[ax];
+				by^=cod[15&cod[ax^15]];
+				ts|=(int)(255&by);
+				}
+			
+			if (ts!=0) {
+				int ts2 =(int)((System.currentTimeMillis()+Config.TimeSpoof)/60000L);
+				if (ts2>ts) return VOUCHER_OLD;
+				}
+
+			v = Stdio.md5a(new byte[][] { b , Sale, a, v });
+			for (int ax=0;ax<14;ax++) a[ax]^=v[ax];
+			int maxc=0;
+			
+			String x = Maildir+"/keys/invite.lst";
+			RandomAccessFile O=null;
+			boolean fin=false;
+			try {
+				O = new RandomAccessFile(x,"rw");
+				O.seek(0);
+				if (O.length()!=0) {
+					maxc = O.readShort();
+					for (int ax=0;ax<maxc;ax++) {
+					v = new byte[14];
+					O.read(v);
+					if (Arrays.equals(v, a)) { 
+							fin=true; 
+							break; 
+							}
+					}
+				} else O.writeShort(0);
+				
+			if (save) {
+				O.write(a);
+				maxc=maxc+1;
+				O.seek(0);
+				O.writeShort(maxc);
+				}
+			O.close();	
+			} catch(Exception E) {
+				try { O.close(); } catch(Exception I) {};
+				throw E;
+				}	
+			 
+			if (fin) return VOUCHER_USED; else return VOUCHER_OK;
+			
+		}
+		
+		public SMTPReply checkRemoteServer(String server) throws Exception {
+			if (!EnterRoute) throw new PException("@500 This is not an exit router");
+			MXRecord[] MX = Main.DNSCheck.getMX(server.toLowerCase().trim());
+			if (MX==null || MX.length==0) return new SMTPReply(550,"No MX Record");
+			MXRecord.MXSort(MX); 
+			String st="";
+			int cx = MX.length;
+			
+			for (int ax=0;ax<cx;ax++) st+=MX[ax].Priority+" "+MX[ax].Host+"\n";
+			st=st.trim();
+			return new SMTPReply(220,st.split("\\n+"),"TORM MX");
+			}
+		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server, Nick, st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server, Nick, st); 	}
 
+		public ExitRouterInfo selectExit4User(String localpart) throws Exception {
+			String dou=null;
+						
+			HashMap <String,String> Conf = UsrGetConfig(localpart);
+			if (Conf!=null && Conf.containsKey("exitdomain")) dou=Conf.get("exitdomain");
+			
+			ExitRouteList RL= GetExitList();
+			ExitRouterInfo ex = null;
+			if (dou!=null) ex= RL.selectExitByDomain(dou, false);
+			if (ex==null) ex= RL.selectBestExit();
+			RL=null;
+			return ex;
+			}
+
+		public String mailTor2Inet(String onionMail,String exitDom) throws Exception {
+			VirtualRVMATEntry VM = VMAT.SenderVirtualRVMATEntryLoad(onionMail);
+			if (VM!=null) {
+				return VM.mail;
+			} else {
+				String a = J.getLocalPart(onionMail);
+				String b = J.getDomain(onionMail);
+				if (exitDom==null && EnterRoute) exitDom=ExitRouteDomain;
+				if (exitDom==null) {
+					ExitRouteList rl = GetExitList();
+					ExitRouterInfo x = rl.selectAnExit();
+					if (x==null) throw new Exception("@550 No exit router available for "+Onion);
+					return a+"."+b+"@"+x.domain;
+					}
+			return a+"."+b+"@"+exitDom;
+			}
+		}
+
+		public VirtualRVMATEntry LookupVMAT(final String mail,boolean forceLookup) throws Exception {
+			VirtualRVMATEntry VM=null;
+			ExitRouterInfo ex = null;
+			String dom = J.getDomain(mail);
+			
+			if (!forceLookup) {
+				VM = VMAT.SenderVirtualRVMATEntryLoad(mail);
+				if (VM!=null) return VM;
+				ExitRouteList EL = GetExitList();
+				ex = EL.getByDomain(dom);
+				EL=null;
+				}
+			
+			if (ex==null) {
+					ex = new ExitRouterInfo();
+					ex.isLegacy=true;
+					ex.canVMAT=true;
+					ex.port=25;
+					ex.onion = dom;
+					ex.domain=dom;
+					}
+			
+			SrvAction A = new SrvAction(this,ex.onion,"VMATLookup") {
+				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+					if (this.SupVMAT) {
+							SMTPReply Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT LOOKUP "+mail);
+							if (Re.Code<200 || Re.Code>299) this.RES = null; else this.RES =  Re.Msg;
+							} else  this.RES = null;
+					}
+				};
+				
+			A.DoInSSL=true;
+			try {
+				A.Do();
+				if (A.RES!=null) {
+					String[] a = (String[]) A.RES;
+					String rs = J.getMail(a[0],true);
+					if (rs==null) Log("Bad VMAT Lookup on `"+A.Server+"`");
+					VM = new VirtualRVMATEntry();
+					VM.onionMail = rs;
+					VM.mail=mail;
+					VM.server = J.getDomain(rs);
+					return VM;
+					}
+				} catch(Exception E) {
+					Log("Can't Lookup via `"+A.Server+"` E: "+E.getMessage());
+					}
+			return null;
+		}
+		
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

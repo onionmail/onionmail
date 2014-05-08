@@ -89,6 +89,10 @@ public class POP3Server extends Thread {
 						break;
 						}
 			}
+			int numTasks=0;
+			for (int ax=0;ax<cx;ax++) if (Connection[ax]!=null) numTasks++;
+			Identity.statsRunningPOP3Session=numTasks;
+			if (numTasks>Identity.statsMaxRunningPOP3Session) Identity.statsMaxRunningPOP3Session=numTasks;
 			
 			try {
 					con = srv.accept();

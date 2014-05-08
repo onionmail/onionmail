@@ -21,9 +21,12 @@ package org.tramaci.onionmail;
  */
 
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -39,6 +42,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.zip.CRC32;
 
 import javax.crypto.Cipher;
@@ -569,7 +573,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 	public static byte[] AESEncMul(byte[] keySpec, byte[] data) throws Exception {
 		   int cx = keySpec.length;
 		   int round=(int) Math.floor(cx/48);
-		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   if (round==0) throw new Exception("AESEncMul: Invalid KeySpec");
 		   byte[][] Key = new byte[round][32];
 		   byte[][] IV = new byte[round][16];
 		   for (int ax=0;ax<round;ax++) {
@@ -583,7 +587,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 	public static byte[] AESEncMulP(byte[] keySpec, byte[] data) throws Exception {
 		   int cx = keySpec.length;
 		   int round=(int) Math.floor(cx/48);
-		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   if (round==0) throw new Exception("AESEncMul: Invalid KeySpec");
 		   byte[][] Key = new byte[round][32];
 		   byte[][] IV = new byte[round][16];
 		  
@@ -603,7 +607,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 	public static byte[] AESDecMulP(byte[] keySpec, byte[] data) throws Exception {
 		   int cx = keySpec.length;
 		   int round=(int) Math.floor(cx/48);
-		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   if (round==0) throw new Exception("AESEncMul: Invalid KeySpec");
 		   byte[][] Key = new byte[round][32];
 		   byte[][] IV = new byte[round][16];
 		  
@@ -624,7 +628,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 	public static byte[] AESDecMul(byte[] keySpec, byte[] data) throws Exception {
 		   int cx = keySpec.length;
 		   int round=(int) Math.floor(cx/48);
-		   if (round==0) throw new Exception("AESEncMul: Ivalid KeySpec");
+		   if (round==0) throw new Exception("AESEncMul: Invalid KeySpec");
 		   byte[][] Key = new byte[round][32];
 		   byte[][] IV = new byte[round][16];
 		   for (int ax=0;ax<round;ax++) {
@@ -987,15 +991,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
     
     	return o;    	
     }
-/*
-public static byte[] Test(byte[][] in) {
-	String s ="";
-	for (int ax=0;ax<in.length;ax++) s+="\n"+Stdio.Dump(in[ax]);
-	s=s.trim();
-	s=s.replace("\n", "_");
-	return s.getBytes();
-}
-   */
+
 public static byte[] md5a(byte[][] in)  {
 		MessageDigest digest;
 		try {
@@ -1229,7 +1225,28 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 	
 		return r;
 	}
-			
+		
+	@SuppressWarnings("deprecation")
+	public static synchronized void LogFile(String l,String LogFilen,Config C) throws Exception {
+		Date D = new Date(System.currentTimeMillis() + C.TimeSpoof);
+		String h = (D.getYear()+1900)+"-"+
+							J.Int2Str(D.getMonth()+1,2)+"-"+
+							J.Int2Str(D.getDate(),2)+" "+
+							J.Int2Str(D.getHours(),2)+":"+
+							J.Int2Str(D.getMinutes(),2)+":"+
+							J.Int2Str(D.getSeconds(),2)+"."+
+							J.Int2Str((int)(System.currentTimeMillis() % 1000),4);	
+		
+		l=h+"\t"+l.trim();
+			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LogFilen, true)));
+			try {
+				out.println(l);
+				try { out.close(); } catch (Exception ignore) { }
+				} catch(Exception E) {
+				try { out.close(); } catch (Exception ignore) { }
+				throw E;
+				}
+		}
 	
 	public static void echo(String st) { System.out.print(st); }
 	

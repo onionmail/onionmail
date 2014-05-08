@@ -134,7 +134,11 @@ public class DynaRes {
 			
 			String tmp = Res;
 			HashMap <String,String> H = new HashMap <String,String>();
-			for(String K:Par.keySet()) tmp=tmp.replace("%"+K+"%",Par.get(K));
+			for(String K:Par.keySet()) {
+					String sq=Par.get(K);
+					if (sq==null) sq="NULL";
+					tmp=tmp.replace("%"+K+"%",sq);
+					}
 			for(String K:Head.keySet()) {
 				String v = Head.get(K);
 				if (v.contains("%")) {

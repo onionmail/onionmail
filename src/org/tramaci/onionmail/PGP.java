@@ -66,7 +66,7 @@ public class PGP {
 	        
 	        if (o instanceof PGPEncryptedDataList)  enc = (PGPEncryptedDataList) o; else enc = (PGPEncryptedDataList) pgpF.nextObject();
 	        
-	        if (o==null) throw new Exception("@550 No dataList in message");
+	        //deadcode: if (o==null) throw new Exception("@550 No dataList in message");
 	        
 	        Iterator it = enc.getEncryptedDataObjects();
 	        PGPPrivateKey sKey = null;

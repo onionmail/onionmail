@@ -64,7 +64,8 @@ Content-Type: text/plain; charset=UTF-8
      @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@  @@  @@   @@      @@        
       @@@   @@  @@  @@@@    @@@@  @@  @@         @@  @@  @@@@@@  @@@@@  @@@@@@      
 
-                                <Onion Mail's Guide>
+                                <OnionMail's Guide>
+                                     Ver. 1.4
 
 [1.0] What's Onion Mail
 [1.1] Why should I use Onion Mail?
@@ -73,6 +74,9 @@ Content-Type: text/plain; charset=UTF-8
 [3.0] Communicating with the server
 [3.1] Spam list
 [4.0] Dealing with unwanted messages with X-Notice headers
+[5.0] Create your OnionMail address
+[6.0] Use PGP messages
+[7.0] Virtual M.A.T. Protocol and simple mail addresses.
 
 ----------------------------------------------------------------------------
 
@@ -162,15 +166,30 @@ In any case, a "Thanks" string in the message's body is always appreciated.
 
 List of the main commands:
 
-ADD SPAM:<email>
+ADD SPAM<email>
 Adds an email address to your spam list.
 Adding a star (*) before the @ will include the whole source server in
 the notification.
 
+SPAM DEL<email>
+Remove an email address to your spam list.
+Adding a star (*) before the @ will include the whole source server in
+the notification.
+
+SPAM SET
+Upload your spam list. Put the list in the body of message, one addres per line
+preceded by command ADD or DEL. ADD to include, DEL to remove.
+	Example:
+	ADD spam@megaspammer.onion
+	DEL firends@anonymous.onion
+
+SPAM CLEAR
+Clear and remove your spam list.
+
 SPAM LIST
 Shows your spam list.
 
-DEL SPAM:<numero>
+DEL SPAM <numero>
 Removes an address from your spam list.
 (See section 3.1 for details)
 
@@ -179,6 +198,7 @@ Sends you a message with the server's rules.
 
 IDENT
 Sends you info about the server and about SSL certificates.
+It can send the server's PGP public key.
 
 REBOUND HEADERS
 Re-sends you the headers the way they were received.
@@ -189,6 +209,17 @@ Sends you the list of the mail entry/exit nodes.
 EXIT SET <domain>
 Sets the default entry/exit server.
 
+LIST <list address> CREATE
+Create a new mailing list.
+
+LIST <list address> DESTROY
+Delete a mailing list. 
+
+LIST <list address> INVITE <usermail>
+Invite a new user into the mailing list.
+
+LIST <list address> REMOVE <usermail>
+Remove/ban an user.
 
 LIST <list address> RULEZ
 Sends you the file with the mailing list's information.
@@ -198,6 +229,21 @@ Subscribes you to the mailing list.
 
 LIST <list address> UNSUBSCRIBE
 Removes you from the mailing list.
+
+MYKEY
+Subscribe your PGP public key to the server.
+
+PGP
+This use the encrypted mode server messages.
+The command must be into the first line of the body of message and the
+message must be encrypted with PGP/GPG.
+
+VMAT
+Virtual MAT operations (See section 7.0).
+Enable the use of normal mail addresses.
+
+CONFIG
+Return a summary informations about default account configuration.
 
 Errors while sending the message will cause error 500 to be displayed
 and the message won't be received by the server.
@@ -277,4 +323,86 @@ simple email.
 You can also ask the node's administrator to be put in the exit policy.
 This way, the node won't be able to send or receive messages from your
 server or address.
+
+----------------------------------------------------------------------------
+
+[5.0] Create your OnionMail address
+
+Warning this function must be enabled via configuration file "servers.conf".
+
+1) Get your public PGP key and copy the ASCII armor.
+2) Send a message to the server (server@address.onion) with subject:
+	NEWUSER username
+	Where username is your user name and the address part before "@".
+	Paste the public key into the body of the message.
+	
+3) The server will reply to you via encrypted PGP message contains your login
+informations and passwords.
+
+Do not use the PGP commands mode!
+
+----------------------------------------------------------------------------
+
+[6.0] Use PGP messages
+
+The first step is your public PGP key subscription via MYKEY message:
+1) Get your public PGP key and copy the ASCII armor.
+2) Send a message to the server (server@address.onion) with subject:
+	MYKEY
+	Paste the public key into the body of the message.
+3) The server will reply to you with the server's PGP public key.
+
+How to encrypt server command messages:
+The subject of the message must be the word "PGP".
+Put the real subject of the message into the body at the first line.
+Encrypt the message via PGP/GPG.
+
+The server will reply to you via PGP encrypted messages.
+Don't forget to encrypt the messages with subject "PGP". 
+
+----------------------------------------------------------------------------
+
+[7.0] Virtual M.A.T. Protocol and simple mail addresses.
+
+Some OnionMail servers allows to translate the OnionMail address to a
+normal mail address without onion route into the mail address.
+This is allowed by VMAT protocol.
+(Virtual Mail Address Translation).
+
+To enable this feature send a message to your server with the subject the
+word VMAT.
+
+Place into the body of message the commands.
+
+To create a new VMAT address put a line with the word "register" 
+(lowercase) followed by the desidered mail address in a exit router`s 
+domain.
+
+Example:
+register test@onionmail.info
+This command do the request on the server onionmail.info to create a VMAT 
+address.
+
+Your server will reply the password and the final mail address if 
+available.
+
+Example:
+Address test1@onionmail.info OK
+	Password: plesehackme!
+	
+When the VMAT address is active your mail address will translated to 
+the VMAT address on the Internet and Tor network.
+This is the best way to use the normal mail address into the tor network 
+without rebound the message via exit node.
+
+To enable, disable or delete your VMAT address, put into the body of the 
+message the commands followed by VMAT mail address and the password.
+Example:
+
+enable test1@onionmail.info plesehackme!
+disable test1@onionmail.info plesehackme!
+delete test1@onionmail.info plesehackme!
+
+We suggest to use PGP mode encrypthed messages.
+
 ----------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 by Tramaci.Org
+ * Copyright (C) 2013-2014 by Tramaci.Org
  * This file is part of OnionMail (http://onionmail.info)
  * 
  * OnionMail is free software; you can redistribute it and/or modify
@@ -41,7 +41,8 @@ import java.util.Map;
 import org.bouncycastle.openpgp.PGPEncryptedData;
 
 	public class Config {
-						
+		public boolean UseKernel=true;
+		public boolean	ExitCheckViaTor = false;						
 		public int GarbageFreq = 2000;									//Frequenza di Garbage collector per le Onion e le connessioni inattive.
 				
 		public InetAddress DNSServer = null; 							//IP Server DNS
@@ -160,7 +161,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				
 		public String[] SPAMSrvCheck = new String[] {};
 				
-		public int MaxDoFriendOld=60; //minuti Par/Conf
+		public int MaxDoFriendOld=60; //TODO in config minuti Par/Conf 
 		public boolean SSLJavaHasBug = false; 
 		
 		public boolean UseBootSequence = true;
@@ -173,6 +174,10 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public boolean PGPStrictKeys = false;
 		public int AESKeyRoundExtra = 0;
 		
+		public boolean VerfySenderViaSimulation=true;
+		public boolean NoBootFromSameMachine=false;
+		public boolean AutoDeleteReadedMessages=true;
+				
 		public static void echo(String st) { System.out.print(st); }
 		
 		public static int parseInt(String st,String name) throws Exception {
@@ -200,6 +205,19 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			int p =-1;
 			try { p = Integer.parseInt(st); } catch(Exception E) {}
 			if (p<1 || p>65535) throw new Exception("Invalid value `"+st+"`");
+			return p;
+		}
+		
+		public static int parseIntS(String si) throws Exception {
+			int p =-1;
+			int cx=si.length();
+			String st="";
+			for (int ax=0;ax<cx;ax++) {
+				int c = si.codePointAt(ax);
+				if (c>47 && c<58) st+=si.charAt(ax);
+				}
+			try { p = Integer.parseInt(st); } catch(Exception E) {}
+			if (p<1 || p>65535) return 0;
 			return p;
 		}
 		
@@ -268,6 +286,29 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				throw new Exception("Incomplete exit policy list");
 		}
 		
+		private static Object[] ParseLines(Config C,BufferedReader br, int line,String exc) throws Exception {
+			String li = null;
+			String ret="";
+					while((li=br.readLine())!=null) {
+						line++;
+						li = li.trim();
+						if (li.length()==0) continue;
+						if (li.charAt(0) =='#') continue;
+						String[] tok = li.split("\\#",2);
+
+						li = tok[0];
+						li = li.trim();
+						if (li.length()==0) continue;
+						if (li.compareTo("}")==0) {
+								ret=ret.trim();
+								return new Object[] { line , ret.split("\\n+") };
+								}
+						ret+=li+"\n";
+						}
+						throw new Exception(exc);
+		}
+		
+		
 		private static HashMap <String,Integer> copypol(HashMap <String,Integer>P) {
 			HashMap <String,Integer> q=new HashMap <String,Integer>();
 			for(String k:P.keySet()) q.put(k, P.get(k));
@@ -281,7 +322,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			C.SMPTServer=ST0;
 			C.SMPTServer[ne] = new SrvIdentity(C);
 			C.SMPTServer[ne].Nick=nick;
-			
+			C.SMPTServer[ne].EnabledVMAT="\n";
+			C.SMPTServer[ne].DisabledVMAT="\n";
+			C.SMPTServer[ne].AutoDeleteReadedMessages = C.AutoDeleteReadedMessages;
 			HashMap <String,Integer> P = Config.copypol(SP);
 			
 			String li = null;
@@ -311,6 +354,18 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						
 						if (cmd.compareTo("passwd")==0) {
 							C.SMPTServer[ne].PassWd = tok[1].trim();
+							continue;
+							
+						}
+						
+						if (cmd.compareTo("identtextfile")==0) {
+							C.SMPTServer[ne].IdentText = J.MapPath(CPath, tok[1]);
+							if (!new File(C.SMPTServer[ne].IdentText).exists()) throw new Exception("IdentTextFile not found `"+C.SMPTServer[ne].IdentText+"`");
+							continue;
+						}
+						
+						if (cmd.compareTo("logvoucherto")==0) {
+							C.SMPTServer[ne].LogVoucherTo = J.MapPath(CPath, tok[1]);
 							continue;
 						}
 						
@@ -346,7 +401,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										if (xh!=0 || xd!=0) C.SMPTServer[ne].NewUsrEnabled=true;
 										continue;
 										}					
-						
+																	
 						if (cmd.compareTo("newlstenabled ")==0) { 
 										C.SMPTServer[ne].NewLstEnabled  = Config.parseY(tok[1]);
 										continue;
@@ -363,12 +418,40 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}		
 						
+						if (cmd.compareTo("rmxcache")==0) { 
+										String str[] = tok[1].split("\\s+");
+										int rmxSz  = Config.parseInt(str[0], "servers", 0,65535);
+										int rmxTl = 10;
+										if (str.length>1) rmxTl =  Config.parseInt(str[0], "minutes", 1,1440);
+										C.SMPTServer[ne].setRMXCache(rmxSz, rmxTl);
+										continue;
+										}	
+						
+						if (cmd.compareTo("multidelivermaxrcptto")==0) { 
+										C.SMPTServer[ne].MultiDeliverMaxRCPTTo = Config.parseInt(tok[1], "addresses", 2, 128);
+										continue;
+										}
+												
+						if (cmd.compareTo("exitaltport ")==0) { 
+										C.SMPTServer[ne].ExitAltPort  = Config.parseInt(tok[1], "port", 1, 65535);
+										continue;
+										}
+						
+						if (cmd.compareTo("exitmultipleserverdelivery")==0) { 
+										C.SMPTServer[ne].ExitNotMultipleServerDelivery  = true ^ Config.parseY(tok[1]);
+										continue;
+										}
 						
 						if (cmd.compareTo("statfile")==0) { 
 										C.SMPTServer[ne].StatFile = J.MapPath(CPath, tok[1]);
 										continue;
 										}
 						
+						if (cmd.compareTo("binstatfile")==0) { 
+										C.SMPTServer[ne].binaryStatsFile = J.MapPath(CPath, tok[1]);
+										continue;
+										}
+																		
 						if (cmd.compareTo("onlyonion")==0) { 
 										C.SMPTServer[ne].OnlyOnion = Config.parseY(tok[1]);
 										continue;
@@ -384,10 +467,19 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
-						if (cmd.compareTo("enteralias")==0) { 
+						if (cmd.compareTo("autodeletereaded")==0) { 
+										C.SMPTServer[ne].AutoDeleteReadedMessages = Config.parseY(tok[1]);
 										continue;
-										//DUMMY Option for old version compatibility
-										}												
+										}
+						
+						if (cmd.compareTo("application")==0) {
+										Application a = Config.parseApplicationFile( J.MapPath(CPath, tok[1]));
+										if (C.SMPTServer[ne].Applications==null) C.SMPTServer[ne].Applications=new HashMap <String,Application>();
+										if (C.SMPTServer[ne].Applications.containsKey(a.localPart)) throw new Exception("Application `"+a.localPart+"` arleady loaded");
+										C.SMPTServer[ne].Applications.put(a.localPart, a);
+										continue;
+										}
+										
 						if (cmd.compareTo("onlyonionto")==0) { 
 										C.SMPTServer[ne].OnlyOnionTo = Config.parseY(tok[1]);
 										continue;
@@ -397,6 +489,72 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									line=Config.ParseExitList(C,br,line,P);
 									continue;
 									}
+						
+						if (cmd.compareTo("vmatallow")==0) {
+									Object[] o = Config.ParseLines(C,br,line,"Incomplete VMATAllow section");
+									line=(int) o[0];
+									String[] t0 = (String[]) o[1];
+									for (int ax=0;ax<t0.length;ax++) {
+											t0[ax]=t0[ax].toLowerCase();
+											t0[ax]=t0[ax].trim();
+											if (t0[ax].compareTo("*")==0) {
+													C.SMPTServer[ne].EnabledVMAT+="\n*\n";
+												} else if (!t0[ax].matches("[0-9a-z\\.\\-\\_]{5,25}")) throw new Exception("Syntax error in VMATAllow: "+(ax+1)+"`"+t0[ax]+"`"); 
+													C.SMPTServer[ne].EnabledVMAT+=t0[ax]+"\n";
+												}
+									continue;
+									}
+						
+						if (cmd.compareTo("vmatdeny")==0) {
+									Object[] o = Config.ParseLines(C,br,line,"Incomplete VMATDeny section");
+									line=(int) o[0];
+									String[] t0 = (String[]) o[1];
+									for (int ax=0;ax<t0.length;ax++) {
+											t0[ax]=t0[ax].toLowerCase();
+											t0[ax]=t0[ax].trim();
+											if (t0[ax].compareTo("*")==0) {
+													C.SMPTServer[ne].DisabledVMAT+="\n*\n";
+												} else if (!t0[ax].matches("[0-9a-z\\.\\-\\_]{5,25}")) throw new Exception("Syntax error in VMATDeny: "+(ax+1)); 
+													C.SMPTServer[ne].DisabledVMAT+=t0[ax]+"\n";
+												}
+									continue;
+									}
+						
+						if (cmd.compareTo("exitbad")==0) {
+							if (C.SMPTServer[ne].ExitBad!=null) throw new Exception("Too many ExitBad sequence");
+							Object[] o = Config.ParseLines(C,br,line,"Incomplete ExitBad section");
+							line=(int) o[0];
+							String[] t0 = (String[]) o[1];
+							String r0=",";
+							int cx=t0.length;
+							for (int ax=0;ax<cx;ax++) {
+								String a = t0[ax].toLowerCase().trim();
+								if (a.length()==0) continue;
+								if (!a.matches("[a-z0-9\\.\\-\\_]{4,80}")) throw new Exception("R6082 Invalid domain `"+a+"`");
+								a=a+",";
+								if (!r0.contains(","+a)) r0+=a;
+								}
+							C.SMPTServer[ne].ExitBad=r0;
+							continue;
+							}
+						
+						if (cmd.compareTo("exitgood")==0) {
+							if (C.SMPTServer[ne].ExitGood!=null) throw new Exception("Too many exitgood sequence");
+							Object[] o = Config.ParseLines(C,br,line,"Incomplete exitgood section");
+							line=(int) o[0];
+							String[] t0 = (String[]) o[1];
+							String r0=",";
+							int cx=t0.length;
+							for (int ax=0;ax<cx;ax++) {
+								String a = t0[ax].toLowerCase().trim();
+								if (a.length()==0) continue;
+								if (!a.matches("[a-z0-9\\.\\-\\_]{4,80}")) throw new Exception("R6081 Invalid domain `"+a+"`");
+								a=a+",";
+								if (!r0.contains(","+a)) r0+=a;
+								}
+							C.SMPTServer[ne].ExitGood=r0;
+							continue;
+							}
 						
 						if (cmd.compareTo("exitnotice")==0) { 
 										tok[1]=tok[1].trim();
@@ -614,6 +772,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne]);
 						if (Main.SetPGPSrvKeys)	C.SMPTServer[ne].SrvSetPGPKeys();
 						}
+				
+				C.SMPTServer[ne].BlackList=new IPList(C.SMPTServer[ne],"spam.ip");
+								
 				} catch(Exception E) {
 					String ms = E.getMessage();
 					if (ms.startsWith("@")) {
@@ -664,6 +825,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			STKbr[0]=br;
 						
 			String ConfList="\n"+filepath+"\n";
+			String exitbad="";
+			String exitgood="";
+			boolean feedIsGood=false;
 			
 			try {
 				while(true) {	
@@ -808,7 +972,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("usebootsequence")==0) { fc=true; C.UseBootSequence=Config.parseY(tok[1]); }
 								if (cmd.compareTo("aeskeyroundextra")==0) { fc=true; C.AESKeyRoundExtra=Config.parseInt(tok[1],"Round", 0, 15); }		
 								if (cmd.compareTo("rsakeygenbc")==0) { fc=true; Main.RSAGenBC=Config.parseY(tok[1]); }
+								if (cmd.compareTo("usekernel")==0) { fc=true; C.UseKernel	=Config.parseY(tok[1]); }
+								
 								if (cmd.compareTo("randomheart")==0) { fc=true; Main.RandomHeart=J.MapPath(CPath, tok[1]); }
+								
+								if (cmd.compareTo("verfysenderviasimulation")==0) { fc=true; C.VerfySenderViaSimulation=Config.parseY(tok[1]); }
+								if (cmd.compareTo("nobootfromsamemachine")==0) { fc=true; C.NoBootFromSameMachine=Config.parseY(tok[1]); }
+								if (cmd.compareTo("exitcheckviator")==0) { fc=true; C.ExitCheckViaTor=Config.parseY(tok[1]); }
 								
 								if (cmd.compareTo("dnssotimeout")==0) { fc=true; C.DNSSoTimeout=Config.parseInt(tok[1],"milliseconds timeout",2000); }
 								if (cmd.compareTo("maxsmtpsession")==0) { fc=true; C.MaxSMTPSession=Config.parseInt(tok[1],"smtp connections value",512); }
@@ -824,10 +994,14 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("listthreadsmax")==0) { fc=true; C.ListThreadsMax=Config.parseInt(tok[1],"Threads", 0, 256); }
 							//	if (cmd.compareTo("serverblacklist")==0) { fc=true; C.ServerBlackList=J.MapPath(CPath, tok[1]); }
 								if (cmd.compareTo("passwordmaxstrangerchars")==0) { fc=true; C.PasswordMaxStrangerChars=Config.parseInt(tok[1],"Chars", 1, 256); }
+								if (cmd.compareTo("maxdofriendold")==0) { fc=true; C.MaxDoFriendOld=Config.parseInt(tok[1],"Minutes", 1, 1440); }
+								
+								
 								if (cmd.compareTo("passwordsize")==0) { fc=true; C.PasswordSize=Config.parseInt(tok[1],"Chars", 7, 256); }
 								if (cmd.compareTo("minbootderks")==0) { fc=true; C.MinBootDerks=Config.parseInt(tok[1],"Servers", 1, 16); }
 								if (cmd.compareTo("mailretentiondays")==0) { fc=true; C.MailRetentionDays=Config.parseInt(tok[1],"Days", 4, 365); }
 								if (cmd.compareTo("pgpstrictkeys")==0) { fc=true; C.PGPStrictKeys=Config.parseY(tok[1]); }
+								if (cmd.compareTo("autodeletereaded")==0) { fc=true; C.AutoDeleteReadedMessages = Config.parseY(tok[1]); }
 								
 								if (cmd.compareTo("pgpencrypteddataalgo")==0) { 
 										fc=true;
@@ -1003,6 +1177,45 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("nolocalip")==0) { fc=true; C.NoIP = ParseIPList(tok, false, true,"none empty nothing nobody unused"); }
 								if (cmd.compareTo("netallowip")==0) { fc=true; C.NetAllowIp = ParseIPList(tok,true,true,"all"); }
 								if (cmd.compareTo("netdenyip")==0) { fc=true; C.NetNoAllowIp = ParseIPList(tok,true,true,"none empty nothing nobody unused"); }
+								
+								
+								if (cmd.compareTo("exitbad")==0) {
+										Object[] o = Config.ParseLines(C,br,line,"Incomplete ExitBad section");
+										line=(int) o[0];
+										String[] t0 = (String[]) o[1];
+										String r0=",";
+										int cx=t0.length;
+										for (int ax=0;ax<cx;ax++) {
+											String a = t0[ax].toLowerCase().trim();
+											if (a.length()==0) continue;
+											if (!a.matches("[a-z0-9\\.\\-\\_]{4,80}")) throw new Exception("Invalid domain `"+a+"`");
+											a=a+",";
+											if (!r0.contains(","+a)) r0+=a;
+											}
+										exitbad+=","+r0;
+										fc=true;
+										}
+						
+									if (cmd.compareTo("exitgood")==0) {
+										
+										Object[] o = Config.ParseLines(C,br,line,"Incomplete exitgood section");
+										line=(int) o[0];
+										String[] t0 = (String[]) o[1];
+										String r0=",";
+										int cx=t0.length;
+										for (int ax=0;ax<cx;ax++) {
+											String a = t0[ax].toLowerCase().trim();
+											if (a.length()==0) continue;
+											if (!a.matches("[a-z0-9\\.\\-\\_]{4,80}")) throw new Exception("Invalid domain `"+a+"`");
+											a=a+",";
+											if (!r0.contains(","+a)) r0+=a;
+											}
+										exitgood+=","+r0;
+										fc=true;
+										}
+								
+									if (cmd.compareTo("friendsgood")==0) { fc=true; feedIsGood=Config.parseY(tok[1]); }
+								
 								if (cmd.length()==0) fc=true;
 								if (!fc) throw new Exception("Unknown parameter `"+cmd+"`");
 							}
@@ -1025,6 +1238,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				Friends=Friends.trim();
 				C.FriendServer = Friends.split("\\n+");
 				
+				if (feedIsGood) exitgood+=","+J.Implode(",",C.FriendServer)+",";				
+				int cx = C.SMPTServer.length;
+				exitgood=exitgood.replace(',','\n').trim();
+				exitbad=exitbad.replace(',','\n').trim();
+				for (int ax=0;ax<cx;ax++) {
+					String a = C.SMPTServer[ax].ExitGood!=null ? C.SMPTServer[ax].ExitGood.replace(',','\n') : "";
+					String b = C.SMPTServer[ax].ExitBad!=null ? C.SMPTServer[ax].ExitBad.replace(',','\n') : "";
+					a=Config.nlStringSum(a, exitgood);
+					b=Config.nlStringSum(b, exitbad);
+					a=a.replace('\n',',');
+					b=b.replace('\n',',');
+					if (a.length()>0 && a.compareTo(",,")!=0) C.SMPTServer[ax].ExitGood=a; else C.SMPTServer[ax].ExitGood=null;
+					if (b.length()>0 && b.compareTo(",,")!=0) C.SMPTServer[ax].ExitBad=b; else C.SMPTServer[ax].ExitBad=null;
+					}
+								
 				if (PGPRnd!=null) {
 					PGPRnd=PGPRnd.trim();
 					C.PGPSpoofVer=PGPRnd.split("\\n+");
@@ -1056,7 +1284,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						}
 					}
 					
-					int cx = C.NoPort.length;
+					cx = C.NoPort.length;
 					for (int ax=0;ax<cx;ax++) if (C.NoPort[ax]==C.DefaultPort) {
 						Main.echo("\nWarning:\t\nDefault onion port "+C.DefaultPort+" blocked by NoPort!\n\n");
 						break;
@@ -1430,6 +1658,99 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								
 				return NewServer;
 		}
+		
+		public static Application parseApplicationFile(String file) throws Exception {
+			FileInputStream F = new FileInputStream(file);
+			BufferedReader br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
+			Application a = new Application();
+			try {
+				int line=0;
+				String li;
+				while((li=br.readLine())!=null) {
+					String tok[]=li.split("\\#",2);
+					tok[0]=tok[0].trim();
+					if (tok[0].length()==0) continue;
+					tok=tok[0].split("\\s+",2);
+					String cmd = tok[0].toLowerCase();
+					line++;
+					int tl = tok.length;
+					
+					if (cmd.compareTo("name")==0 && tl==2) {
+						if (!tok[1].matches("[a-z0-9]{1,30}\\.app")) throw new Exception("Invalid application name");
+						if (a.localPart!=null) throw new Exception("Application name arledy defined, second definition in line "+line+" into the file `"+file+"` defined in");
+						a.localPart=tok[1].toLowerCase().trim();
+						continue;
+						}
+					
+					if (cmd.compareTo("charset")==0 && tl==2) {
+						a.charSet=tok[1].toUpperCase().trim();
+						continue;
+						}
+					
+					if (cmd.compareTo("cmd")==0 && tl==2) {
+						a.commandLine=tok[1];
+						continue;
+						}
+					
+					if (cmd.compareTo("maxmsglength")==0 && tl==2) {
+						a.maxMsgLength= Config.parseInt(tok[1], "Chachters", 1, 256000); 
+						continue;
+						}
+					
+					if (cmd.compareTo("maxrelength")==0 && tl==2) {
+						a.maxReLength= Config.parseInt(tok[1], "Chachters", 1, 256000); 
+						continue;
+						}
+					
+					if (cmd.compareTo("base64")==0 && tl==2) {
+						a.encode=Config.parseY(tok[1]);
+						continue;
+						}
+							
+					if (cmd.compareTo("accessmode")==0 && tl==2) {
+						tok[1]=tok[1].toLowerCase().trim();
+						if (tok[1].contains("tor"))	a.accessMode|=Application.ACCESS_TOR;
+						if (tok[1].contains("inet"))	a.accessMode|=Application.ACCESS_INET;
+						if (tok[1].contains("sysop"))	a.accessMode|=Application.ACCESS_SYSOP;
+						if (tok[1].contains("user"))	a.accessMode|=Application.ACCESS_USER;
+						continue;
+						}
+				
+					if (cmd.compareTo("runmode")==0 && tl==2) {
+						if (a.runMode!=0) throw new Exception("RunMode arledy defined, second definition in line "+line+" into the file `"+file+"` defined in");
+						tok[1]=tok[1].toLowerCase().trim();
+						if (tok[1].compareTo("smtp")==0) a.runMode=Application.RUN_SMTP;
+						if (tok[1].compareTo("batch")==0) a.runMode=Application.RUN_BATCH;
+						if (tok[1].compareTo("app")==0) a.runMode=Application.RUN_APP;
+						continue;
+						}
+				
+					if (cmd.compareTo("req")==0 && tl==2) {
+						String p = J.GetPath(file);
+						p+="/"+tok[1];
+						if (!new File(p).exists()) throw new Exception("Require file `"+p+"` not found. (definition in line "+line+" into the file `"+file+"`) defined in");
+						continue;
+						}
+				
+				throw new Exception("Invalid command `"+cmd+"` in line of file `"+file+"` defined in");
+				}	
+				
+				F.close();
+				try { br.close(); } catch(Exception i) {}
+				
+				if (a.accessMode==0) throw new Exception("Access mode not defined in application `"+file+"` defined in");
+				if (a.runMode==0) throw new Exception("RunMode not defined in application `"+file+"` defined in");
+				if (a.commandLine==null) throw new Exception("Cmd not defined in application `"+file+"` defined in");
+				if (a.localPart==null) throw new Exception("Application name not defined in file `"+file+"` defined in");
+			} catch(Exception E) {
+				try { F.close(); } catch(Exception i) {}
+				try { br.close(); } catch(Exception i) {}
+				throw E;
+			}
+			
+			return a;	
+		}
+		
 		/*
 		private String GetCertFile(String CN) {
 			String t0 = CN.toLowerCase()+"\n"+CN.toUpperCase()+"\n"+this.RootPass+"\n"+this.RootPathConfig;
@@ -1584,5 +1905,18 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			return new String(bl);
 		}
 	
+		public static String nlStringSum(String a,String b) {
+				a=a.toLowerCase().trim();
+				b=b.toLowerCase().trim();
+				a="\n"+a+"\n";
+				String[] t = b.split("\\n+");
+				int cx=t.length;
+				for (int ax=0;ax<cx;ax++) if (t[ax].length()>0 && !a.contains("\n"+t[ax]+"\n")) a+=t[ax]+"\n";
+				a=a.trim();
+				t = a.split("\\n+");
+				a = J.Implode("\n", t);
+				return "\n"+a+"\n";
+				}
+		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

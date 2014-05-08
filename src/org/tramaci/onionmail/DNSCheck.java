@@ -138,8 +138,8 @@ public class DNSCheck {
                 attribute = attributes.get("TXT");
                 if ( attribute != null ) {
                 		ip=attribute.get().toString();
-                		if (Config.DNSBLUseCache) CHAddB(tip,ip);
-                		return "DNSBL "+ip;
+                		if (Config.DNSBLUseCache) CHAddB(tip,service);
+                		return service;
                 		}
             } 	catch (NameNotFoundException e) {}
             	catch (NamingException e) {}
@@ -151,7 +151,8 @@ public class DNSCheck {
 	   
     @SuppressWarnings("rawtypes")
 	public MXRecord[] getMX(String hostname) {
-        
+         MXRecord[] re =null;
+    	
     	 if (Config.DNSBLUseCache) {
         	int tcr= (int)(System.currentTimeMillis()/1000);
         	if (tcr>GarbageTCR|| CacheMX.size()>Config.DNSBLCacheSize) {
@@ -177,7 +178,7 @@ public class DNSCheck {
                     tmp=tmp.trim();
                     String[] Tok = tmp.split("\\n+");
                     int cx = Tok.length;
-                    MXRecord[] re = new MXRecord[cx];
+                    re = new MXRecord[cx];////
                     for (int ax=0;ax<cx;ax++) {
                     		String[] Tik = Tok[ax].split("\\s+");
                     		if (Tik.length!=2) continue;

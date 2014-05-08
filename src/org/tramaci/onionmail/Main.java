@@ -36,13 +36,17 @@ import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import javax.crypto.SecretKey;
 
 public class Main {
 	Config Config = new Config();
 	
-	public static final long VersionID = 0x0001_0001_0031_00A2L;
-	public static final String Version="1.1.49B";
+	public static final long VersionID = 0x0001_0004_0004_0119L;
+	public static final String Version="1.4.4.281B";
 	public static final String VersionExtra="";
 	
 	public static DNSServer DNSServer=null;
@@ -50,9 +54,18 @@ public class Main {
 	public static SMTPServer[] SMTPS = null;
 	public static POP3Server[] POP3S = null;
 	public static org.tramaci.onionmail.MailingList.ListThread[] ListThreads = null;
+	public static MultiDeliverThread[] MultiTthread = null;
 	
 	public static ControlService CS = null;
 	public static ControlService[] CSP = null; 
+	
+	public static volatile int MaxThread = 0;
+	public static volatile int PercThread=0;
+	
+	public static volatile int statsMaxThread = 0;
+	public static volatile int statsPercThread=0;
+	
+	public static ScheduledExecutorService Kernel = null;
 	
 	protected static PublicKey FSK = null;
 	protected static KeyPair IDK = null;
@@ -355,6 +368,7 @@ public class Main {
 				}
 			
 		ListThreads= new org.tramaci.onionmail.MailingList.ListThread[Config.ListThreadsMax];
+		MultiTthread = new MultiDeliverThread[Config.ListThreadsMax];
 		
 		if (!Config.RUNSMTP && Config.SMPTServer.length>0) echo("Warning:\n\tAll SMTP Server defined will not work because RunSMTP is not set!\n\n");
 		if (Config.RUNSMTP && Config.SMPTServer.length==0) echo("Warning:\n\tNo SMTP Server defined!\n\n");
@@ -366,13 +380,15 @@ public class Main {
 						
 			echo("Running SMTP Server:\n");
 			int cx = Config.SMPTServer.length;
-			SMTPS = new SMTPServer[cx];
+			int dx = cx;
+			for (int ax=0;ax<cx;ax++) if (Config.SMPTServer[ax].EnterRoute) dx++;
+			SMTPS = new SMTPServer[dx];
 			POP3S = new POP3Server[cx];
 			
 			String otsm="\n";
 			
 			for (int ax=0;ax<cx;ax++) otsm+=Config.SMPTServer[ax].Onion.trim().toLowerCase()+"\n";
-			
+			int bx=0;
 			for (int ax=0;ax<cx;ax++) {
 				echo("\nStart "+J.Limited("`"+Config.SMPTServer[ax].Nick+"`",40)+"\n");
 				echo("\tOnion:\t"+Config.SMPTServer[ax].Onion+"\n");
@@ -381,9 +397,14 @@ public class Main {
 				if (Config.SMPTServer[ax].EnterRoute) echo("YES!\n\tQFDN:\t"+Config.SMPTServer[ax].ExitRouteDomain+"\n"); else echo("No\n");
 				
 				try {
-					SMTPS[ax] = new SMTPServer(Config,Config.SMPTServer[ax]);
-					SMTPS[ax].Identity.OnTheSameMachine=otsm;
-					
+					SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax]);
+					SMTPS[bx].Identity.OnTheSameMachine=otsm;
+					bx++;
+					if (Config.SMPTServer[ax].EnterRoute) {
+						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],Config.SMPTServer[ax].ExitAltPort);
+						bx++;
+						echo("ExitAltPort:\t"+J.Limited((Config.SMPTServer[ax].EnterRoute ? "0.0.0.0" : J.IP2String(Config.SMPTServer[ax].LocalIP) ) +	":"+Config.SMPTServer[ax].ExitAltPort,23)+"\n");
+						}
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "SMTP."+Config.SMPTServer[ax].Nick);
@@ -459,6 +480,7 @@ public class Main {
 	Config.GlobalLog(Config.GLOG_All, "MAIN", "OnionMail is running!");
 	Thread.sleep(2000);		
 	SelfTest();
+	if (Config.UseKernel) startKernel(); 
 	}
 	
 	private void DelKeys() throws Exception {
@@ -503,7 +525,7 @@ public class Main {
 public static void main(String args[]) {
 		Main N=null;
 		boolean verbose=false;
-		
+			
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
@@ -787,7 +809,114 @@ public static void main(String args[]) {
 			fo.close();
 		}	
 
-	
+	public void startKernel() {
+		if (Main.Kernel!=null) return;
+		ScheduledExecutorService K = Executors.newSingleThreadScheduledExecutor();
+		
+		Runnable KernelImpl = new Runnable() {
+			@Override
+			public void run() {
+				try {	
+					int ctask=0;
+					int maxt=0;
+					int grbt=0;
+					String nodup=",";
+					if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", "StartGarbage");
+					if (Main.SMTPS!=null) {
+							int cx = Main.SMTPS.length;
+							maxt+=cx;
+							for (int ax=0;ax<cx;ax++) try {
+								if (Main.SMTPS[ax]!=null) {
+									grbt++;
+									if (!nodup.contains(","+Main.SMTPS[ax].Identity.Nick+",")) {
+										ctask+=Main.SMTPS[ax].Identity.statsRunningPOP3Session;
+										ctask+=Main.SMTPS[ax].Identity.statsRunningSMTPSession;
+										nodup+=Main.SMTPS[ax].Identity.Nick+",";
+										}
+									Main.SMTPS[ax].Garbage();
+									}
+								} catch(Exception KP) { Config.EXC(KP, "Kernel:SMTP"); }
+							} //smtp
+					
+					if (Main.POP3S !=null) {
+							int cx = Main.POP3S .length;
+							maxt+=cx;
+							for (int ax=0;ax<cx;ax++) try {
+								if (Main.POP3S [ax]!=null) {
+									grbt++;
+									if (!nodup.contains(","+Main.POP3S [ax].Identity.Nick+",")) {
+										ctask+=Main.POP3S [ax].Identity.statsRunningPOP3Session;
+										ctask+=Main.POP3S [ax].Identity.statsRunningSMTPSession;
+										nodup+=Main.POP3S [ax].Identity.Nick+",";
+										}
+									Main.POP3S [ax].Garbage();
+									}
+								} catch(Exception KP) { Config.EXC(KP, "Kernel:POP3"); }
+							} //pop3
+					
+					if (Main.CSP !=null) {
+							int cx = Main.CSP .length;
+							maxt+=cx;
+							for (int ax=0;ax<cx;ax++) try {
+								if (Main.CSP [ax]!=null) {
+									grbt++;
+									Main.CSP [ax].Garbage();
+									}
+								} catch(Exception KP) { Config.EXC(KP, "Kernel:ControlPort"); }
+							} //pop3
+									
+					if (Main.ListThreads !=null) {
+								int cx = Main.ListThreads.length;
+								maxt+=cx;
+								long tcr = System.currentTimeMillis();
+								
+								for (int ax=0;ax<cx;ax++) try {
+									if (Main.ListThreads[ax]==null) continue;
+									boolean remove=false;
+									grbt++;
+									if ((tcr - Main.ListThreads[ax].Started)>Config.ListThreadsTTL) remove=true;
+									if (Main.ListThreads[ax].running==false) remove=true;
+									if (!Main.ListThreads[ax].isAlive()) remove=true;
+									if (remove) {
+										Main.ListThreads[ax].End();
+										Main.ListThreads[ax]=null;
+										} else ctask++;
+									} catch(Exception KP) { Config.EXC(KP, "Kernel:ListThread"); }
+							} //list
+					
+					if (Main.MultiTthread !=null) {
+								int cx = Main.MultiTthread.length;
+								maxt+=cx;
+								long tcr = System.currentTimeMillis();
+								
+								for (int ax=0;ax<cx;ax++) try {
+									if (Main.MultiTthread[ax]==null) continue;
+									boolean remove=false;
+									grbt++;
+									if ((tcr - Main.MultiTthread[ax].Started)>Config.ListThreadsTTL) remove=true;
+									if (Main.MultiTthread[ax].running==false) remove=true;
+									if (!Main.MultiTthread[ax].isAlive()) remove=true;
+									if (remove) {
+										Main.MultiTthread[ax].End();
+										Main.MultiTthread[ax]=null;
+										} 
+									ctask++;
+									} catch(Exception KP) { Config.EXC(KP, "Kernel:MultiThread"); }
+							} //MultiDeliver
+						Main.MaxThread = ctask;
+						Main.PercThread = (int) Math.ceil(100.0*(grbt / maxt));
+						if (Main.MaxThread>Main.statsMaxThread) Main.statsMaxThread=Main.MaxThread;
+						if (Main.PercThread>Main.statsPercThread) Main.statsPercThread=Main.PercThread;
+						if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", ctask+" T.c., "+grbt+" T.r., "+Main.PercThread+"%");
+						
+					} catch(Exception KP) { Config.EXC(KP, "Kernel"); }	
+				}/*run*/
+			};
+		
+		Main.Kernel=K;
+		K.scheduleAtFixedRate(KernelImpl,1 ,60, TimeUnit.SECONDS);
+		
+	}
 	
 	
 	

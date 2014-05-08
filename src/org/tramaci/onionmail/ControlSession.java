@@ -219,8 +219,7 @@ public class ControlSession extends Thread{
 			ReplyAccess();
 			continue;
 			}
-			
-		
+				
 		/////////////////
 			
 		if (cmd.compareTo("quit")==0) break;
@@ -229,7 +228,7 @@ public class ControlSession extends Thread{
 		if (CurSrv!=-1) {	/// Server
 		
 				if (cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
-				
+							
 				if (cmd.compareTo("getkey")==0) {
 						String[] t0 =new String[] { J.Base64Encode(Stdio.Public2Arr(SRVS[CurSrv].SPK)) };
 						ReplyA(true,"RSA Public Key",t0);
@@ -239,12 +238,32 @@ public class ControlSession extends Thread{
 				
 				///////////////
 				
+				if (cmd.compareTo("dnsbl")==0 && pa==2) {
+					if (!SRVS[CurSrv].EnterRoute) {
+						Reply(false,"2 No exit");
+						continue;
+						}
+					String ips = Tok[1].trim();
+					String dnss=Main.DNSCheck.DNSBL(ips);
+					boolean s= (dnss!=null);
+					Reply(true, s ? "1 Spam `"+dnss+"`" : "0 Ok");
+					continue;
+					}
+				
+				if (cmd.compareTo("bestexit")==0) {
+						ExitRouteList a= SRVS[CurSrv].GetExitList();
+						ExitRouterInfo ie = a.selectBestExit();
+						if (ie==null) Reply(false); else Reply(true,ie.toString());
+						continue;
+						}
+				
 				if (cmd.compareTo("sslcert")==0) {
 						String t0 = SRVS[CurSrv].MyCert.toString();
 						ReplyA(true,"Certificate",t0.split("\n"));
 						t0=null;
 						continue;
 						}
+				
 		}				
 		//////////////
 		
@@ -271,6 +290,27 @@ public class ControlSession extends Thread{
 		
 		if (CurSrv!=-1) {
 			if (cmd.compareTo("elist")==0) { SA_EXITLIST(Tok); continue; }
+
+			if (cmd.compareTo("vouchermk")==0) {
+				Reply(true,SRVS[CurSrv].VoucherCreate(Tok.length>1 ? Config.parseIntS(Tok[1]) : 0));
+				continue;
+				}
+			
+			if ((cmd.compareTo("voucherchk")==0 || cmd.compareTo("voucher")==0) && Tok.length>1) {
+				boolean save =  cmd.compareTo("voucher")==0;
+				
+				int ax= SRVS[CurSrv].VoucherTest(Tok[1],save);
+				if (SRVS[CurSrv].LogVoucherTo!=null && ax==1 && save) try {
+						if (Config.Debug) Log("Voucher `"+(Tok.length>2 ? Tok[2] : "???")+"` V=`"+Tok[1]+"`");
+						Stdio.LogFile((Tok.length>2 ? Tok[2] : "???")+"\tcli\t"+Tok[1], SRVS[CurSrv].LogVoucherTo, Config);
+						} catch(Exception E) { Config.EXC(E, SRVS[CurSrv].Nick+".Cmd.Voucher"); }
+				
+				if (ax==SrvIdentity.VOUCHER_UNKNOWN) Reply(false,"Unknown"); else 
+						if (ax==SrvIdentity.VOUCHER_OK) Reply(true,"OK"); else 
+							if (ax==SrvIdentity.VOUCHER_USED) Reply(false,"Used"); else 
+								if (ax==SrvIdentity.VOUCHER_OLD) Reply(false,"Old"); else Reply(false,"Error");
+				continue;
+				}
 			
 			if (curmail!=null) {
 				if (cmd.compareTo("par")==0) {
@@ -469,6 +509,7 @@ public class ControlSession extends Thread{
 		Reply(false,"WTF ???");
 	}
 	if (isConnected()) Reply(true,"Closing");
+	Log("Close");
 	close();
 	
 	}
@@ -508,10 +549,10 @@ public class ControlSession extends Thread{
 					M = SRVS[CurSrv].LoadManifest(lst[ax]+".mf", false);
 					} catch(Exception  E) { Config.EXC(E,"TrustDBRead `"+lst[ax]+".mf`"); }
 					
-				st+=J.Spaced(M.Onion, 23)+",";
+				st+=J.Spaced(M.my.onion, 23)+",";
 				Tcr=F.lastModified();
 				fl="M";
-				if (M.exit) st+="E,"+J.Spaced(M.ExitDomain, 50)+","; else st+="N,"+J.Spaced("N/A", 50)+",";
+				if (M.my.isExit) st+="E,"+J.Spaced(M.my.domain, 50)+","; else st+="N,"+J.Spaced("N/A", 50)+",";
 				} else {
 				st+=J.Spaced("N/A", 23)+",?,"+J.Spaced("N/A", 50);
 				fl="-";
@@ -564,15 +605,43 @@ public class ControlSession extends Thread{
 		SrvIdentity S = SRVS[CurSrv];	
 		ExitRouteList RL = S.GetExitList();
 		String s="";
-		for (String k:RL.keySet()) s+=k+": "+RL.get(k)+"\n";
+		ExitRouterInfo[] EL = RL.getAll();
+		boolean hm=false;
+		if (Tok.length>1) {
+			int mode =0;
+			Tok[1]=Tok[1].toLowerCase();
+			hm = Tok[1].contains("h");
+			
+			if (Tok[1].contains("-b")) mode|=ExitRouteList.EFLT_BAD_N; 		else if (Tok[1].contains("b")) mode|=ExitRouteList.EFLT_BAD_Y;
+			if (Tok[1].contains("-d")) mode|=ExitRouteList.EFLT_DOWN_N; 	else if (Tok[1].contains("d")) mode|=ExitRouteList.EFLT_DOWN_Y;
+			if (Tok[1].contains("-e")) mode|=ExitRouteList.EFLT_EXIT_N; 		else if (Tok[1].contains("e")) mode|=ExitRouteList.EFLT_EXIT_Y;
+			if (Tok[1].contains("-l")) mode|=ExitRouteList.EFLT_LEGACY_N; 	else if (Tok[1].contains("l")) mode|=ExitRouteList.EFLT_LEGACY_Y;
+			if (Tok[1].contains("-m")) mode|=ExitRouteList.EFLT_MX_N; 		else if (Tok[1].contains("m")) mode|=ExitRouteList.EFLT_MX_Y;
+			if (Tok[1].contains("-t")) mode|=ExitRouteList.EFLT_TRUST_N; 	else if (Tok[1].contains("t")) mode|=ExitRouteList.EFLT_TRUST_Y;
+			if (Tok[1].contains("-v")) mode|=ExitRouteList.EFLT_VMAT_N; 	else if (Tok[1].contains("v")) mode|=ExitRouteList.EFLT_VMAT_Y;
+						
+			if (Tok[1].contains("7")) mode=ExitRouteList.FLT_EXIT;
+			if (Tok[1].contains("6")) mode=ExitRouteList.FLT_BAD;
+			if (Tok[1].contains("5")) mode=ExitRouteList.FLT_DOWN;
+			if (Tok[1].contains("4")) mode=ExitRouteList.FLT_MX;
+			if (Tok[1].contains("3")) mode=ExitRouteList.FLT_VMAT;
+			if (Tok[1].contains("2")) mode=ExitRouteList.FLT_OK;
+			if (Tok[1].contains("1")) mode=ExitRouteList.FLT_TRUST;
+			if (Tok[1].contains("0")) mode=ExitRouteList.FLT_ALL;
+			
+			EL = ExitRouteList.queryFLTArray(EL, mode);
+			}
+		
+		int cx= EL.length;
+		if (hm) for (int ax=0;ax<cx;ax++) s+=EL[ax].toInfoString()+"\n"; else for (int ax=0;ax<cx;ax++) s+=EL[ax].toString()+"\n";
+		EL=null;
+		RL=null;
 		s=s.trim();
 		if (s.length()==0) {
-			if (S.EnterRoute) {
-				ReplyA(true,"Exit/Enter list",new String[] { S.ExitRouteDomain+": "+S.Onion });
-				} else Reply(false,"No Exit/Enter server available");
+			Reply(false,"Empty");
 			return;
 			}
-		ReplyA(true,"Exit/Enter list",s.split("\\n+"));
+		ReplyA(true,hm ? "ELIST/H 2.0" : "ELIST/S 2.0",s.split("\\n+"));
 	}
 	
 	private void SA_SPAM(String[] Tok) throws Exception {
@@ -771,7 +840,7 @@ public class ControlSession extends Thread{
 			rs+="nick="+S.Nick+"\n";
 			rs+="maxmsgsize="+S.MaxMsgSize+"\n";
 			rs+="maxmsgxuser="+S.MaxMsgXuser+"\n";
-			rs+="maxspamxuse=r"+S.MaxSpamEntryXUser+"\n";
+			rs+="maxspamxuser="+S.MaxSpamEntryXUser+"\n";
 			rs+="isssl="+(S.isSSL ? 1:0)+"\n";
 			rs+="relay="+(S.CanRelay ? 1:0)+"\n";
 			rs+="random="+J.RandomString(16)+"\n";
@@ -793,7 +862,7 @@ public class ControlSession extends Thread{
 			}
 	
 	private void SA_SEND(String[] Tok)  throws Exception {
-		SrvIdentity S=S=SRVS[CurSrv];
+		SrvIdentity S=SRVS[CurSrv];
 		String from = "server@"+S.Onion;
 		String to = J.getMail(Tok[1],false);
 		if (to==null) {
@@ -822,7 +891,7 @@ public class ControlSession extends Thread{
 		
 		try {
 			Log(Config.GLOG_Event,"Control.Send `"+J.getDomain(to)+"`");
-			S.SendRemoteSession(to, "server@"+S.Onion, H,st);
+			S.SendRemoteSession(to, "server@"+S.Onion, H,st,null);
 			Reply(true,"Id=Nothing");
 		} catch (Exception E) {
 			String ms = E.getMessage()+"";
@@ -983,8 +1052,8 @@ public class ControlSession extends Thread{
 				continue;
 				}
 			if (Tok[2].toLowerCase().contains("admin")) Ut.Type = MailingList.TYP_Admin; else Ut.Type = MailingList.TYP_Usr;
-			ML.SetUsr(Ut);
-			Reply(true,Integer.toString(Ut.Type,36)+" "+Ut.Address);
+			boolean bit = ML.SetUsr(Ut);
+			Reply(bit,Integer.toString(Ut.Type,36)+" "+Ut.Address);
 			continue;
 		}
 		
@@ -1003,8 +1072,8 @@ public class ControlSession extends Thread{
 				H.put("to", nu);
 				H.put("subject", "Mailing list invitation");
 				S.SendMessage(nu, H, msg);
-				ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, nu, Pwl));
-				Reply(true);	
+				boolean bit = ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, nu, Pwl));
+				Reply(bit);	
 			} catch(Exception E) {
 				Reply(false,"Send message Error: `"+E.getMessage().replace("@", "")+"`");
 			}
@@ -1175,6 +1244,7 @@ public class ControlSession extends Thread{
 		br=null;
 		O=null;
 		EndTime=1;
+		try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
 	}
 	
 	ControlSession(ControlService pr,Socket soki) throws Exception {

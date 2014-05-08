@@ -144,7 +144,18 @@ public class MailingList {
 				}
 		}
 		
-		public void SetUsr(MLUserInfo O) throws Exception {
+		public boolean SetUsr(MLUserInfo O) throws Exception {
+			if (!O.Address.endsWith(".onion")) {
+				VirtualRVMATEntry VM = Mid.LookupVMAT(O.Address, false);
+				if (VM!=null) {
+					O.Address = VM.onionMail;
+					} else {
+					ExitRouteList EL = Mid.GetExitList();
+					String dom = J.getDomain(O.Address);
+					if (EL.containsDomain(dom)) return false; 
+					}
+				}
+			
 			String Addr=O.Address.toLowerCase();
 			DBCryptIterator i = List.GetIterator();
 			int cx = i.Length();
@@ -158,11 +169,12 @@ public class MailingList {
 					List.BlockWrite(idp, by);
 					List.Update();
 					Iter=List.GetIterator();
-					return;
+					return true;
 					}
 				}
 			List.AddBlock(PackUser(O));
 			Iter= List.GetIterator();
+			return true;
 		}
 		
 		public MLUserInfo Read() throws Exception {
@@ -337,6 +349,9 @@ public class MailingList {
 		
 			}
 			running=false;
+			
+			int cx= Main.ListThreads.length;
+			for (int ax=0;ax<cx;ax++) if (Main.ListThreads[ax]==this) Main.ListThreads[ax]=null;
 		}
 		
 		public void End() {
@@ -379,7 +394,7 @@ public class MailingList {
 							if (Conf!=null && Conf.containsKey("exitdomain")) dom=Conf.get("exitdomain");
 							Conf=null;
 							ExitRouteList ER = Mid.GetExitList();
-							if (dom==null) qfdn=ER.GetDomain(null); else qfdn=dom;
+							if (dom==null) qfdn=ER.getDomainOnly(null); else qfdn=dom;
 							if (qfdn==null) Config.GlobalLog(Config.GLOG_Event, Mid.Onion, "MailingList CFG QFDN=null");
 							}
 						
@@ -428,7 +443,7 @@ public class MailingList {
 												HO.put("envelope-to",J.MailOnion2Inet(Config, U.Address, qfdn));
 												}
 										HO.put("Date", Mid.TimeString());
-										Mid.SendRemoteSession(U.Address, lst, HO, MS);	
+										Mid.SendRemoteSession(U.Address, lst, HO, MS,null);	
 										}
 								
 								} catch(Exception E) { 

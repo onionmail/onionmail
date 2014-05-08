@@ -49,6 +49,7 @@ public class SrvPop3Session extends Thread {
 	private POP3Server ParentServer;
 	
 	private boolean Deleted[];
+	private boolean DeleteR[];
 	private int MsgSize[];
 	private int MsgNum;
 	private int BoxSize=0;
@@ -179,6 +180,8 @@ public class SrvPop3Session extends Thread {
 		BoxLen = MsgNum;
 		MsgSize= new int[MsgNum];
 		Deleted = new boolean[MsgNum];
+		if (Mid.AutoDeleteReadedMessages) DeleteR = new boolean[MsgNum];
+		
 		String[] UIDL = new String[MsgNum];
 		Pass="X";
 		Pass=null;
@@ -271,6 +274,7 @@ public class SrvPop3Session extends Thread {
 					continue;
 					}
 				RETR(sel,-1);
+				DeleteR[sel]=true;
 				continue;
 				}
 						
@@ -304,6 +308,7 @@ public class SrvPop3Session extends Thread {
 				BoxSize=BoxSizeo;
 				MsgNum=BoxLen;
 				Deleted=new boolean[BoxLen];
+				DeleteR=new boolean[BoxLen];
 				Reply(true,MsgNum+" messages");
 				continue;
 			}
@@ -313,6 +318,11 @@ public class SrvPop3Session extends Thread {
 		
 		int errs=0;
 		int dels=0;
+		if (Mid.AutoDeleteReadedMessages) {
+			cx=DeleteR.length;
+			for (int ax=0;ax<cx;ax++) Deleted[ax]|=DeleteR[ax];
+			DeleteR=null;
+			}
 		
 		for (int ax=0;ax<BoxLen;ax++) {
 			if (Config.Debug) Log("Quit & Delete messages");
@@ -465,6 +475,7 @@ public class SrvPop3Session extends Thread {
 		br=null;
 		O=null;
 		EndTime=1;
+		try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
 	}
 	
 	SrvPop3Session(POP3Server pr,Socket soki) throws Exception {

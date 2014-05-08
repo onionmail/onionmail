@@ -56,9 +56,9 @@ public class J {
 						"importance|x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
 						"list-help|content-transfer-encoding|errors-to|return-receipt-to|thread-index|"+
 						"content-language|disposition-notification-to|x-original-sender|x-lastcount|"+
-						"x-y-counter|message-id|cc|bcc|reply-to|x-ssl-transaction|x-hellomode|"+
-						"organization|list-unsubscribe|list-subscribe|envelope-to|x-ssl-transaction|"+
-						"x-generated|return-path|error-to|envelope-to|ccn|tkim-server-auth|";
+						"x-y-counter|message-id|cc|bcc|reply-to|x-ssl-transaction|x-hellomode|disposition-notification-to|"+
+						"organization|list-unsubscribe|list-subscribe|envelope-to|x-ssl-transaction|auto-submitted|"+
+						"x-generated|return-path|error-to|envelope-to|ccn|tkim-server-auth|x-vmat-address|x-failed-recipients|";
 		
 	public static final String NoFilterHost = 
 						"|return-path|envelope-to|subject|"+
@@ -66,8 +66,8 @@ public class J {
 						"x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
 						"list-help|errors-to|return-receipt-to|thread-index|"+
 						"disposition-notification-to|x-original-sender|"+
-						"message-id|cc|bcc|reply-to|"+
-						"|list-unsubscribe|list-subscribe|envelope-to|";
+						"message-id|cc|bcc|reply-to|disposition-notification-to|error-to|"+
+						"|list-unsubscribe|list-subscribe|envelope-to|x-vmat-address|x-failed-recipients|";
 	
 	private final static char[] ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
 
@@ -371,7 +371,7 @@ public class J {
 	} 
 	
 	public static String BeautifulHeader(String st) {
-		String ABR="-smtp-http-mime-id-dkim-ip-ssl-tls-url-https-uri-uidl-tkim-tor-";
+		String ABR="-smtp-http-mime-id-dkim-ip-ssl-tls-url-https-uri-uidl-tkim-tor-vmat-mat-";
 		st=st.trim().toLowerCase();
 		String Tok[] = st.split("\\-");
 		String Q="";
@@ -468,7 +468,7 @@ public class J {
 		if (onion) {
 			if (t0.matches("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.onion\\n")) return in;
 			} else {
-			if (t0.matches("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,5}\\n")) return in;	
+			if (t0.matches("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-_]+\\.[A-Za-z]{2,5}\\n")) return in;	
 			}
 		return null;
 	}
@@ -610,7 +610,7 @@ public class J {
 		return false;
 	}
 	
-	public static String MailInet2Onion(String MailFrom,String ExitDomain) throws Exception {
+	public static String MailInet2Onion(String MailFrom,String ExitDomain) throws Exception { //TODO Verifica!
 		String E = "@503 Invalid Onion Exit Route Mail Address '"+MailFrom+"'";
 		String lo = getLocalPart(MailFrom);
 		if (getDomain(MailFrom).compareTo(ExitDomain)!=0) throw new Exception(E);
@@ -632,12 +632,11 @@ public class J {
 	}
 
 	public static String MailInet2Onion(String MailFrom) throws Exception {
-		String E = "@503 Invalid Onion Exit Route Mail Address '"+MailFrom+"'";
-		String lo = getLocalPart(MailFrom);
-		if (!lo.endsWith(".onion")) throw new Exception(E);
+	String lo = getLocalPart(MailFrom);
+		if (!lo.endsWith(".onion")) throw new Exception("@503 Invalid Onion Exit Route Mail Address `"+MailFrom+"`");
 		String[] Tok = lo.split("\\.+");
 		int cx = Tok.length;
-		if (cx<3) throw new Exception(E);
+		if (cx<3) throw new Exception("@503 Invalid Onion Exit Route Mail Address `"+MailFrom+"`");
 		cx-=2;
 		String o = Tok[cx].trim();
 		cx--;
@@ -646,7 +645,7 @@ public class J {
 			l += Tok[ax].trim();
 			if (ax!=cx) l+=".";
 			}
-		if (l.length()<4) throw new Exception(E);
+		if (l.length()<4) throw new Exception("@503 Invalid Onion Exit Route Mail Address `"+MailFrom+"`");
 		l+="@"+o+".onion";
 		return l.toLowerCase().trim();
 	}
@@ -1172,8 +1171,8 @@ public class J {
 				try { Stdio.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
 			try { mf = Stdio.md5a(new byte[][] { mf , rs.getBytes("UTF-8") }); } catch(Exception I) {}
 					
-			byte[] vm=new byte[] { 0 };
-			try { vm= Stdio.md5(rs.getBytes("UTF-8")); } catch(Exception I) {}
+		//	byte[] vm=new byte[] { 0 };
+		//	try { vm= Stdio.md5(rs.getBytes("UTF-8")); } catch(Exception I) {}
 			return 
 						Stdio.Dump(mf) + "-" +					//Manifest compiled
 						Long.toHexString(Main.VersionID);//Ver.
@@ -1286,6 +1285,137 @@ public class J {
 		in=in.replace("\t", "");
 		in=in.replace(" ", "");
 		return new String(J.Base64Decode(in));
+	}
+	
+	public static void LoopFileInit(String fileName,int magicNumber,int maxRecord,int recordSize) throws Exception {
+		File f = new File(fileName);
+		
+		if (!f.exists()) {
+			 	LoopFileCreate( fileName, magicNumber, maxRecord, recordSize);
+			 	f=null;
+			 	return;
+				}
+		
+		long size= 16+(recordSize+2)*maxRecord;
+		if (f.length()<size) LoopFileCreate( fileName, magicNumber, maxRecord, recordSize);
+		}
+	
+	public static void LoopFileCreate(String fileName,int magicNumber,int maxRecord,int recordSize) throws Exception {
+		RandomAccessFile O = new RandomAccessFile(fileName,"rw");
+		recordSize=recordSize+2;
+		O.seek(0);							
+		O.writeShort(0x1234);		//magic_fmt
+		O.writeShort(-1);				//curr 
+		O.writeShort(0);					//hi
+		O.writeShort(0);					//0
+		O.writeInt(magicNumber);	//magic
+		O.writeShort(maxRecord);	//maxrec
+		O.writeShort(recordSize);	//size
+		
+		byte[] b= new byte[256];
+		long size = recordSize*maxRecord;
+		int block = (int) size>>8;
+		if ((size&255)!=0) block++;
+		for (int ax=0;ax<block;ax++) O.write(b);
+		
+		//Extended Record
+		O.write(b); 
+		O.writeShort(0x1234);
+		O.writeShort(0x0102);		
+		O.writeInt(magicNumber);	//magic
+		O.writeShort(maxRecord);	//maxrec
+		O.writeShort(recordSize);	//size
+		O.writeShort(0x5678);
+		O.writeShort(12);
+		O.close();
+		b=null;
+	}
+	
+	public static void LoopFileWrite(String fileName,long[] data,int[] sizes) throws Exception {
+		RandomAccessFile O = new RandomAccessFile(fileName,"rw");
+		try {
+			O.seek(0);
+			int oem = O.readShort();	//oem fmt
+			if (oem!=0x1234) throw new Exception("LoopFileWrite: Invalid Magic number 0x1234");
+			int currentRecord = O.readShort();		//curr
+			int currentHI = O.readShort();	//hi
+			O.readShort();	//0
+			O.readInt();		//magic
+			int maxRecord = O.readShort(); //maxrec
+			int recordSize = O.readShort();	//size
+					
+			currentRecord=currentRecord+1;
+			if (currentRecord>=maxRecord) {
+				currentRecord=0;
+				currentHI=(currentHI+1) & 16383;
+				}
+					
+			long addr = 16 + currentRecord*recordSize;
+			O.seek(addr);
+			byte[] b = Stdio.Stosxm(data, sizes);
+			if (b.length>(recordSize-1)) throw new Exception("LoopFileWrite: Record too big "+b.length+"/"+(recordSize-1));
+			O.writeByte(0x80 | (127 & currentHI));
+			O.write(b);
+			b=null;
+			O.seek(2);
+			O.writeShort(currentRecord);
+			O.writeShort(currentHI);
+			} catch(Exception E) {
+				try { O.close(); } catch(Exception F) {}
+				throw E;
+				} 
+		O.close();
+		
+	}
+
+	public static String msgBase64Encode(String msg) {
+		msg=msg.replace("\r\n", "\n");
+		msg=msg.replace("\n", "\r\n");
+		msg=J.Base64Encode(msg.getBytes());
+		String q="";
+		int cx=msg.length();
+		for (int ax=0;ax<cx;ax++) {
+			q+=msg.charAt(ax);
+			if ((ax%75)==74) q+="\r\n";
+			}
+		return q.trim()+"\r\n";
+	}
+	
+	public static String Implode(String glue, String[] array) {
+		int cx= array.length-1;
+		String rs="";
+		for (int ax=0;ax<=cx;ax++) {
+			rs+=array[ax];
+			if (ax!=cx) rs+=glue;
+			}
+		return rs;
+	}
+	
+	public static float fPercMax(int val,int max,int per) {
+		if (max==0)  return 0;
+		return (val/max)*per;
+		}
+	
+	public static int iPercMax(int val,int max,int per) {
+		if (max==0)  return 0;
+		return (int) Math.ceil((val/max)*per);
+		}
+	
+	public static String sPercMax(int val,int max,int per,int dec) {
+		if (max==0)  return "0";
+		double f = (val/max)*per;
+		double v = Math.pow(10, dec);
+		f=Math.ceil(f*v);		
+		f=f/v;
+		return Double.toString(f);
+		}
+
+	public static String LogHash(SrvIdentity S,String address) throws Exception {
+		long a = System.currentTimeMillis()/3600000L;
+		a=a^a>>1;
+		int i = (int) (a&3);
+		String s = Stdio.Dump(S.Subs[i])+"#"+address+"#"+Long.toString(a,36);
+		return Long.toString(s.hashCode(),36);
 	}
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify

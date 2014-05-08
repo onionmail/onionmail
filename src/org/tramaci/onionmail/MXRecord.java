@@ -26,7 +26,7 @@ public class MXRecord {
     	public String Host = null;
     	private InetAddress A=null;
     	
-    	public InetAddress getAddress() throws Exception {
+    	public InetAddress getAddress() throws Exception {	//TODO Attenzione all'utilizzo di questo metodo può creare richieste DNS
     		if (A==null) A = InetAddress.getByName(Host);
     		return A;
     	}
@@ -35,4 +35,29 @@ public class MXRecord {
     	Priority=p;
     	Host=h;
     }
+      
+    
+    public static void MXSort(MXRecord[] records) {
+	    int cx = records.length;
+	    MXRecord tmp;
+	    int bx = 0;
+	    boolean running = true;
+	    
+	    while (running) {
+	        running = false;
+	        bx++;
+	        for (int ax = 0; ax < cx - bx; ax++) {
+	    
+	        	if (records[ax].Priority > records[ax + 1].Priority) {
+	                running = true;
+	                tmp = records[ax];
+	                records[ax] = records[ax + 1];
+	                records[ax + 1] = tmp;
+	                }
+	        	
+	        	}
+	    	}
+	    }
+    
+    
 }
