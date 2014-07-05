@@ -1,0 +1,94 @@
+
+HOW TO USE:
+
+This program requires:
+ * java
+ * tor
+ * tor hidden service
+
+To run (example):
+su onionmailuser -c "java -jar onionmail.jar -ndk -f etc/config.cong -p PleaseChnageMe!!! > onionmail.log &"
+
+1) Modify your torrc to create an hidden service.
+https://www.torproject.org/docs/tor-hidden-service.html.en
+
+	Example: 
+
+	HiddenServiceDir ./hiddenServiceDir/server1/
+	HiddenServicePort 25 127.0.0.1:20025
+	HiddenServicePort 110 127.0.0.1:20110
+
+2) Restart tor
+	Read the file ./hiddenServiceDir/server1/hostname
+	to view the .onion address.
+
+3) Conifure your OnionMail server:
+ * Change the tor's ip and port into the file etc/core.conf
+ * Change the password into the file etc/control.conf
+ * Configure your server (modify the file etc/servers.conf)
+
+	SMTPServer <nickname> of the server.
+	Onion (the hidden service name, read it into the file 
+		hiddenServiceDir/hostname).
+	
+	PassWD 	Password of this server (controlPort) 
+	Your hidden service must have ports:
+	25	SMTP
+	110	POP3
+	Example:
+
+	in torrc
+
+	HiddenServiceDir ./hiddenServiceDir/server1/
+	HiddenServicePort 25 127.0.0.1:20025
+	HiddenServicePort 110 127.0.0.1:20110
+
+	in servers.conf
+
+	SMTPPort       	20025
+	POP3Port	20110
+	LocalIP		127.0.0.1
+
+	To create an exit/enter OnionMail server:
+	Set the parameter ExitRouteDomain to the Internet domain of the server.
+	Set the parameter ServerType to exit
+	Set the parameter ExitAltPort 10025
+		This is the SMTP's alternative port to check the exit server.
+		Don't forget to put this port in torrc (the same port).
+		HiddenServicePort 10025 127.0.0.1:10025
+
+4) Generate servers:
+	java -jar onionmail.jar -f etc/config.conf --gen-servers
+
+5) Copy the file sysop.txt and keyblock.txt into a secure storage 
+	NOT INTO THE SAME MACHINE OF ONIONMAIL
+
+6) Check the if java.security enables the OpenJDK SSL bugs.
+	 If for some reason during SSL negotiation happens this exception:
+	 sun.security.pkcs11.wrapper.PKCS11Exception: CKR_DOMAIN_PARAMS_INVALID
+	 Try to comment the line
+	 security.provider.10=sun.security.pkcs11.SunPKCS11 ${java.home}/lib/security/nss.cfg
+	 in /etc/java-7-openjdk/security/java.security file.
+	 Another way is edit the ssl.conf file to disable some CipherSuites or
+	 enable some SSL bug related flags.
+ 	 Update your JRE and libj2pkcs11.so library.
+  
+7) Start OnionMail server
+	java -jar onionmail.jar -f etc/config.conf
+
+If you want to open a new enter/exit server:
+* Do not create any user into the same machine of exit/enter server.
+  (sysop is allowed).
+  
+* Set the permission to create a new service:
+  apt-get install libcap2-bin
+  setcap 'cap_net_bind_service=+ep' `readlink -f /usr/bin/java`
+  
+* Edit the configuration file server.conf:
+  ServerType exit
+  ExitRouteDomain Domain name of this exit route server (after "@")
+  MXDomain Domain of sever in (MX record)
+  ExitIP IP to use as source and listen to.
+  Edit the DNS MX record.	 
+
+Remember to remove SSL limitations.

@@ -64,20 +64,23 @@ Content-Type: text/plain; charset=UTF-8
      @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@  @@  @@   @@      @@        
       @@@   @@  @@  @@@@    @@@@  @@  @@         @@  @@  @@@@@@  @@@@@  @@@@@@      
 
-                                <OnionMail's Guide>
-                                     Ver. 1.4
+                              .: OnionMail's Guide :.
+                                     Ver. 1.5
 
-[1.0] What's Onion Mail
-[1.1] Why should I use Onion Mail?
-[2.0] Sending emails
-[2.1] Special addresses
-[3.0] Communicating with the server
-[3.1] Spam list
-[4.0] Dealing with unwanted messages with X-Notice headers
-[5.0] Create your OnionMail address
-[6.0] Use PGP messages
-[7.0] Virtual M.A.T. Protocol and simple mail addresses.
-
+[1.0]  What's Onion Mail
+[1.1]  Why should I use Onion Mail?
+[2.0]  Sending emails
+[2.1]  Special addresses
+[3.0]  Communicating with the server
+[3.1]  Spam list
+[4.0]  Dealing with unwanted messages with X-Notice headers
+[5.0]  Create your OnionMail address
+[6.0]  Use PGP messages
+[7.0]  Virtual M.A.T. Protocol and simple mail addresses.
+[8.0]  Virtual M.A.T. in Tor network
+[9.0]  User configuration
+[10.0] Mailing list.
+[11.0] How to know the user limits.
 ----------------------------------------------------------------------------
 
 [1.0] What's Onion Mail:
@@ -96,6 +99,12 @@ anonymity and security granted by the Tor network, while using mail
 services. This program prevents unauthorized access to data and metadata
 from most of " Rogue states' " interception systems.
 
+This type of server that uses a strong encryption can not be cracked because 
+the keys are not on the server but scattered around the tor network.
+Each mailbox uses asymmetric encryption that prevents read messages or metadata.
+An attacker can not read messages only with the keys of the server, it also need
+all the passwords of the users. This ensures increased safety.
+
 ----------------------------------------------------------------------------
 
 [2.0] Sending emails
@@ -111,8 +120,7 @@ server after a few days of their reception.
 
 (4) An address that's not used to read messages, that's not in use
 anymore or that has been signaled as a spammer, can be deleted.
-
-
+ 
 (5) Messages passing from server to server are sent during the same session.
 
 (6) Only mailing lists' messages can be temporarily saved while they are
@@ -142,13 +150,14 @@ These addresses have special functions and cannot be assigned to users.
 This list shows the addresses' general scheme independent to a specific
 server. The symbol '*' is used to express any word.
 
-sysop@ Server Administrator
-server@ A bot used to communicate operations to the server (See section 3.0)
-*.onion@ Entry/exit node
-*.list@ Mailing lists addresses
-*.sys@ System addresses
-*.op@ SysOps (Can be created only through CLI)
-*.app@ Applications' addresses
+sysop@		Server Administrator
+server@ 	A bot used to communicate operations to the server 
+		(See section 3.0)
+*.onion@ 	Entry/exit node
+*.list@ 	Mailing lists addresses
+*.sys@  	System addresses
+*.op@ 		SysOps (Can be created only through CLI)
+*.app@ 		Applications' addresses
 
 A SysOp can reserve other addresses for special purposes.
 ----------------------------------------------------------------------------
@@ -404,5 +413,135 @@ disable test1@onionmail.info plesehackme!
 delete test1@onionmail.info plesehackme!
 
 We suggest to use PGP mode encrypthed messages.
+
+----------------------------------------------------------------------------
+
+[8.0] Virtual M.A.T. in Tor network.
+
+When a VMAT address is registered you can use your VMAT simple mail address
+into the tor network like the real onion mail address.
+To use the address is recommend to use the default exit setting.
+Set your default exit server to the address before the character "@" of
+your VMAT address.
+See [9.0] to set exitdomain parameter.
+You can use the EXIT SET parameter (like OnionbMail 1.0).
+
+----------------------------------------------------------------------------
+
+[9.0] User configuration.
+
+To read and configure the parameters of your account, send a message to the
+server with subject the word "SETTINGS".
+
+If the body of the message is empty the server will reply to you with a 
+message containing settings.
+If you want to change the settings, put the settings into the body of the 
+message or reply to the messages with settings changed.
+
+The settings are listed in this form:
+name: value
+
+Example:
+exitdomain:     onionmail.info
+msgxhour:       1
+exitonion:      louhlbgyupgktsw7.onion
+hcode:          5a443fe7
+usevmat:        yes
+novmatautoset:  no
+torvmat:        yes
+
+Parameters:
+exitdomain	Select the exit/enter server and VMAT address (one per exit
+		server).
+		
+exitonion	This is a read only onion address of exit server.
+
+usevmat		This is a boolean value (yes / no) to enable the VMAT
+		address on Internet messages (via exit server). 
+
+torvmat		This is a boolean value (yes / no) to enable the VMAT
+		address on Tor messages.
+
+novmatautoset	This is a boolean value (yes / no) to disable the VMAT
+		selection into the headers.
+		
+msgxhour	This is a read only number of messages sent in this hour.
+		(Used by server limitation).
+		
+hcode		This is a read only string that change 1 time per hour.
+ 		(Used by server limitation).
+
+clear		This is a write only string used to delete a parameter.
+		Example: To delete and set to dafault the parameter
+		exitonion use:
+		clear: exitonion
+		To reset all:
+		clear: all
+		 		
+----------------------------------------------------------------------------
+
+[10.0] Mailing lists:
+
+OnionMail supports the mailing lists natively.
+To create a new mailinglist send a message to your server like this:
+Subject: LIST <list address> CREATE
+The list address must have an address into the server and the local part must
+end with ".list".
+Example: mailing.list@example.onion on server example.onion
+
+The body of the message must contains the list of mail addresses in this form:
+The word "user" followed by a colon and mail address, indicates a normal user.
+The word "admin" followed by a colon and mail address, indicates an 
+administrator.
+Put one mail address per line.
+
+Example:
+User: mail@example.org
+Admim: admin@esample.org
+
+The administrators can use these commands:
+
+LIST <list address> DESTROY
+Delete a mailing list. 
+
+LIST <list address> INVITE <usermail>
+Invite a new user into the mailing list.
+
+LIST <list address> REMOVE <usermail>
+Remove/ban an user.
+
+The user can use these commands:
+
+LIST <list address> RULEZ
+Sends you the file with the mailing list's information.
+
+LIST <list address> SUBSCRIBE
+Subscribes your mail address to the mailing list.
+
+LIST <list address> UNSUBSCRIBE
+Removes your mail address from the mailing list.
+
+----------------------------------------------------------------------------
+
+[11.0] How to know the user limits.
+
+Send to the server a message with the word "CONFIG" as subject.
+The server will reply with fast rulez message like this:
+
+This server is in DEBUG MODE: 			NO
+VMAT is supported: 				YES
+Log the vouchers code: 				NO
+Use X-Notice headers: 				YES
+This is an Enter/Exit server: 			YES
+Delete all messages automatically after read: 	YES
+
+Maximum message size: 				19530 KB
+Maximum number of messaged in inbox: 		128
+MailBox size:					2500000 KB
+Maximum number of address in spam list: 	128
+Maximum number of recipients per message: 	5
+Maximum number of users mailing list: 		8192
+Maximim number of messages x per hour:		250
+	NickName
 
 ----------------------------------------------------------------------------

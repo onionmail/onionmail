@@ -1,0 +1,4 @@
+etc			Default configuration.
+src			OnionMail's source code.
+textCaptcha-src		TextCapche.ext source code.
+jce_policy-6.zip	Unlock JAVA limitations.
