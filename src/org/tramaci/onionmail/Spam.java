@@ -75,7 +75,7 @@ public class Spam {
 		return new File(fs+".key").exists() && new File(fs+".lst").exists();
 		}
 	
-	private String GetFile(String local) throws Exception {
+	public String GetFile(String local) throws Exception {
 		local=local+"@local";
 		CRC32 C = new CRC32();
 		C.update(Sale);

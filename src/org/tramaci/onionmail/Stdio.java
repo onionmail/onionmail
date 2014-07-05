@@ -662,7 +662,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 		byte[][] blo = Stdio.DivBlock(data, 16, false);
 		int cx=blo.length;
 		int kc = key.length-1;
-		for (int kx=kc;kx>-1;kx--) {
+		for (int kx=kc;kx>-1;kx--) {	
 			CBCBlockCipher aes = new CBCBlockCipher(new AESEngine());
 			CipherParameters ivAndKey = new ParametersWithIV(new KeyParameter(key[kx]), iv[kx]);
 			aes.init(false, ivAndKey);
@@ -716,7 +716,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
         aes.init(false, ivAndKey);
         return AES2cipher(aes, data);
       } catch(Exception E) {
-    	   throw new Exception("!Invalid KEY for data");
+    	   throw new Exception("!Invalid KEY for data" + E.getMessage());
        } 
     }
 	 	
@@ -1198,6 +1198,18 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 		return out;
 	}
 	
+	public static byte[] EncMulti(byte[] key,byte[] data) throws Exception {
+		byte[][] ke = Stdio.DivBlock(key, 32, false); 
+		byte[][] iv = Stdio.DivBlock(key, 16, false);
+		return Stdio.AESEnc2m(ke, iv, data);
+		}	
+	
+	public static byte[] DecMulti(byte[] key,byte[] data) throws Exception {
+		byte[][] ke = Stdio.DivBlock(key, 32, false); 
+		byte[][] iv = Stdio.DivBlock(key, 16, false);
+		return Stdio.AESDec2m(ke, iv, data);
+		}	
+	
 	public static InetSocketAddress Long2Sok(long ip) throws Exception {
 		byte[] i = new byte[4];
 		i[0] = (byte)(255&ip);
@@ -1260,6 +1272,7 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 							for (int ax=0;ax<S.length;ax++) echo("STACK "+ax+":\t "+S[ax].toString()+"\n");
 		}
 	
+		
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

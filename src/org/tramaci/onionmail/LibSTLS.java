@@ -54,7 +54,7 @@ import org.bouncycastle.x509.X509V3CertificateGenerator;
 @SuppressWarnings("deprecation")
 public class LibSTLS {
 
-	public static final String BC = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
+	public static final String BC = "BC";
 	public static final String Version = "LibSTLS V 1.1"; 
 	
 	public static void AddBCProv() { Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider()); 	} 

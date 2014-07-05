@@ -20,6 +20,7 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.util.HashMap;
 
 public class MultiDeliverThread extends Thread { 
@@ -122,9 +123,23 @@ public class MultiDeliverThread extends Thread {
 	public void End() {
 		try { this.interrupt(); } catch(Exception E) {};
 		
+		String fd=null;
 		try { 
 				Message.Destroy(Mid.Config.MailWipeFast);
-				} catch(Exception E) { Mid.Config.EXC(E, Mid.Nick+".DultiDevEnd"); }
+				} catch(Exception E) { 
+						Mid.Config.EXC(E, Mid.Nick+".DultiDevEnd");
+						if (Message!=null) try {
+								fd=Message.getFileName();
+								if (fd!=null) {
+									try { Message.Close(); } catch(Exception I) {}
+									File f = new File(fd);
+									if (f.exists()) J.Wipe(fd, Mid.Config.MailWipeFast);
+									if (f.exists() && !f.delete()) throw new Exception("Can't delete `"+fd+"`");
+									}
+								} catch(Exception EF) {
+								Mid.Config.EXC(E, Mid.Nick+".DultiDevEnd.delete");	
+								}
+						}
 		
 		Message=null;
 		running=false;
@@ -166,10 +181,10 @@ public class MultiDeliverThread extends Thread {
 		t=t.replace("\n",", ");
 		
 		Hldr.put("sender", from);
-		Hldr.put("error-to","<>");
+		Hldr.put("errors-to","<>");
 		
 		HldrInet.put("sender", MailFromInet);
-		HldrInet.put("error-to","<>");
+		HldrInet.put("errors-to","<>");
 		HldrInet.put("from", MailFromInet);
 		HldrInet.put("to",t);
 		

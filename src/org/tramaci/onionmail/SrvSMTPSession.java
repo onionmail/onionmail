@@ -32,6 +32,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.security.PublicKey;
 import java.util.HashMap;
 
@@ -135,18 +136,24 @@ public class SrvSMTPSession extends Thread {
 			
 		} catch(Exception E) {
 			isDismissed=true;
-					
-			if (E instanceof PException) {
+						
+			if (E instanceof PException || E instanceof SocketException) {
 					InetAddress sp = con.getInetAddress();
 					if (sp.getAddress()[0]!=127) try {
-						Log("Some SPAM Points for: `"+J.IP2String(sp)+"` HELO  `"+HelloData+"`\n");
 						if (Mid.BlackList!=null) Mid.BlackList.setIP(sp, 1);
-						} catch(Exception I) { Config.EXC(I, "AddSpamPoin "+Mid.Nick); }
+						Log("Some SPAM Points for: `"+J.IP2String(sp)+"` HELO  `"+HelloData+"`\n");
+						} catch(Exception I) { Config.EXC(I, "AddSpamPoint "+Mid.Nick); }
 					Mid.StatSpam++;
 					}
-			if (Config.Debug) E.printStackTrace();
+			
 			String msg = E.getMessage();
 			if (msg==null) msg="Exception.Null";
+			
+			if (E instanceof SocketException) {
+				msg="@550 Network Error: "+E.getMessage();
+				} 
+			
+			if (Config.Debug) E.printStackTrace();
 			
 			if (msg.startsWith("@")) {
 				msg=msg.substring(1);
@@ -163,6 +170,7 @@ public class SrvSMTPSession extends Thread {
 		
 	isDismissed=true;
 	try { con.close(); } catch(Exception I) {}
+	Mid.Garbage();
 	try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
 	}
 	
@@ -624,11 +632,19 @@ public class SrvSMTPSession extends Thread {
 						continue;
 						}
 					
-					SMTPReply.Send(O, 250, new String[] {
-							M.localPart+"@"+Mid.ExitRouteDomain,
-							M.onionMail,
-							passwd})	;
-					
+					M.localPart+="@"+Mid.ExitRouteDomain;
+					byte[] sig = Mid.VMAT.Sign(M.localPart, M.onionMail, Mid.SSK);
+					String[] sis = new String[] { J.Base64Encode(sig) };
+					sig=null;
+					sis = J.WordWrap(sis[0], 64);
+					String[] rsa = new String[sis.length+3];
+					rsa[0] = M.localPart;
+					rsa[1] = M.onionMail;
+					rsa[2] = passwd;
+					System.arraycopy(sis, 0, rsa, 3, sis.length);
+					sis=null;
+					SMTPReply.Send(O, 250, rsa)	;
+					rsa=null;
 					continue;
 				}
 				
@@ -792,8 +808,24 @@ public class SrvSMTPSession extends Thread {
 					Send("535 authorization failed");
 					continue;
 					}
-				Send("235 ok, go ahead");
+				
 				AuthEd=true;
+				
+				if (Mid.MaxMsgXUserXHour>0) try {
+					HashMap <String,String> cnt = Mid.UsrGetConfig(Login);
+					if (cnt!=null) {
+						String cd = cnt.get("hcode");
+						if (cd.compareTo(Mid.HourCode(Login))==0) {
+							if (cnt.containsKey("msgxhour")) {
+								int nm = J.parseInt(cnt.get("msgxhour"));
+								if (nm>=Mid.MaxMsgXUserXHour) AuthEd=false;
+								}
+							}
+						}
+					} catch(Exception E) { Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`"); }
+				
+				if (AuthEd) Send("235 ok, go ahead"); else throw new PException("@451 Too many messages sent. Your limit is "+Mid.MaxMsgXUserXHour+" messages x hour!");
+				
 				continue;
 			}
 			
@@ -819,8 +851,21 @@ public class SrvSMTPSession extends Thread {
 					Send("535 authorization failed");
 					continue;
 					}
-				Send("235 ok, go ahead");
+				
 				AuthEd=true;
+				if (Mid.MaxMsgXUserXHour>0) try {
+					HashMap <String,String> cnt = Mid.UsrGetConfig(Login);
+					if (cnt!=null) {
+						String cd = cnt.get("hcode");
+						if (cd.compareTo(Mid.HourCode(Login))==0) {
+							if (cnt.containsKey("msgxhour")) {
+								int nm = J.parseInt(cnt.get("msgxhour"));
+								if (nm>=Mid.MaxMsgXUserXHour) AuthEd=false;
+								}
+							}
+						}
+					} catch(Exception E) { Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`"); }
+				if (AuthEd) Send("235 ok, go ahead"); else throw new PException("@451 Too many messages sent. Your limit is "+Mid.MaxMsgXUserXHour+" messages x hour!");
 				continue;
 			}
 			
@@ -1035,6 +1080,7 @@ public class SrvSMTPSession extends Thread {
 									String al = Mid.UsrAlias(mlp);
 									if (al==null ||!Mid.UsrExists(al)) {
 										Send("503 No such user 2");
+										if (Config.Debug) Log("No such user 2 `"+Long.toString(mlp.hashCode(),36)+"`");
 										RouteTo=0;
 										continue;
 										}
@@ -1096,7 +1142,7 @@ public class SrvSMTPSession extends Thread {
 							}
 			} catch(Exception E) { Config.EXC(E, Mid.Nick+".DNSBL"); }
 	
-	if (TypeFrom==XTypeInet) Mid.StatMsgInet++; else if (!IPisLocal) Mid.StatMsgInet++; 
+	if (TypeFrom==XTypeInet) Mid.StatMsgInet++; 
 			
 	if (RouteTo == XRouteLocal)	BeginLocalDelivery();
 	if (RouteTo == XRouteServer) BeginServerDelivery();
@@ -1105,9 +1151,136 @@ public class SrvSMTPSession extends Thread {
 	if (RouteTo == XRouteMulti) BeginMultiDelivery();
 	if (RouteTo == XRouteApp) BeginAppDelivery();
 	
+	if (Login!=null && Mid.MaxMsgXUserXHour!=0) try {
+		HashMap <String,String> cnt = Mid.UsrGetConfig(Login);
+		if (cnt==null) cnt = new HashMap <String,String> ();
+		String dc = Mid.HourCode(Login);
+		if (cnt.containsKey("hcode")) {
+			String md = cnt.get("hcode");
+			if (md.compareTo(dc)!=0) {
+				cnt.put("hcode", dc);
+				cnt.put("msgxhour", "0");
+				}
+			} else cnt.put("hcode", dc);
+		String md = cnt.get("msgxhour");
+		if (md==null) md="0";
+		int cax = J.parseInt(md)+1;
+		cnt.put("msgxhour", Integer.toString(cax));
+		Mid.UsrSetConfig(Login,cnt);
+		} catch(Exception E) { Config.EXC(E,Mid.Nick+".UsrCntW `"+Long.toString(Login.hashCode(),36)+"`"); }
+			
 	Tok = GetSMTPCommands(1,new String[] { "QUIT" },null,null);	
 	if (Tok==null) throw new PException(500,"Only one session per connection!");
 	BeginClose();
+	}
+	
+	private void TORVMATPassage(final HashMap <String,String> Hldr) {
+		String err=null;
+						
+		try {
+			String f = Hldr.get("from");
+			if (f==null) {
+				Log("Missing: From Header!");
+				Hldr.put("from", MailFrom);
+				return;
+				}
+			
+			f=J.getMailEx(f);
+			if (f==null) {
+				Log("Invalid from");
+				return;
+				}
+			
+			String vmatsrv=null;
+			if (f.compareTo(MailFrom)==0) return; 
+			
+			if (f.contains(".onion@") || MailFrom.contains(".onion@") || MailTo.startsWith("server@") || MailTo.contains(".app@")) return;
+			if (Hldr.containsKey("list-post") || Hldr.containsKey("list-id") || Hldr.containsKey("reply-to")) return;
+						
+			if (Hldr.containsKey("x-vmat-server")) {
+				vmatsrv=Hldr.get("x-vmat-server").trim().toLowerCase();
+				}
+			
+			String fdo = J.getDomain(f);		
+			if (fdo!=null && !fdo.endsWith(".onion")) {
+				ExitRouteList EL = Mid.GetExitList();
+				ExitRouterInfo EI = EL.getByDomain(fdo);
+				if (EI==null && Mid.EnterRoute && fdo.compareTo(Mid.ExitRouteDomain)==0) {
+					EI = new ExitRouterInfo();
+					EI.domain=Mid.ExitRouteDomain;
+					EI.onion=Mid.Onion;
+					}
+				
+				if (EI==null && vmatsrv==null) return;
+				if (EI!=null && vmatsrv!=null && EI.onion.compareTo(vmatsrv)!=0) err="SRV_ERR1";
+				if (EI!=null && vmatsrv==null) err="N_VMAT";
+				}
+			
+			if (vmatsrv!=null && Hldr.containsKey("x-vmat-sign")) {
+				if (Config.Debug) Log("Verify SIGN"); 
+				String rsa = Hldr.get("x-vmat-sign");
+				rsa=rsa.replace(" ", "");
+				rsa=rsa.trim();
+				byte[] sig = J.Base64Decode(rsa);
+				rsa=null;
+				if (sig.length>0) {
+					PublicKey pk = null;
+					if (vmatsrv.compareTo(Mid.Onion)==0) pk=Mid.SPK; else try {
+						pk = Mid.LoadRSAKeys(vmatsrv);
+						} catch(Exception EK) {
+							Log("Error loading Key for `"+vmatsrv+"` "+EK.getMessage());
+							if (Config.Debug) EK.printStackTrace();
+						}
+					if (pk!=null) {
+						if (Config.Debug) Log("Verify SIGN:RSA");
+						if (Mid.VMAT.VirtualRVMATVerify(f, MailFrom, sig, pk)) {
+							Hldr.put("x-tor-vmat-verified", "sign");
+							return;
+							} else {
+								err="FALSE_VMAT";
+								if (!Hldr.containsKey("subject")) Hldr.put("subject", "");
+								String sub = Hldr.get("subject");
+								if (sub==null) sub="";
+								sub = "***"+err+"*** "+sub;
+								Hldr.put("x-tor-vmat-error", err);
+								Hldr.put("subject", sub);
+								Log("False VMAT in tor by `"+Long.toString(MailFrom.hashCode(),36)+"`");
+								return;
+							}
+						} else if (Config.Debug) Log("TormPassage: No public key for `"+vmatsrv+"`");  
+					}
+				}
+			
+			VirtualRVMATEntry vm = Mid.LookupVMAT(f, false);
+			
+			if (vm!=null) {
+				if (vm.mail.compareTo(f)!=0) err="FALSE_SENDER1";
+				if (vm.onionMail.compareTo(MailFrom)!=0) err="FALSE_SENDER2";
+				} ///else err="NO_VMAT_ADDR";
+			
+		} catch(Exception E) {
+			err="NOT_VER";
+			String ms = E.getMessage();
+			if (ms==null || ms.startsWith("@")) ms="500 GenericError"; else ms=ms.substring(1);
+			Hldr.put("x-vmat-error", ms);
+			}
+		
+		if (err!=null) {
+			int bits=3;
+			if (Mid.VMATErrorPolicy.containsKey(err)) bits =  Mid.VMATErrorPolicy.get(err); else if (Mid.VMATErrorPolicy.containsKey("*")) Mid.VMATErrorPolicy.get("*");
+					
+			if (!Hldr.containsKey("subject")) Hldr.put("subject", "");
+			String sub = Hldr.get("subject");
+			if (sub==null) sub="";
+			if (bits>2) 
+					sub = "***"+err+"*** "+sub; 
+					else if (bits>1) 
+					sub ="** "+sub;
+			
+			Hldr.put("x-tor-vmat-error", err);
+			Hldr.put("subject", sub);
+			} else Hldr.put("x-tor-vmat-verified", "lookup");
+		
 	}
 	
 	private HashMap<String,String> ParseHeaders(BufferedReader I) throws Exception {
@@ -1281,6 +1454,8 @@ public class SrvSMTPSession extends Thread {
 		Hldr = J.FilterHeader(Hldr);
 		Hldr.put("x-y-count", Long.toString(Mid.Time(),36)+"-"+Long.toString(MailFrom.hashCode(),36));
 		Hldr.put("date",Mid.TimeString());
+		if (TormVmatTo==null) TORVMATPassage(Hldr);
+		
 		st=st.trim();
 		if (Main.MultiTthread[fi]!=null && Main.MultiTthread[fi].running) Main.MultiTthread[fi].End();
 		MultiDeliverThread MT = new MultiDeliverThread(Mid,MailFrom,stA,Hldr,I);
@@ -1316,9 +1491,10 @@ public class SrvSMTPSession extends Thread {
 		HashMap<String,String> Hldr = BeginDataHeaders();
 		
 		if (isDSN(Hldr)) throw new PException("@550 Ignored DSN Message");
-		
 		Hldr = J.FilterHeader(Hldr);
 		Hldr.put("x-y-count", Long.toString(Mid.Time(),36)+"-"+Long.toString(MailFrom.hashCode(),36));
+		if (TormVmatTo==null) TORVMATPassage(Hldr);
+		
 		M.ReceiveMessage(I);
 		ListThread LT = M.SendMessage(MailFrom, Hldr);
 		if (Main.ListThreads[fi]!=null && Main.ListThreads[fi].running) Main.ListThreads[fi].End();
@@ -1340,6 +1516,8 @@ public class SrvSMTPSession extends Thread {
 		
 		Message MS = M.MsgCreate();
 		HashMap<String,String> Hldr = BeginDataHeaders();
+		if (TormVmatTo==null) TORVMATPassage(Hldr);
+		
 		if (ToAliasUser!=null) {
 			Hldr.put("envelope-to", ToAliasUser);
 			Hldr.put("x-alias", ToAliasUser);
@@ -1600,7 +1778,7 @@ public class SrvSMTPSession extends Thread {
 	
 	private void ServerAction(String MailFrom,HashMap<String,String> Hldr,String msg) throws Exception {
 		
-		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0)) throw new PException(500,"SA6001 Operation not permitted");
+		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0,true)) throw new PException(500,"SA6001 Operation not permitted");
 		
 		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] {
 				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","RULEZ", "SET IS SPAM","SPAM LIST",
@@ -1700,7 +1878,7 @@ public class SrvSMTPSession extends Thread {
 		if (Tok[0].compareTo("SET IS SPAM")==0 && pa==2) SA_AddSpam(Tok[1].trim().toLowerCase(),MailFrom);
 		if (Tok[0].compareTo("SPAM LIST")==0) SA_SPAMLIST(MailFrom,Tok);
 		if (Tok[0].compareTo("SPAM")==0) SA_SPAMOPT(MailFrom,Tok,msg);	
-		if (Tok[0].compareTo("SETTINGS")==0) SA_SETTINGS(MailFrom,Tok);
+		if (Tok[0].compareTo("SETTINGS")==0) SA_SETTINGS(MailFrom,Tok,msg);
 		if (Tok[0].compareTo("MYKEY")==0) SA_MYKEY(MailFrom,msg);
 
 		if (Tok[0].compareTo("VMAT")==0) {
@@ -2035,18 +2213,40 @@ public class SrvSMTPSession extends Thread {
 		
 	}
 	
-	private void SA_SETTINGS(String from,String[] Tok) throws Exception {
+	private void SA_SETTINGS(String from,String[] Tok,String msgi) throws Exception {
 		String mlp = J.getLocalPart(from);
 		HashMap<String,String> H = Mid.UsrGetProp(mlp);
-		String txt="User properties:\n";
-		if (H==null || H.isEmpty()) txt="<Empty>"; else for (String K:H.keySet()) txt+=J.Spaced(K+":", 40)+J.Limited(H.get(K), 80)+"\n";
-		txt+="\nUser parameters:\n";
+		String txt=""; 
+		//if (H==null || H.isEmpty()) txt+="<Empty>"; else for (String K:H.keySet()) txt+=J.Spaced(K+":", 40)+J.Limited(H.get(K), 80)+"\n";
+		//txt+="\nUser parameters:\n";
 		H = Mid.UsrGetConfig(mlp);
-		if (H==null || H.isEmpty()) txt="<Empty>"; else for (String K:H.keySet()) txt+=J.Spaced(K+":", 40)+J.Limited(H.get(K), 80)+"\n";
+		
+
+		try {
+			msgi=msgi.replace("\r\n", "\n");
+			msgi=msgi.trim();
+			if (msgi.length()!=0 && msgi.contains(":")) {
+				String[] li = msgi.split("\\n+");
+				HashMap<String,String> Hn = J.ParseHeaders(li);
+				li=null;
+				msgi=null;
+				H = Mid.UserSetParamG(mlp, Hn);
+				msgi=H.get("_error");
+				H.remove("_error_");
+				if (msgi!=null && msgi.length()>0) txt+=msgi;
+				msgi=null;
+				}
+			} catch (Exception E) {
+				Log("Param error "+E.getMessage());
+				txt+="Parameter error: "+E.getMessage()+"\n";
+				E.printStackTrace();
+			}
+		
+		if (H==null || H.isEmpty()) txt+="<Default>"; else for (String K:H.keySet()) txt+=J.Spaced(K+":", 40)+J.Limited(H.get(K), 80)+"\n";
 		H = ClassicHeaders("server@"+Mid.Onion, from);
 		txt+="\n";
 		
-		H.put("subject","User configuration");
+		H.put("subject","Re: SETTINGS");
 		if (PGPSession) txt=Mid.SrvPGPMessage(mlp+"@"+Mid.Onion,H,txt);	
 		Mid.SendLocalMessage(mlp, H, txt);
 		Send("250 Id=nothing");
@@ -2210,7 +2410,7 @@ public class SrvSMTPSession extends Thread {
 		HashMap <String,String> H = new HashMap <String,String>();
 				H.put("from",From);
 				H.put("to", To);
-				H.put("error-to", "<>");
+				H.put("errors-to", "<>");
 				H.put("x-generated", "server cmd");
 				H.put("mime-version", "1.0");
 				H.put("content-type", "text/plain; charset=iso-8859-1");
@@ -2462,7 +2662,7 @@ public class SrvSMTPSession extends Thread {
 					if (u.compareTo(from)==0) continue;
 					
 					if (u!=null) {
-							if (!u.startsWith("sysop@") && J.isReserved(u, 0)) {
+							if (!u.startsWith("sysop@") && J.isReserved(u, 0,false)) {
 								Log("Try reserved mailinglist `"+from+"` -> `"+u+"` List `"+list+"`");
 								ex++;
 								continue;
@@ -2547,7 +2747,7 @@ public class SrvSMTPSession extends Thread {
 		boolean isLogged =  msg.contains(Tmpp);
 		
 		if (!isLogged) {
-			String act="req-list-"+cmd;
+			String act="req-list";  //+cmd;
 			try {
 							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
 							DynaRes Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
@@ -2578,7 +2778,7 @@ public class SrvSMTPSession extends Thread {
 		}
 		
 		if (cmd.compareTo("subscribe")==0) {
-			if (J.isReserved(from,0)) throw new PException(500,"Invalid user");
+			if (J.isReserved(from,0,true)) throw new PException(500,"Invalid user");
 			String pal = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
 			boolean bit = ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, from.toLowerCase(), pal));
 			if (!bit) if (!bit) OpErr+="Can't subscribe: `"+from+"`\n";
@@ -2609,7 +2809,7 @@ public class SrvSMTPSession extends Thread {
 			}
 		
 		if (cmd.compareTo("invite")==0) {
-			if (J.isReserved(Tok[3],0)) throw new PException(500,"Invalid user");
+			if (J.isReserved(Tok[3],0,true)) throw new PException(500,"Invalid user");
 			RU = ML.GetUsr(Tok[3]);
 			if (RU!=null) throw new Exception("@550 User arleady in list");
 			String pwl = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
@@ -2688,6 +2888,7 @@ public class SrvSMTPSession extends Thread {
 	Re.Par.put("exitnotice", Re.Par.get( Mid.ExitNoticeE ? "yes":"no"));
 	Re.Par.put("logvoucher", Re.Par.get( Mid.LogVoucherTo!=null ? "yes":"no"));
 	Re.Par.put("vmat", Re.Par.get("yes"));
+	Re.Par.put("msgxhour", Mid.MaxMsgXUserXHour==0 ? Re.Par.get("nomsgxhour") : 	Integer.toString(Mid.MaxMsgXUserXHour));
 	Re.Par.put("nick",Mid.Nick);
 	
 	Re = Re.GetH(H);
@@ -2816,6 +3017,7 @@ public class SrvSMTPSession extends Thread {
 					 rmsg+="\nAddress `"+RVM.mail+"` OK\n\tPassword: "+RVM.passwd+"\n";
 					 	 } catch(Exception E) {
 						 String ms = E.getMessage();
+						 if (ms==null) ms="NULL";
 						 if (ms.startsWith("@")) {
 							ms=ms.substring(1);
 							rmsg+="Line "+(ax+1)+" Remote Error: "+ms+"\n";

@@ -32,7 +32,8 @@ public class Const {
 		public static final int MX_RVMAT=				0x1A0D;
 		public static final int MX_DERK=				0x7310;
 		public static final int MX_ExitRouterInfo=0x1A0E;
-		
+		public static final int MX_RemotePhFile=	0xFCAF;
+		public static final int MX_RemotePhFileS=	0xFCAE;
 		public static final int MX_E_Boot=				0x7C01;
 		public static final int MX_1_Boot=				0x7C00;
 		

@@ -1,7 +1,10 @@
 
 Use:
 	onionmail [-q] [-f <config file>] [-v] [-p <password>] [-ndk] 
-		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp]
+		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp] [-pi]
+		[-rpf <remotePasswdFile>]
+		[--gen-rpass] [-sp]
+		[--rpass-server]
 		
 	onionmail [-q] --gen-passwd 
 	onionmail [-q] --gen-servers [-sp] -f <config file> [--pgp] [--set-pgp]
@@ -19,10 +22,17 @@ Use:
 			(Must be in `dir/config.conf` format).
 	-v		Enable verbose.
 	-p	<par>	Use a password by command line for all KeyBlock files.
+	-pi		Use the STDIN password mode:
+			When OnionMail sends a string to stderr:
+			OM:[PASS] Send password to STDIN
+			Send the server's password to stdin.
+
 	-ndk		Do not delete any KeyBlock and sysop file.
 	-sp		Choose passwords manually for all KeyBlock files.
 	-q		Disable copyright message (must be first parameter).
 	-d		Daemonize: Redirect stdout to onionstart.log file.
+	-rpf <file>	Get the passphrase remotely via remote passphrase file
+			and server.
 	--pgp		Save the files sysop.txt in encrypted gpg messages.
 	-pf	<file>	Calculate password from global salt keyfile.   
 			The password is calculated form the filename and 
@@ -54,3 +64,10 @@ Use:
 			passphrases.
 	--kctl		Show the KCTL remote menù to manage remote seeds of 
 			keys.
+
+	--gen-rpass	Start remote passphrase files generator.
+			If this parameter is preceded by -sp you can choose
+			the passphrase to store.
+
+	--rpass-server	Do the remote passphrase server (one session only).
+

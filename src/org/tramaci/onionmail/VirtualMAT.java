@@ -48,6 +48,99 @@ public class VirtualMAT {
 		return r0;
 		}
 	
+	////////////////////// RVMAT IN TOR //////////////////////////////////////////
+		
+	public void saveRVMATinTor(String localpart,VirtualRVMATEntry v) throws Exception {
+		String dom = J.getDomain(v.mail);
+		saveRVMATinTor( localpart, v, dom);
+		}
+	
+	private void deleteRVMATinTor(String localpart,String dom) throws Exception {
+		String sc = localpart+"#"+dom;
+		CRC32 C = new CRC32();
+		C.update(sc.getBytes());
+		C.update(MY.Sale);
+		String fn = Long.toString(0x7FFFFFFFFFFFFFFFL & C.getValue(),36)+"-";
+		sc=sc.toUpperCase();
+		C.update(sc.getBytes());
+		long t0 = C.getValue();
+		int h = (int) (t0&31);
+		t0=t0>>5;
+		fn+=Long.toString(t0,36);
+		C=null;
+		String ph = MY.Maildir+"/net/j"+Integer.toString(h,36)+"/"+fn;
+		if (!new File(ph).exists()) return;
+		J.Wipe(ph, MY.Config.MailWipeFast);
+		}
+		
+	private void saveRVMATinTor(String localpart,VirtualRVMATEntry v,String dom) throws Exception {
+		String sc = localpart+"#"+dom;
+		String sco=sc.toLowerCase();
+		CRC32 C = new CRC32();
+		C.update(sc.getBytes());
+		C.update(MY.Sale);
+		String fn = Long.toString(0x7FFFFFFFFFFFFFFFL & C.getValue(),36)+"-";
+		sc=sc.toUpperCase();
+		C.update(sc.getBytes());
+		long t0 = C.getValue();
+		int h = (int) (t0&31);
+		t0=t0>>5;
+		fn+=Long.toString(t0,36);
+		C=null;
+		
+		byte[] key =Stdio.sha256a(new byte[][] { MY.Sale , sco.getBytes() , MY.Subs[4] });
+		byte[] iv = Stdio.md5a(new byte[][] { key, sc.getBytes() });
+		String ph = MY.Maildir+"/net/j"+Integer.toString(h,36)+"/";
+		new File(ph).mkdirs();
+		byte[] dta = PackVirtualRVMATEntry(v);
+		dta = Stdio.AESEnc2(key, iv, dta);
+		Stdio.file_put_bytes(ph+fn,dta);
+		}
+	
+	public VirtualRVMATEntry loadRVMATinTor(String localpart) throws Exception { return loadRVMATinTor(localpart,"@"); }
+	
+	public VirtualRVMATEntry loadRVMATinTor(String localpart,String dom) throws Exception {
+		String sc = localpart+"#"+dom;
+		String sco=sc.toLowerCase();
+		CRC32 C = new CRC32();
+		C.update(sc.getBytes());
+		C.update(MY.Sale);
+		String fn = Long.toString(0x7FFFFFFFFFFFFFFFL & C.getValue(),36)+"-";
+		sc=sc.toUpperCase();
+		C.update(sc.getBytes());
+		long t0 = C.getValue();
+		int h = (int) (t0&31);
+		t0=t0>>5;
+		fn+=Long.toString(t0,36);
+		C=null;
+		String ph = MY.Maildir+"/net/j"+Integer.toString(h,36)+"/"+fn;
+		if (!new File(ph).exists()) return null;
+		
+		byte[] key =Stdio.sha256a(new byte[][] { MY.Sale , sco.getBytes() , MY.Subs[4] });
+		byte[] iv = Stdio.md5a(new byte[][] { key, sc.getBytes() });
+		
+		byte[] dta = Stdio.file_get_bytes(ph);
+		dta = Stdio.AESDec2(key, iv, dta);
+		VirtualRVMATEntry rs =UnPackVirtualRVMATEntry(dta);
+		return rs;
+		}
+	
+	public VirtualRVMATEntry setRVMATinTor(String localpart,String dom) throws Exception {
+		VirtualRVMATEntry vm =null;
+		try { vm = loadRVMATinTor(localpart,dom); } catch(Exception E) { MY.Log("LoadRVMAT "+E.getMessage()); }
+		if (vm==null) return null;
+		saveRVMATinTor(localpart,vm,"@");
+		return vm;
+		}
+	
+	public boolean unsetRVMATinTor(String localpart,String mail) throws Exception {
+		VirtualRVMATEntry vm = SenderVirtualRVMATEntryLoad(mail);
+		if (vm==null) return false;
+		if (vm.mail.compareTo(mail)!=0) return false;
+		deleteRVMATinTor(localpart, "@");
+		return true;
+	}
+	
 	////////////////////// Verifica VMAT TO ////////////////////////////////////////
 	
 	public boolean recipientCheckRVMAT(String localpart, String mail) throws Exception { // Controlla VMAT sul server locale TORM VMAT TO
@@ -91,7 +184,7 @@ public class VirtualMAT {
 		}
 	
 	
-	public void recipientSetRVMAT(String localpart,String mail) throws Exception { //Aggiunge VAT sul server locale TORM VMAT TO
+	public void recipientSetRVMAT(String localpart,String mail) throws Exception { //Aggiunge VMAT sul server locale TORM VMAT TO
 		byte[] b;
 		long[] arr;
 		long[] n;
@@ -222,15 +315,25 @@ public class VirtualMAT {
 		return M;
 		}
 	
-	public VirtualRVMATEntry Sign(VirtualRVMATEntry M,PrivateKey P) throws Exception {
-		byte[] b = (M.mail+"\n"+M.onionMail+"\n"+M.server).getBytes();
+	public void  Sign(final VirtualRVMATEntry M,PrivateKey P) throws Exception {
+		byte[] b = (M.mail+"\n"+M.onionMail).getBytes();
 		M.sign = Stdio.RSASign(b, P);
-		return M;
+		}
+	
+	public byte[]  Sign(String mail,String onionMail,PrivateKey P) throws Exception {
+		byte[] b = (mail+"\n"+onionMail).getBytes();
+		return Stdio.RSASign(b, P);
+		}
+	
+	public boolean VirtualRVMATVerify(String mail,String onionMail,byte[] sign,PublicKey P) throws Exception {
+		if (sign.length==0) return false;
+		byte[] b = (mail+"\n"+onionMail).getBytes();
+		return Stdio.RSAVerify(b, sign, P);
 		}
 	
 	public boolean VirtualRVMATEntryVerify(VirtualRVMATEntry M,PublicKey P) throws Exception {
 		if (M.sign.length==0) return false;
-		byte[] b = (M.mail+"\n"+M.onionMail+"\n"+M.server).getBytes();
+		byte[] b = (M.mail+"\n"+M.onionMail).getBytes();
 		return Stdio.RSAVerify(b, M.sign, P);
 		}
 	/////////////////////////////////

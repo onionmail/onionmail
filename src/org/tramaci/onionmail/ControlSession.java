@@ -20,6 +20,7 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -290,7 +291,15 @@ public class ControlSession extends Thread{
 		
 		if (CurSrv!=-1) {
 			if (cmd.compareTo("elist")==0) { SA_EXITLIST(Tok); continue; }
-
+			
+			if (cmd.compareTo("rsetcnt")==0) {
+				SRVS[CurSrv].LimSrvMHour=new int[0];
+				SRVS[CurSrv].LimSrvMMsg=new int[0];
+				SRVS[CurSrv].LimSrvMHash=new int[0];
+				Reply(true,"Counter reset");
+				continue; 
+				}
+			
 			if (cmd.compareTo("vouchermk")==0) {
 				Reply(true,SRVS[CurSrv].VoucherCreate(Tok.length>1 ? Config.parseIntS(Tok[1]) : 0));
 				continue;
@@ -313,7 +322,7 @@ public class ControlSession extends Thread{
 				}
 			
 			if (curmail!=null) {
-				if (cmd.compareTo("par")==0) {
+		/*		if (cmd.compareTo("par")==0) {
 					if (J.getDomain(curmail).compareTo(SRVS[CurSrv].Onion)==0) {
 						try {
 							String s;
@@ -327,7 +336,7 @@ public class ControlSession extends Thread{
 							}
 						} else Reply(false,"Access denied");
 					continue;
-					}
+					}*/
 				}
 			}
 		
@@ -340,7 +349,26 @@ public class ControlSession extends Thread{
 		
 		if (CurSrv!=-1) {
 			if (cmd.compareTo("mklist")==0  && serveruser) { SA_MKLIST(Tok); continue; }
-			if (cmd.compareTo("addusr")==0  && serveruser) { SA_ADDUSR(Tok); continue; }
+			if (cmd.compareTo("addusr")==0  && serveruser) { SA_ADDUSR(Tok,false); continue; }
+			if (cmd.compareTo("ovrusr")==0  && serveruser) { SA_ADDUSR(Tok,true); continue; }
+			if (cmd.compareTo("friends")==0  && serveruser) {
+					String[]fl = SRVS[CurSrv].RequildFriendsList();
+					ReplyA(true,"FRIENDS/1.0",fl);
+					continue; 
+					}
+			
+			if (cmd.compareTo("deluser")==0 && serveruser && Tok.length>1) {
+				if (SRVS[CurSrv].UsrExists(Tok[1])) {
+					try {
+						SRVS[CurSrv].UsrDestroy(Tok[1]);
+						Reply(true);
+						} catch(Exception E1) {
+							Config.EXC(E1, "CTRL.Deluser");
+							Reply(false,E1.getMessage());
+						}
+					} else Reply(false,"User not found"); 
+					continue;
+				}
 			
 			if (cmd.compareTo("addpgpusr")==0 && serveruser && Tok.length==2) {
 				Reply(true,"Send your PGP armor Key, end width \".\"");
@@ -756,10 +784,8 @@ public class ControlSession extends Thread{
 				Log("Terminate control port\n");
 				Main.CS.End();
 			} catch(Exception E) { Config.EXC(E, "Term ControlPort"); }
-				
-		try {
-				if ( Main.DNSServer!=null)  Main.DNSServer.interrupt();
-				} catch(Exception E) { Config.EXC(E, "Term DNSServer"); }
+			
+		
 		System.exit(0);
 		
 	}
@@ -875,7 +901,7 @@ public class ControlSession extends Thread{
 		H.put("from",from);
 		H.put("to", to);
 		H.put("date", S.TimeString());
-		H.put("error-to","<>");
+		H.put("errors-to","<>");
 		H.put("x-generated", "control-port");
 				
 		String st="";
@@ -1023,7 +1049,7 @@ public class ControlSession extends Thread{
 			 SA_EXITLIST(Tok);
 			continue;
 		}
-		
+/*		
 		if (cmd.compareTo("par")==0) {
 		if (J.getDomain(list).compareTo(SRVS[CurSrv].Onion)==0) {
 			try {
@@ -1038,7 +1064,7 @@ public class ControlSession extends Thread{
 				}
 			} else Reply(false,"Access denied");
 		continue;
-		}
+		}*/
 		
 		if (cmd.compareTo("mode")==0 && pa>2) {
 			String nu = J.getMail(Tok[1], false);
@@ -1137,7 +1163,9 @@ public class ControlSession extends Thread{
 		ML.Close();
 	}
 	
-	private void SA_ADDUSR(String[] Tok) throws Exception {
+	
+	
+	private void SA_ADDUSR(String[] Tok,boolean isPassWd) throws Exception {
 			String smtpp;
 			String pop3p;
 			String user;
@@ -1148,7 +1176,6 @@ public class ControlSession extends Thread{
 			
 			if (
 						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 
-						user.compareTo("sysop")==0 					|| 
 						user.compareTo("server")==0 					|| 
 						user.endsWith(".onion") 								|| 
 						user.endsWith(".o") 									||
@@ -1176,7 +1203,7 @@ public class ControlSession extends Thread{
 				}
 			
 			SrvIdentity S = SRVS[CurSrv];
-			if (S.UsrExists(user)) {
+			if (!isPassWd && S.UsrExists(user)) {
 				Reply(false,"User arleady exists");
 				return;
 				}

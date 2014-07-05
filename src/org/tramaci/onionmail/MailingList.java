@@ -363,7 +363,7 @@ public class MailingList {
 		
 			private void BeginList() throws Exception {
 						Head.put("from", MailFrom);
-						Head.put("error-to","<>");
+						Head.put("errors-to","<>");
 						String lst= LocalPart+"@"+Mid.Onion;
 						Head.put("reply-to",lst);
 						Head.put("x-beenthere","list");

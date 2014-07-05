@@ -78,7 +78,9 @@ public class SrvAction {
 			for (int ax=0;ax<=cx;ax++) try {
 					Server=MX[ax].Host.toLowerCase().trim();
 					if (Mid.Config.Debug) Mid.Log("SrvAction "+Tag+" `"+Server+"` via "+(InternetConnection ? "Inet" : "Tor"));
-					if (InternetConnection) RS = new Socket(Server,25); else  RS = J.IncapsulateSOCKS(Mid.Config.TorIP, Mid.Config.TorPort, Server,25);
+					if (InternetConnection) {
+							if (Mid.ExitIP!=null) RS =  new  Socket(Server,25, Mid.ExitIP, 0); else RS = new Socket(Server,25); 
+							} else  RS = J.IncapsulateSOCKS(Mid.Config.TorIP, Mid.Config.TorPort, Server,25);
 					break;
 				} catch(Exception E) {
 				if (currentExit!=null) currentExit.setResult(false);

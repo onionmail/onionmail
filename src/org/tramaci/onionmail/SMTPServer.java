@@ -32,19 +32,41 @@ public class SMTPServer extends Thread {
 	
 	private SrvSMTPSession[] Connection = null;
 	
-	SMTPServer(Config C,SrvIdentity serv) throws Exception {
+	public static final short SM_TorServer = 0;
+	public static final short SM_InetServer=1;
+	public static final short SM_InetAlt=3;
+	
+	public short serverMode = SM_TorServer;
+	
+	SMTPServer(Config C,SrvIdentity serv,short srvMode) throws Exception {
 		super();
 		Config = C;
 		Identity = serv;
 		running=false;
-		if (serv.EnterRoute) srv = new ServerSocket(Identity.LocalPort); else srv = new ServerSocket(Identity.LocalPort,0,Identity.LocalIP);
-				
+		serverMode = srvMode;
+		
+		if ((serverMode&1)!=0 && !serv.EnterRoute) throw new Exception("Invalid server configuration");
+		if (serverMode==SM_TorServer) srv = new ServerSocket(Identity.LocalPort,0,Identity.LocalIP);
+		if (serverMode==SM_InetServer) {
+			if (Identity.ExitIP!=null) srv = new ServerSocket(Identity.LocalPort,0,Identity.ExitIP); else srv = new ServerSocket(Identity.LocalPort);
+			}
+		if (serverMode==SM_InetAlt) {
+			if (Identity.ExitIP!=null) srv = new ServerSocket(Identity.ExitAltPort,0,Identity.ExitIP); else srv = new ServerSocket(Identity.ExitAltPort);
+			}
+		
+		/*oldcode
+		if (serv.EnterRoute) {
+				if (Identity.ExitIP!=null) srv = new ServerSocket(Identity.LocalPort,0,Identity.ExitIP); else srv = new ServerSocket(Identity.LocalPort); 
+				} else srv = new ServerSocket(Identity.LocalPort,0,Identity.LocalIP);
+		*/
+		
 		running=true;
 		Connection = new SrvSMTPSession[Config.MaxSMTPSession];
-		Identity.Spam = new Spam(Config,Identity);
+		if (Identity.Spam==null) Identity.Spam = new Spam(Config,Identity);
 		start();
 		}
 	
+	/*oldcode
 	SMTPServer(Config C,SrvIdentity serv,int port) throws Exception {
 		super();
 		Config = C;
@@ -57,6 +79,7 @@ public class SMTPServer extends Thread {
 		Identity.Spam = new Spam(Config,Identity);
 		start();
 		}
+	*/
 	
 	public void Garbage() {	
 		int cx = Connection.length;
@@ -133,16 +156,16 @@ public class SMTPServer extends Thread {
 					}
 			
 			if (si==-1) {
-				Log("SMTP Connection Drop: "+con.getRemoteSocketAddress().toString()+"\n");
+				Log("SMTP Connection Drop: "+J.IP2String(con.getInetAddress()));
 				try { con.close(); } catch(Exception N) {}
 				continue;
 				}
 			
-			if (Config.Debug) Log("SMTP Connection: "+con.getRemoteSocketAddress().toString()+"\n");
+			if (Config.Debug) Log("SMTP Connection: "+J.IP2String(con.getInetAddress()));
 			try {
 					Connection[si] = new SrvSMTPSession(Config,Identity,con,this);
 					} catch(Exception E) {
-					Log("SMTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n");
+					Log("SMTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n"); //TODO Cambiare ip2string
 					try { con.close(); } catch(Exception N) {}
 					continue;
 					}
@@ -150,6 +173,12 @@ public class SMTPServer extends Thread {
 			}
 		
 		}
-		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server, "SMTP "+Identity.Nick, st); 	}
+		public void Log(String st) { 
+				char m='?';
+				if (serverMode==SMTPServer.SM_TorServer) m='T';
+				if (serverMode==SMTPServer.SM_InetServer) m='I';
+				if (serverMode==SMTPServer.SM_InetAlt) m='A';
+				Config.GlobalLog(Config.GLOG_Server, "SMTP/"+m+" "+Identity.Nick, st); 	
+				}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server,  "SMTP "+Identity.Nick, st); 	}
 }

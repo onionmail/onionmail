@@ -37,7 +37,7 @@ public class POP3Server extends Thread {
 		Config = C;
 		Identity = serv;
 		running=false;
-		srv = new ServerSocket(Identity.LocalPOP3Port,0,Identity.LocalIP);
+		srv = new ServerSocket(Identity.LocalPOP3Port ,0,Identity.LocalIP);
 				
 		running=true;
 		Connection = new SrvPop3Session[Config.MaxSMTPSession];
@@ -104,12 +104,12 @@ public class POP3Server extends Thread {
 					}
 			
 			if (si==-1) {
-				Log("Connection Drop: "+con.getRemoteSocketAddress().toString()+"\n");
+				Log("Connection Drop: "+J.IP2String(con.getInetAddress())+"\n");
 				try { con.close(); } catch(Exception N) {}
 				continue;
 				}
 			
-			if (Config.Debug) Log("Connection: "+con.getRemoteSocketAddress().toString()+"\n");
+			if (Config.Debug) Log("Connection: "+J.IP2String(con.getInetAddress())+"\n");
 			try {
 					Connection[si] = new SrvPop3Session(this,con);
 					} catch(Exception E) {

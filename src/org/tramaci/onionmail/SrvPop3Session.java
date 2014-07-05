@@ -20,11 +20,14 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.Date;
+import java.util.HashMap;
 
 import javax.net.ssl.SSLSocket;
 
@@ -71,7 +74,7 @@ public class SrvPop3Session extends Thread {
 		String Pass=null;
 		
 		while(isConnected() && !isOld()) {
-			String[] Tok = 	ReadCommands(5,new String[] {"QUIT","USER ","PASS ","CAPA","APOP","STLS","STARTTLS"});
+			String[] Tok = 	ReadCommands(5,new String[] {"QUIT","USER ","PASS ","CAPA","APOP","STLS","STARTTLS","RQUS"});
 			if (Tok[0].compareTo("QUIT")==0)  {
 					Reply(true);
 					close();
@@ -105,6 +108,23 @@ public class SrvPop3Session extends Thread {
 			if (Tok[0].compareTo("APOP")==0) {
 				Reply(false,"Can't use APOP");
 				continue;
+				}
+			
+			if (Mid.POP3CanRegister && Tok[0].compareTo("RQUS")==0) {
+				Log("ccc");
+				try { SA_REQUSR(); } catch(Exception E) {
+					String msg= E.getMessage();
+					if (msg==null) msg="NULL";
+					if (msg.startsWith("@")) {
+							msg=msg.substring(1);
+							Log("RQUS: "+msg); 
+							Reply(false,msg);
+							} else {
+							Config.EXC(E, "RQUS");
+							Reply(false,"Error");
+							}
+					}
+				return;
 				}
 			
 			if (Tok.length==2) {
@@ -414,6 +434,7 @@ public class SrvPop3Session extends Thread {
 				"UIDL\n";
 		
 		if (!TLSON) po+="STLS\nSTARTTLS\n";
+		if (Mid.POP3CanRegister) po+="RQUS\n";
 		po+="IMPLEMENTATION POP3";
 		po=po.trim();
 		
@@ -475,6 +496,7 @@ public class SrvPop3Session extends Thread {
 		br=null;
 		O=null;
 		EndTime=1;
+		Mid.Garbage();
 		try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
 	}
 	
@@ -618,6 +640,223 @@ public class SrvPop3Session extends Thread {
 					}
 						return Q;
 				}
+
+		private void SA_REQUSR() throws Exception {
+		
+		if ( TextCaptcha.isEnabled()) {
+				CaptchaCode C= TextCaptcha.generateCaptcha(Config.TextCaptchaSize, Config.TextCaptchaMode);
+				ReplyA(true,"CAPTCHA",C.image.split("\\n+"));
+				int ax;
+				for (ax=0;ax<3;ax++) {
+					String rs = ReadLn();
+					rs=rs.toLowerCase().trim();
+					String ab = C.code.toLowerCase().trim();
+					if (rs.compareTo(ab)==0) break;
+					if (ax!=2) {
+						 C= TextCaptcha.generateCaptcha(Config.TextCaptchaSize, Config.TextCaptchaMode);
+						 ReplyA(false,"CAPTCHA Retry",C.image.split("\\n+"));
+						}
+					}
+				if (ax==3) throw new PException("@550 Invalid captcha code");
+				} else {
+					int ax;
+					boolean rsb=true;
+					for (ax=0;ax<3;ax++) {
+							int a = (int) (511&Stdio.NewRndLong());
+							int b = (int) (511&Stdio.NewRndLong());
+							if ((a&256)!=0) a=-(a & 255);
+							if ((b&256)!=0) b=-(b & 255);
+							int c = a+b;
+							String[] tok = new String[] { 
+											"Equation: " ,
+											Integer.toString(a),
+											b<0 ? "" : "+" ,
+											Integer.toString(b),
+											"=",
+											Integer.toString(c)}
+											;
+							
+							c = (int) (Stdio.NewRndLong()&3)%3;
+							c = 1+(c*2);
+							String sol = tok[c];
+							tok[c]="X";
+							String cap="";
+							for (int al=0;al<6;al++) cap+=" "+tok[al]+" ";
+							ReplyA(rsb,"CAPTCHA",new String[] { 
+									"Please solve the following equation to prove you're human. ",
+									cap.trim(),
+									"What is the value of X?"})
+									;
+							String rs = ReadLn();
+							rs=rs.trim();
+							if (rs.compareTo(sol)==0) break;
+							rsb=false;
+							}
+					if (ax==3) throw new PException("@550 Invalid captcha code");		
+				}
+		
+		ReplyA(true,"VOUCHER Give me a Voucher or an empty line",new String[] {});
+		String cod = ReadLn();
+				
+		boolean vca=false;
+		if (cod.length()>0) {
+			cod = cod.trim();
+			if (Mid.VoucherTest(cod, true)==1) vca=true;
+			}
+		
+		if (!vca) Mid.CanAndCountCreateNewUser();
+		
+		Reply(true,"USERNAME");
+		int ax=0;
+		SrvIdentity S = Mid;
+		for (ax=0;ax<3;ax++) {
+			cod = ReadLn();
+			if (S.UsrExists(cod)) {
+				Reply(false,"USERNAME User arleady exists");
+				continue;
+				}
+			break;
+			}
+		
+		if (ax==3) throw new PException("@550 Too many error");
+				
+		String user = cod.trim().toLowerCase();
+		if (
+						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 
+						user.compareTo("server")==0 					|| 
+						user.endsWith(".onion") 								|| 
+						user.endsWith(".o") 									||
+						user.endsWith(".list") 									|| 
+						user.endsWith(".sys")									||
+						user.endsWith(".app")								||
+						user.endsWith(".sysop")								||
+						user.endsWith(".op")									|| 
+						user.startsWith(".") 									|| 
+						user.endsWith(".") 										|| 
+						user.contains("..")) 									{
+				
+						Reply(false,"Invalid user Name");
+						return;
+				}
+				
+		Reply(true,"PGP Give me a PGP public key (end with \".\")");
+		String msg="";
+		for (ax=0;ax<4000;ax++) {
+			String st = ReadLn();
+			st=st.trim();
+			if (st.compareTo(".")==0) break;
+			msg+=st+"\n";
+			}
+		if (ax==4000) throw new PException("@550 KEY too long");
+		
+		boolean usePGP=false;
+		msg=msg.trim();
+		String q="";
+		String[] li = msg.split("\\n");
+		int cx = li.length;
+		if (cx>2) {
+			usePGP=true;
+			int pgp = 0;
+			for (ax=0;ax<cx;ax++) {
+				String s = li[ax].trim();
+				if (s.contains("---BEGIN PGP PUBLIC KEY BLOCK---")) {
+					if (pgp!=0) throw new PException("@550 Invalid PGP KEY block");
+					pgp=1;
+					}
+				if (pgp==1) q+=s+"\r\n";
+				if (s.contains("---END PGP PUBLIC KEY BLOCK---")) {
+					if (pgp!=1) throw new PException("@550 Invalid PGP KEY block"); else pgp=2;
+					} 
+			}
+		if (pgp!=2) throw new PException("@550 Can't read PGP KEY block correctly");
+		}
+	
+	HashMap <String,String> P = new HashMap <String,String>();
+	P.put("lang", S.DefaultLang);
+	P.put("flag", Const.USR_FLG_TERM);
+	String pop3p = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+	pop3p=pop3p.replace(':', 'a');
+	pop3p=pop3p.replace('!', 'b');
+	pop3p=pop3p.replace('=', '1');
+	
+	String smtpp = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+	smtpp=smtpp.replace(':', 'a');
+	smtpp=smtpp.replace('!', 'b');
+	smtpp=smtpp.replace('=', '1');
+	
+	S.UsrCreate(user,pop3p, smtpp, 1,P);
+	
+	String rs="BEGIN: ACCOUNT_DATA\nver: 1.1\n";
+	rs+="onionmail: "+ user+"@"+S.Onion+"\n";
+	
+	ExitRouteList EL = Mid.GetExitList();
+	ExitRouterInfo SE = EL.selectBestExit();
+	
+	if (SE!=null && SE.canVMAT) try {
+		VirtualRVMATEntry RVM = Mid.VMATRegister(user+"@"+SE.domain,user);
+		if (RVM!=null) {
+			rs+="vmat: 1\n";
+			rs+="vmatmail: "+RVM.mail+"\n";
+			rs+="vmatpass: "+RVM.passwd+"\n";
+			} else rs+="vmat: 0\n";
+		} catch(Exception E) {
+				if (Config.Debug) E.printStackTrace();
+				String msge=E.getMessage();
+				if (msge==null) msge=null;
+				if (msg!=null & msge.startsWith("@")) Log("RQUS: Error "+msge.substring(1)); else Config.EXC(E, "RQUS.VMAT");
+				rs+="vmat: 0\n";
+				}
+	
+	rs+="onion: "+S.Onion+"\n";
+	rs+="username: "+user+"\n";
+	rs+="pop3password: "+pop3p+"\n";
+	rs+="smtppassword: "+smtpp+"\n";
+	rs+="sha1: "+LibSTLS.GetCertHash(S.MyCert)+"\n";
+	rs+="nick: "+S.Nick+"\n";
+	rs+="msgsize: "+S.MaxMsgSize+"\n";
+	rs+="msgold: "+Config.MailRetentionDays+"\n";
+	rs+="maxmsguser: "+S.MaxMsgXuser+"\n";
+	rs+="scrambler: "+Config.PGPEncryptedDataAlgoStr;
+	pop3p = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+	smtpp = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+	pop3p=null;
+	smtpp=null;
+	System.gc();
+	
+	if (usePGP) {
+		rs+="\n.\n";
+		byte[] original = rs.getBytes();
+		ByteArrayInputStream pubKey = new ByteArrayInputStream(q.getBytes());
+		byte[] encrypted = PGP.encrypt(original, PGP.readPublicKey(pubKey), null, true, true,new Date(S.Time()),Config.PGPEncryptedDataAlgo);
+		rs = new String(encrypted);
+		}
+	
+	Log("New user via pop3 `"+user+"`");
+	ReplyA(true, usePGP ? "PGP" : "TXT" , rs.split("\\n"));
+	String st = ReadLn();
+	st=st.trim();
+	st=st.toLowerCase();
+	
+	if (st.compareTo("quit")==0) {
+		Reply(true,"QUIT");
+		return;
+		}
+	
+	if (st.compareTo("pem")==0) {
+		byte[] der = S.MyCert.getEncoded();
+		st=J.Base64Encode(der);
+		der=null;
+		q="";
+		cx = st.length();
+		for (ax=0;ax<cx;ax++) {
+			q+=st.charAt(ax);
+			if (ax%75==74) q+="\n";
+			}
+		st="-----BEGIN CERTIFICATE-----\n"+q.trim()+"\n-----END CERTIFICATE-----\n";
+		q=null;
+		ReplyA(true,"PEM",st.split("\\n"));
+		} else Reply(false,"ERROR");
+	}
 		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}		

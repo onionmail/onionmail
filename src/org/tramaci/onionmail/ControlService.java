@@ -130,18 +130,18 @@ public class ControlService extends Thread {
 					}
 			
 			if (si==-1) {
-				Log("Control Connection Drop: "+con.getRemoteSocketAddress().toString()+"\n");
+				Log("Control Connection Drop: "+J.IP2String(con.getInetAddress()));
 				try { con.close(); } catch(Exception N) {}
 				continue;
 				}
 			
-			if (Config.Debug) Log("Control Connection: "+con.getRemoteSocketAddress().toString()+"\n");
+			if (Config.Debug) Log("Control Connection: "+J.IP2String(con.getInetAddress()));
 			try {
 					Connection[si] = new ControlSession(this,con);
 					Connection[si].isPublic = isPublic;
 					
 					} catch(Exception E) {
-					Log("Control: "+con.getRemoteSocketAddress().toString()+" ->  Error "+E.getMessage()+"\n");
+					Log("Control: "+J.IP2String(con.getInetAddress())+" ->  Error "+E.getMessage()+"\n");
 					try { con.close(); } catch(Exception N) {}
 					continue;
 					}

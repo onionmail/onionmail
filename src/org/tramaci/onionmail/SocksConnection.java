@@ -44,13 +44,13 @@ public class SocksConnection  {
 		
 		Config=C;
 		
-		XOnionParser ONION = XOnionParser.fromString(Config,Onion);
+	//	XOnionParser ONION = XOnionParser.fromString(Config,Onion);
 		
 		EndTime=System.currentTimeMillis()+Config.MaxConnectionIdle;
 		CON=con;
 	
 		int cx =0;
-		Onion = ONION.Onion;
+	//	Onion = ONION.Onion;
 		if (Config.Debug) Log("OnionConnection ["+Onion+"]\n");
 		
 		TOR = new Socket(Config.TorIP,Config.TorPort);
@@ -76,7 +76,7 @@ public class SocksConnection  {
 			try { TOR.close(); } catch(Exception E) {}
 			End();
 			int rc = 255&req[1];
-			if (rc==91) Log("SOCKS: ["+ONION.Full+"] Request failed!\n"); else Log("SOCKS: ["+ONION.Full+"] Tor: SOCKS Server Error "+rc+"!\n");
+			if (rc==91) Log("SOCKS: ["+Onion+"] Request failed!\n"); else Log("SOCKS: ["+Onion+"] Tor: SOCKS Server Error "+rc+"!\n");
 			throw new Exception("Socks: Error H"+Long.toHexString((long)(255&req[1])).toUpperCase());
 			}
 		

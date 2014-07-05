@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 by Tramaci.Org
+ * Copyright (C) 2013-2014  by Tramaci.Org
  * This file is part of OnionMail (http://onionmail.info)
  * 
  * OnionMail is free software; you can redistribute it and/or modify
@@ -16,6 +16,10 @@
  * along with this source code; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
+
+
+//TODO Migliorare le eccezioni
+//TODO Rimuovere TorDnsLocalProxy e sostituire con NTU2
 
 package org.tramaci.onionmail;
 import java.io.BufferedReader;
@@ -45,12 +49,10 @@ import javax.crypto.SecretKey;
 public class Main {
 	Config Config = new Config();
 	
-	public static final long VersionID = 0x0001_0004_0004_0119L;
-	public static final String Version="1.4.4.281B";
-	public static final String VersionExtra="";
-	
-	public static DNSServer DNSServer=null;
-	public static OnionRouter Router = null;
+	public static long VersionID = 0x0001_0004_0006_01C6L;
+	public static String Version="1.4.7.454B";
+	public static String VersionExtra="";
+
 	public static SMTPServer[] SMTPS = null;
 	public static POP3Server[] POP3S = null;
 	public static org.tramaci.onionmail.MailingList.ListThread[] ListThreads = null;
@@ -58,6 +60,8 @@ public class Main {
 	
 	public static ControlService CS = null;
 	public static ControlService[] CSP = null; 
+	
+	public static long[] statusHash = null;
 	
 	public static volatile int MaxThread = 0;
 	public static volatile int PercThread=0;
@@ -102,6 +106,7 @@ public class Main {
 	public static String ProgPath="./";
 	public static String RandomHeart=null;
 	public static boolean RSAGenBC = false;
+	private static boolean verbose=false;
 	
 	public void SelfTest() throws Exception {
 		int cx= SMTPS.length;
@@ -271,6 +276,7 @@ public class Main {
 	
 	@SuppressWarnings("static-access")
 	public void Start(String fc) throws Exception {
+		int numSrv=0;
 		try {
 			Config = Config.LoadFromFile(fc);
 			
@@ -344,35 +350,18 @@ public class Main {
 			System.exit(2);
 			}
 		
-		
-		
-		echo("\nSMTP Service:  \t" + (Config.RUNSMTP ? "Enabled":"Disabled")+"\n");
-		echo("TorDNS Service:\t" + (Config.RunDNSServer ? "Enabled":"Disabled")+"\n");
-		
 		if (!J.TCPRest(Config.TorIP, Config.TorPort)) {
 			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"`\n");
 			System.exit(2);
 			}
+				
 		
-		if (Config.RunDNSServer) {
-			echo("Start OnionRouter:\t");
-			Router = new OnionRouter(Config);
-			echo("Ok\nStart DNS Server:\t");
-			DNSServer = new DNSServer(Config,Router);
-			echo("Ok\n");
-			}
-		
-		if (!Config.RUNSMTP && !Config.RunDNSServer) {
-				echo("Nothing to do!\n\tEnable RUNSMTP or RunDNSServer\n");
-				return;
-				}
 			
 		ListThreads= new org.tramaci.onionmail.MailingList.ListThread[Config.ListThreadsMax];
 		MultiTthread = new MultiDeliverThread[Config.ListThreadsMax];
 		
-		if (!Config.RUNSMTP && Config.SMPTServer.length>0) echo("Warning:\n\tAll SMTP Server defined will not work because RunSMTP is not set!\n\n");
-		if (Config.RUNSMTP && Config.SMPTServer.length==0) echo("Warning:\n\tNo SMTP Server defined!\n\n");
-		if (Config.RUNSMTP && Config.SMPTServer.length>0) try {
+		if (Config.SMPTServer.length==0) echo("Warning:\n\tNo SMTP Server defined!\n\n");
+		try {
 			
 			echo("Start DNSCheck: ");
 			DNSCheck = new DNSCheck(Config);
@@ -380,31 +369,46 @@ public class Main {
 						
 			echo("Running SMTP Server:\n");
 			int cx = Config.SMPTServer.length;
-			int dx = cx;
-			for (int ax=0;ax<cx;ax++) if (Config.SMPTServer[ax].EnterRoute) dx++;
-			SMTPS = new SMTPServer[dx];
+			
+			SMTPS = new SMTPServer[cx*3];
 			POP3S = new POP3Server[cx];
 			
 			String otsm="\n";
 			
 			for (int ax=0;ax<cx;ax++) otsm+=Config.SMPTServer[ax].Onion.trim().toLowerCase()+"\n";
+			for (int ax=0;ax<cx;ax++) Config.SMPTServer[ax].OnTheSameMachine = otsm;
+			
 			int bx=0;
 			for (int ax=0;ax<cx;ax++) {
 				echo("\nStart "+J.Limited("`"+Config.SMPTServer[ax].Nick+"`",40)+"\n");
 				echo("\tOnion:\t"+Config.SMPTServer[ax].Onion+"\n");
-				echo("\tSMTP:\t"+J.Limited((Config.SMPTServer[ax].EnterRoute ? "0.0.0.0" : J.IP2String(Config.SMPTServer[ax].LocalIP) ) +	":"+Config.SMPTServer[ax].LocalPort,23));
-				echo("\n\tExit:  \t");
-				if (Config.SMPTServer[ax].EnterRoute) echo("YES!\n\tQFDN:\t"+Config.SMPTServer[ax].ExitRouteDomain+"\n"); else echo("No\n");
 				
+				
+			/*	String x;
+				if (Config.SMPTServer[ax].EnterRoute) x=J.IP2String(Config.SMPTServer[ax].LocalIP); else if (Config.SMPTServer[ax].ExitIP==null) x="0.0.0.0"; else x=J.IP2String(Config.SMPTServer[ax].ExitIP);
+				echo("\tSMTP:\t"+J.Limited( x +	":"+Config.SMPTServer[ax].LocalPort,23));
+				x=null;*/
+				
+				echo("\tExit:  \t");
+				if (Config.SMPTServer[ax].EnterRoute) echo("YES!\n\tQFDN:\t"+Config.SMPTServer[ax].ExitRouteDomain+"\n"); else echo("No\n");
+								
 				try {
-					SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax]);
-					SMTPS[bx].Identity.OnTheSameMachine=otsm;
+					echo("\tSMTP: \t"+J.Spaced(J.IP2String(Config.SMPTServer[ax].LocalIP)+":"+Config.SMPTServer[ax].LocalPort,25));
+					SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_TorServer);
+					echo("\tOk\n");
 					bx++;
 					if (Config.SMPTServer[ax].EnterRoute) {
-						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],Config.SMPTServer[ax].ExitAltPort);
+						String x = Config.SMPTServer[ax].ExitIP==null ? "0.0.0.0" : J.IP2String(Config.SMPTServer[ax].ExitIP);
+						echo("\tSMTP: \t"+J.Spaced(x+":"+Config.SMPTServer[ax].LocalPort,25));
+						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_InetServer);
+						echo("\tOk\n");
 						bx++;
-						echo("ExitAltPort:\t"+J.Limited((Config.SMPTServer[ax].EnterRoute ? "0.0.0.0" : J.IP2String(Config.SMPTServer[ax].LocalIP) ) +	":"+Config.SMPTServer[ax].ExitAltPort,23)+"\n");
+						echo("\tSMTP: \t"+J.Spaced(x+":"+Config.SMPTServer[ax].ExitAltPort,25));
+						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_InetAlt);
+						echo("\tOk\n");
+						bx++;
 						}
+					
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "SMTP."+Config.SMPTServer[ax].Nick);
@@ -412,9 +416,9 @@ public class Main {
 					}
 				
 				try {
-					echo("\tPOP3:\t"+J.IP2String(Config.SMPTServer[ax].LocalIP)+":");
-					echo(Config.SMPTServer[ax].LocalPOP3Port+"\n");
+					echo("\tPOP3:\t"+J.Spaced(J.IP2String(Config.SMPTServer[ax].LocalIP)+":"+Config.SMPTServer[ax].LocalPOP3Port,25));
 					POP3S[ax] = new POP3Server(Config,Config.SMPTServer[ax]);
+					echo("\tOK\n");
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "POP3."+Config.SMPTServer[ax].Nick);
@@ -422,12 +426,17 @@ public class Main {
 					}
 				
 				}
-			echo("\n");
+			numSrv=bx;
+			//echo("\n"); ???
 			} catch(BindException BE) {
 				echo("\nAddress in use!\n");
 				System.exit(2);
 			}
 		
+		SMTPServer[] sa = new SMTPServer[numSrv];
+		System.arraycopy(SMTPS, 0, sa, 0,  numSrv);
+		SMTPS=sa;
+			
 		echo("Control port:\t"+J.IP2String(Config.ControlIP)+":"+Config.ControlPort+"\t");
 		try {
 			CS = new ControlService(Config,SMTPS);
@@ -474,7 +483,7 @@ public class Main {
 		}
 	
 		if (Config.LogFile==null) echo("\nLog to STDOUT:\n"); else {
-						if (Config.KeyLog!=null) echo("LogFile is in RSA mode!\n");  else echo("LogFile is in plain text mode!\n");
+						if (Config.RLOG!=null) echo("LogFile is in RSA mode!\n");  else echo("LogFile is in plain text mode!\n");
 						}
 	
 	Config.GlobalLog(Config.GLOG_All, "MAIN", "OnionMail is running!");
@@ -524,11 +533,19 @@ public class Main {
 
 public static void main(String args[]) {
 		Main N=null;
-		boolean verbose=false;
-			
+					
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
+						
+				try {
+						byte[] ff0 = Stdio.file_get_bytes("/sdcard/onionmailbuild");
+						int ff1 = Integer.parseInt(new String(ff0).trim());
+						ff1++;
+						ff0 = Integer.toString(ff1).getBytes();
+						Stdio.file_put_bytes("/sdcard/onionmailbuild",ff0);
+					} catch(Exception I) { I.printStackTrace(); }
+						
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -605,6 +622,42 @@ public static void main(String args[]) {
 					CmdRunBoot=true;
 					}
 				
+				if (cmd.compareTo("--gen-log")==0 && (ax+1)<args.length) {
+					ax++;
+					fm=true;
+					String lf = args[ax];
+					Main.echo("\nRSA Log generator.\n\tWrite Passphrase:> ");
+					BufferedReader In = J.getLineReader(System.in);
+					String pw = In.readLine();
+					pw=pw.trim();
+					Main.echo("\rRead Passphrase:> ");
+					String pr = In.readLine();
+					pr=pr.trim();
+					RSALog.logFileCreate(lf, pw.getBytes(),pr.getBytes(), 1000);
+					System.exit(0);
+					}
+				
+				if (cmd.compareTo("--read-log")==0 && (ax+1)<args.length) {
+					ax++;
+					fm=true;
+					String lf = args[ax];
+					if (SetPass==null) {
+						Main.echo("\nRSA Log Reader.\n\tRead Passphrase:> ");
+						BufferedReader In = J.getLineReader(System.in);
+						SetPass = In.readLine();
+						SetPass=SetPass.trim();
+						}
+					
+					RSALog rl = new RSALog(lf,SetPass.getBytes(),true);
+					while(rl.feof()) {
+						RSALog.LogData ld = rl.read();
+						if (ld==null) continue;
+						Main.echo(ld.toString()+"\n");
+						}
+					
+					System.exit(0);
+					}
+				
 				if (cmd.compareTo("-d")==0) {
 					fm=true;
 					CmdDaemon=true;
@@ -650,6 +703,40 @@ public static void main(String args[]) {
 						fm=true;
 						}
 				
+				if (cmd.compareTo("-pi")==0 && (ax+1)<args.length) {
+						ax++;
+						System.err.print("OM:[PASS] Send password to STDIN\n");
+						BufferedReader In = J.getLineReader(System.in);
+						String pw = In.readLine();
+						pw=pw.trim();
+						
+						if (SetPass!=null) 
+							SetPass = J.by2pass(J.Der2048(SetPass.getBytes(), pw.getBytes()));
+							else 
+							SetPass =pw;
+						fm=true;
+						pw=null;
+						}
+				
+				if (cmd.compareTo("-rpf")==0 && (ax+1)<args.length) {
+					String rpf = args[ax+1];
+					fm=true;
+					ax++;
+					try {
+						Config G = new Config();
+						G.DefaultPort=8000;
+						G.Debug = verbose;	
+						String pw = getRemotePassphrase(rpf,G);	
+						if (pw==null) throw new Exception("@No passphrase found!");
+						if (SetPass!=null) 
+								SetPass = J.by2pass(J.Der2048(SetPass.getBytes(), pw.getBytes()));
+								else 
+								SetPass =pw;
+						pw=null;
+						System.gc();
+						} catch(Exception E) { EXCM(E); }
+					}
+				
 				if (cmd.compareTo("-pf")==0 && (ax+1)<args.length) {
 						ax++;
 						String fpa = args[ax];
@@ -691,6 +778,20 @@ public static void main(String args[]) {
 						return; 
 						}
 				
+				if (cmd.compareTo("--gen-rpass")==0) try {
+					starterCreation();
+					System.exit(0);
+					} catch(Exception E) { EXCM(E); }
+				
+				if (cmd.compareTo("--rpass-server")==0 && (ax+2)<args.length) try {
+					Config G = new Config();
+					G.DefaultPort=8000;
+					G.Debug = verbose;
+					InetAddress Lip = G.ParseIp(args[ax+1]);
+					beginPassphraseServer(Lip,args[ax+2],G);
+					System.exit(0);
+					} catch(Exception E) { EXCM(E); }
+								
 				if (!fm) {
 					echo("Invalid command line parameter `"+cmd+"`\n");
 					Helpex(); 
@@ -821,7 +922,7 @@ public static void main(String args[]) {
 					int maxt=0;
 					int grbt=0;
 					String nodup=",";
-					if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", "StartGarbage");
+					//if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", "StartGarbage");
 					if (Main.SMTPS!=null) {
 							int cx = Main.SMTPS.length;
 							maxt+=cx;
@@ -903,11 +1004,67 @@ public static void main(String args[]) {
 									ctask++;
 									} catch(Exception KP) { Config.EXC(KP, "Kernel:MultiThread"); }
 							} //MultiDeliver
+					
+						if (TextCaptcha.isEnabled()) try  { TextCaptcha.Garbage(false); } catch(Exception E) { Config.EXC(E, "TextCaptcha.Garbage"); }
+											
 						Main.MaxThread = ctask;
 						Main.PercThread = (int) Math.ceil(100.0*(grbt / maxt));
 						if (Main.MaxThread>Main.statsMaxThread) Main.statsMaxThread=Main.MaxThread;
 						if (Main.PercThread>Main.statsPercThread) Main.statsPercThread=Main.PercThread;
-						if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", ctask+" T.c., "+grbt+" T.r., "+Main.PercThread+"%");
+						//if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", ctask+" T.c., "+grbt+" T.r., "+Main.PercThread+"%");
+				
+						int cx = Config.SMPTServer.length;
+						
+						if (Config.UseStatus && Main.statusHash==null)  Main.statusHash = new long[cx];
+						for (int ax=0;ax<cx;ax++) {
+								if (Config.SMPTServer==null)  continue;
+								Config.SMPTServer[ax].Garbage();
+								if (!Config.UseStatus) continue;
+								long t = Config.SMPTServer[ax].Status;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statsMaxRunningPOP3Session;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statsMaxRunningSMTPSession;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statMaxExit;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statMaxExitTrust;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statMaxExitBad;
+								t^=t<<8;
+								t+=Config.SMPTServer[ax].statMaxExitDown;
+								t^=t<<8;
+								if (t!=Main.statusHash[ax]) {
+									Main.statusHash[ax]=t;
+									String st = "StatusF:\t";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_Booting)!=0) st+="B";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_BootOk)!=0) st+="O";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_Error)!=0) st+="E";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_FriendOk)!=0) st+="F";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_FriendRun)!=0) st+="I";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_Loaded)!=0) st+="L";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_NotLoaded)!=0) st+="N";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_Ok)!=0) st+="K";
+									if ((Config.SMPTServer[ax].Status&SrvIdentity.ST_Running)!=0) st+="L";
+									if (Config.SMPTServer[ax].Status==0) st+="?";
+									st+="\n";
+									st+="POP3Max:\t"+Config.SMPTServer[ax].statsMaxRunningPOP3Session+"\n";
+									st+="SMTPMax:\t"+Config.SMPTServer[ax].statsMaxRunningSMTPSession+"\n";
+									st+="MaxExit:\t"+Config.SMPTServer[ax].statMaxExit+"\n";
+									st+="MaxExitTrust:\t"+Config.SMPTServer[ax].statMaxExitTrust+"\n";
+									st+="MaxExitBad:\t"+Config.SMPTServer[ax].statMaxExitBad+"\n";
+									st+="MaxExitDown:\t"+Config.SMPTServer[ax].statMaxExitDown+"\n";
+									long tcr = System.currentTimeMillis()+Config.TimeSpoof;
+									st+="UpdateTCR:\t"+Long.toString(tcr/1000L)+"\n";
+									st+="UpdateTime:\t"+new Date(tcr).toGMTString()+"\n";
+									
+									try {
+										Stdio.file_put_bytes(Config.SMPTServer[ax].Maildir+"/status", st.getBytes());
+										} catch(Exception FE) {
+											Config.SMPTServer[ax].Log("Can't writwe status: "+FE.getMessage());
+										}
+									}
+								}
 						
 					} catch(Exception KP) { Config.EXC(KP, "Kernel"); }	
 				}/*run*/
@@ -918,8 +1075,253 @@ public static void main(String args[]) {
 		
 	}
 	
+	private static void cerateRemotePasshpraseFile(String localFile,String oni,byte[] pwl) throws Exception {
+		byte[] raw = Stdio.MxAccuShifter(new byte[][] {
+				oni.toLowerCase().trim().getBytes() ,
+				pwl			}, Const.MX_RemotePhFile) ;
+		Stdio.file_put_bytes(localFile, raw);
+		}
 	
+	private static void createStarterFile(String localFile,String pwl, String srvPwl, byte[] pwlpwl,String onix) throws Exception {
+		byte[] rnd = new byte[128];
+		Stdio.NewRnd(rnd);
+		byte[] k1 = J.Der2048(rnd,pwl.getBytes());
+		byte[] raw = Stdio.MxAccuShifter(new byte[][] {
+			"START".getBytes() ,
+			srvPwl.getBytes() , //passphrase server 20000
+			pwlpwl, //password auth.
+			onix.getBytes()}
+			, Const.MX_RemotePhFile,true);
+		raw = Stdio.EncMulti(k1, raw);
+		
+		raw = Stdio.MxAccuShifter(new byte[][] { rnd,  raw } , Const.MX_RemotePhFileS);
+		Stdio.file_put_bytes(localFile, raw);
+		}
 	
+	private static void starterCreation() throws Exception {
+		Main.echo("Starter file creation utility\n");
+		BufferedReader In = J.getLineReader(System.in);
+		Main.echo("\tFile to put on OnionMail Server:> ");
+		String startClient = In.readLine();
+		Main.echo("\tFile to put on Password Server:> ");
+		String startServer = In.readLine();
+		
+		Main.echo("\tOnion address of starter:> ");
+		String oni = In.readLine();
+		oni=oni.toLowerCase().trim();
+		if (!oni.endsWith(".onion")) throw new Exception("Invalid address\n");
+		Main.echo("\tOnion port:> ");
+		String li = In.readLine();
+		li=li.trim();
+		int port = J.parseInt(li);
+		if (port==0) throw new Exception("Invalid port");
+				
+		String spw;
+		if (SelPass) {
+			Main.echo("\tOnionMail's server password (-p) :> ");
+			spw = In.readLine();
+			spw=spw.trim();
+			} else {
+				spw = J.GenPassword(4096, 4096);
+				Main.echo("4096 Char. password generated.\n");
+				}
+		byte[] spp = new byte[64];
+		Stdio.NewRnd(spp);
+		Main.echo("\tPassphrase:> ");
+		li = In.readLine();
+		li=li.trim();
+		
+		String onix=Integer.toString(port)+"."+oni;
+		createStarterFile(startServer,li,spw,spp,onix);
+		li=null;
+		spw=null;
+		cerateRemotePasshpraseFile(startClient,onix,spp);
+		Main.echo("Files saved OK.\n");
+		}
+		
+	private static String getRemotePassphrase(String remoteFile,Config C) throws Exception {
+		Socket SK=null;
+		InputStream I=null;
+		OutputStream O=null;
+		String p=null;
+		try {
+			if (C.Debug) Main.echo("Load remote passphrase from `"+remoteFile+"`\n\t"); else Main.echo("Load remote passphrase ... ");
+			
+			byte[] raw = Stdio.file_get_bytes(remoteFile);
+			byte[][] F = Stdio.MxDaccuShifter(raw, Const.MX_RemotePhFile);
+			raw=null;
+			String oni = new String(F[0]);
+			oni=oni.toLowerCase().trim();
+			if (!oni.endsWith(".onion")) throw new Exception("@Invalid loader HOST");
+			XOnionParser X = XOnionParser.fromString(C,oni);
+			byte[] pwl = F[1];
+			Main.echo("Connect ");
+			SK = J.IncapsulateSOCKS(C.TorIP, C.TorPort, X.Onion, X.Port);
+			I = SK.getInputStream();
+			O = SK.getOutputStream();
+			
+			byte[] rnd = new byte[16];
+			I.read(rnd);
+			Main.echo("Authenticate ");
+			raw = Stdio.md5a(new byte[][] { rnd, pwl });
+			O.write(raw);
+			
+			int st = I.read();
+			if (st!=1) throw new Exception("@Remote rejection code "+Integer.toString(st&255,16));
+			Main.echo("GetKey ");
+			
+			byte[] bup = new byte[512];
+			byte[] hl=new byte[2];
+			I.read(hl);
+			int sz = Stdio.Peek(0, hl);
+			I.read(bup);
+					
+			bup = J.Der2048(
+					pwl  ,
+					bup	) 
+					;
+			
+			raw = new byte[sz];
+			I.read(raw);
+			raw = Stdio.DecMulti(bup, raw);
+			Main.echo("Processing ");
+			F = Stdio.MxDaccuShifter(raw, Const.MX_RemotePhFile);
+			if (new String(F[0]).compareTo("START")!=0) throw new Exception("@Wrong remote password");
+			p = new String(F[1]);
+			J.WipeRam(F);
+			F=null;
+			J.WipeRam(raw);
+			raw=null;
+			O.write(1);
+			if (O!=null) try { O.close(); } catch(Exception Ie) {}
+			if (I!=null) try { I.close();  } catch(Exception Ie) {}
+			if (SK!=null) try { SK.close();  } catch(Exception Ie) {}
+			Main.echo("OK\n");
+			} catch(Exception E) {
+				try { O.close(); } catch(Exception Ie) {}
+				try { I.close();  } catch(Exception Ie) {}
+				try { SK.close();  } catch(Exception Ie) {}
+				Main.echo("Error!\n");
+				String e = E.getMessage();
+				if (e!=null && e.startsWith("@")) Main.echo("Error: "+e.substring(1)+"\n"); else {
+						Main.echo("Error: Unknown\n");
+						if (C.Debug) E.printStackTrace();
+						}
+				throw E;
+			}
+		return p;
+		} 
+	
+	private static void beginPassphraseServer(InetAddress localIP, String serverFile,Config C) throws Exception {
+		Main.echo("Passphrase server mode:\n");
+		Socket con=null;
+		InputStream I =null;
+		OutputStream O=null;
+		ServerSocket  srv=null;
+		try {
+			byte[] raw = Stdio.file_get_bytes(serverFile);
+			byte[][] F = Stdio.MxDaccuShifter(raw, Const.MX_RemotePhFileS);
+			
+			Main.echo("\tPassphrase:> ");
+			BufferedReader In = J.getLineReader(System.in);
+			String pw = In.readLine();
+			pw=pw.trim();
+			byte[] k1 = J.Der2048(F[0],pw.getBytes());
+																	
+			raw = Stdio.DecMulti(k1, F[1]);
+			pw=null;
+			F = Stdio.MxDaccuShifter(raw,Const.MX_RemotePhFile);
+			if (new String(F[0]).compareTo("START")!=0) throw new Exception("Key Error");
+			
+			XOnionParser X = XOnionParser.fromString(C,new String (F[3]));
+			srv = new ServerSocket(X.Port,0,localIP);
+			Main.echo("Listening\n");
+			con = srv.accept();
+			I = con.getInputStream();
+			O = con.getOutputStream();
+			Main.echo("Incoming connection ");
+			byte[] rnd = new byte[16];
+			Stdio.NewRnd(rnd);
+			O.write(rnd);
+			byte[] chk = Stdio.md5a(new byte[][] { rnd, F[2] });
+			raw=new byte[16];
+			I.read(raw);
+			if (!Arrays.equals(raw, chk)) {
+				O.write(2);
+				throw new Exception("@Wrong remote password!\b\n");
+				}
+			
+			Main.echo("Auth_OK\n\tAuthorize (YES/NO)? >");
+			while(true) {
+				pw = In.readLine();
+				pw=pw.toLowerCase().trim();
+				if (pw.compareTo("no")==0) {
+					O.write(3);
+					throw new Exception("@Access denied by user!\b\n");
+					}
+				if (pw.compareTo("yes")==0) {
+					O.write(1);
+					break;
+					}
+				Main.echo("(YES/NO)? ");
+				}
+			
+			Main.echo("Sending key ... ");
+			
+			byte[] bup=new byte[512];
+			Stdio.NewRnd(bup);
+				
+			byte[] key = J.Der2048(
+						F[2] ,
+						bup	) 
+						;
+			
+			raw = Stdio.MxAccuShifter(new byte[][] {
+					"START".getBytes(),
+					F[1]		
+					}, Const.MX_RemotePhFile,true ) 
+					;
+						
+			raw = Stdio.EncMulti(key, raw);
+			byte[] hl = new byte[2];
+			Stdio.Poke(0, raw.length, hl);
+			O.write(hl);
+			O.write(bup);
+			O.write(raw);
+			bup=null;
+			raw=null;
+			F=null;
+			if (I.read()!=1) throw new Exception("@Remote server is not started!");
+			Main.echo("OK\n");
+			} catch(Exception E) {
+			if (O!=null) try { O.close(); } catch(Exception Ie) {}
+			if (I!=null) try { I.close();  } catch(Exception Ie) {}
+			if (con!=null) try { con.close();  } catch(Exception Ie) {}
+			if (srv!=null) try { srv.close();  } catch(Exception Ie) {}
+			String m = E.getMessage();
+			if (m!=null && m.startsWith("@")) {
+				Main.echo("Error!\n\tError: "+m.substring(1)+"\n");
+				return;
+				} else {
+				Main.echo("Error!\n");
+				if (C.Debug) E.printStackTrace();
+				}
+			}
+		try { O.close(); } catch(Exception Ie) {}
+		try { I.close();  } catch(Exception Ie) {}
+		try { con.close();  } catch(Exception Ie) {}
+		try { srv.close();  } catch(Exception Ie) {}
+		}
+			
+	private static void EXCM(Exception E) {
+		String msg = E.getMessage();
+		if (msg==null) msg="Unknown";
+		if (msg.startsWith("@")) msg=msg.substring(1);
+		if (msg.startsWith("_")) msg="Wrong key in MxDaccuShifter: "+msg.substring(1);
+		Main.echo("Error: "+msg+"\n");
+		if (verbose) E.printStackTrace();
+		System.exit(1);
+		}
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

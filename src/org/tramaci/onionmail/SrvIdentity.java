@@ -57,7 +57,10 @@ public class SrvIdentity {
 	public String Nick = "null";
 	public String Onion="null.onion";
 	public InetAddress LocalIP = null;
+	public InetAddress ExitIP = null;
 	public boolean NewCreated = false;
+	public boolean POP3CanRegister=true;
+	public boolean POP3CanVMAT=true;
 	
 	public boolean CanRelay=false;
 	
@@ -127,7 +130,7 @@ public class SrvIdentity {
 	public int NewUserMax = 5;
 	public int NewUserCount=0;
 	public int NewUserDay=0;
-	
+	public int MaxMsgXUserXHour = 0;
 	public IPList BlackList=null;
 	
 	public VirtualMAT VMAT = null;
@@ -196,6 +199,10 @@ public class SrvIdentity {
 	public int MaxServerDERKPoint=8;
 	
 	public HashMap <String,int[]> SrvDerToday= new  HashMap <String,int[]>();
+	public volatile int MaxMsgXserverXHour = 0;
+	public int[] LimSrvMHash = new int[0];
+	public int[] LimSrvMHour = new int[0];
+	public int[] LimSrvMMsg = new int[0];
 	
 	public String StatFile=null;
 	
@@ -206,6 +213,8 @@ public class SrvIdentity {
 	public volatile int statsMaxRunningSMTPSession = 0;
 	public volatile int statsRunningPOP3Session = 0;
 	public volatile int statsMaxRunningPOP3Session = 0;
+	
+	public HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 	
 	public int Status = 0;
 	public static final int ST_NotLoaded=0;		//A
@@ -790,7 +799,7 @@ public class SrvIdentity {
 		return J.HashMapUnPack(U[6]);
 		
 	}
-	
+		
 	public HashMap <String,String> UsrGetConfig(String local) throws Exception {
 		String un=UFname(local);
 		un+=".pr";
@@ -819,6 +828,146 @@ public class SrvIdentity {
 		Ks[1]=null;
 		System.gc();
 	}
+	
+	public void DelUserCrawler() throws Exception {
+		byte[] k1 = Stdio.sha256a(new byte[][] { Subs[4], Sale ,Subs[13]});
+		byte[] iv = Stdio.md5a(new byte[][] { k1, Subs[14] });
+		String fil=Maildir+"/oper.idx";
+		
+		byte[] raw;
+		byte[][] f;
+		long[] tcr;
+		int scx=0;
+		if (new File(fil).exists()) {
+				raw = Stdio.file_get_bytes(fil);
+				raw = Stdio.AESDec2(k1, iv, raw);
+				f= Stdio.MxDaccuShifter(raw, 0x4c01);
+				tcr = Stdio.Lodsx(f[0], 4);
+				f = Stdio.MxDaccuShifter(f[1], 0x4c02);
+				} else {
+				k1=null;
+				iv=null;
+				return;
+				}
+		
+		Log("User garbage: Start crawler");
+		long cur = System.currentTimeMillis()/86400000L;
+		int cx = tcr.length;
+		scx=cx;
+		long[] ntcr=new long[tcr.length];
+		byte[][] q = new byte[tcr.length][];
+		int bx=0;
+		for (int ax=0;ax<cx;ax++) {
+			String loc=null;
+			if (cur>tcr[ax]) try {
+				loc = new String(f[ax]);
+				if (loc.compareTo("sysop")==0) continue;
+				if (loc.endsWith(".op")) continue;
+				UsrDestroy(loc);
+				} catch(Exception E) { 
+						Log("Can't del `"+loc+"` "+E.getMessage());
+						if (Config.Debug) E.printStackTrace();
+						} else {
+							ntcr[bx]=tcr[ax];
+							q[bx]=f[ax];
+							bx++;
+						}
+			}
+		tcr=new long[bx];
+		f=new byte[bx][];
+		System.arraycopy(ntcr, 0, tcr, 0, bx);
+		for (int ax=0;ax<bx;ax++) f[ax]=q[ax];
+		ntcr=null;
+		raw = Stdio.Stosx(tcr, 4);
+		q = new byte[][] {
+				Stdio.MxAccuShifter(f, 0x4c02),
+				raw	}
+				;
+		f=null;
+		tcr=null;
+		raw = Stdio.MxAccuShifter(q, 0x4c01, true);
+		Stdio.file_put_bytes(fil, raw);
+		raw=null;
+		q=null;
+		k1=null;
+		iv=null;
+		Log("User garbage: "+(scx-bx)+" users deleted, "+bx+" users in garbage list");
+	}
+		
+	public void AddDelUser(String local) throws Exception {
+		byte[] k1 = Stdio.sha256a(new byte[][] { Subs[4], Sale ,Subs[13]});
+		byte[] iv = Stdio.md5a(new byte[][] { k1, Subs[14] });
+		String fil=Maildir+"/oper.idx";
+		
+		byte[] raw;
+		byte[][] f;
+		long[] tcr;
+		
+		if (new File(fil).exists()) {
+				raw = Stdio.file_get_bytes(fil);
+				raw = Stdio.AESDec2(k1, iv, raw);
+				f= Stdio.MxDaccuShifter(raw, 0x4c01);
+				tcr = Stdio.Lodsx(f[0], 4);
+				f = Stdio.MxDaccuShifter(f[1], 0x4c02);
+				} else {
+				raw=null;
+				tcr=new long[0];
+				f=new byte[0][];
+				}
+				
+		long cur = 2+(System.currentTimeMillis()/86400000L);
+		int cx = tcr.length;
+		long[] tcrn = new long[cx+1];
+		System.arraycopy(tcr, 0, tcrn, 0, cx);
+		tcrn[cx]=cur;
+		tcr=null;
+		cx = f.length;
+		byte[][] q = new byte[cx+1][];
+		for (int ax=0;ax<cx;ax++) q[ax]=f[ax];
+		f=null;
+		q[cx] = local.getBytes();
+		raw = Stdio.Stosx(tcrn, 4);
+		
+		f = new byte[][] {
+				Stdio.MxAccuShifter(q, 0x4c02),
+				raw	}
+				;
+	
+		raw = Stdio.MxAccuShifter(f, 0x4c01, true);
+		f=null;
+		q=null;
+		raw = Stdio.AESEnc2(k1, iv, raw);
+		Stdio.file_put_bytes(fil, raw);
+		raw=null;
+		k1=null;
+		iv=null;		
+		}
+	
+	public void UsrDestroy(String local) throws Exception {
+		String un=UFname(local);
+		
+		String[] lst = new String[] {
+				un	,
+				un+".idx",
+				un+".dbf",
+				un+".pr",
+				null };
+		
+		try {
+			MailBox M = UsrOpenW(Config,local);
+			if (M.Spam !=null && !M.Spam.exists(local)) lst[4] = M.Spam.GetFile(local);
+			} catch(Exception E) { Config.EXC(E, "DestroyUser.GetUBL"); } 
+		
+		for (String f:lst) try {
+			if (f==null) continue;
+			if (new File(f).exists()) J.Wipe(f, Config.MailWipeFast);
+			} catch(Exception E) {
+				Config.EXC(E, "Server `"+Nick+"`.UsrDestroy file `"+f+"`");
+			}
+		
+		Log("User destroyed `"+local+"`");
+	}
+	
 	
 	public void UsrCreate(String local,String pws,String pwlwr,int ttl,HashMap <String,String> Prop) throws Exception {
 		KeyPair GPG = Stdio.RSAKeyGen(2048);
@@ -1131,7 +1280,8 @@ public class SrvIdentity {
 					//MAT / VMAT (without RVMAT)
 					//send via inet
 					Tag+="-nEX";
-					
+					String onionmit=null;
+					if (MaxMsgXserverXHour>0) onionmit= J.getDomain(MailFrom); 
 					VirtualMatEntry VM = VMAT.loadVmat(MailFrom, true);
 					if (VM!=null) { //VMAT
 						Tag+="-VMAT";
@@ -1147,6 +1297,7 @@ public class SrvIdentity {
 						Hldr.put("x-vmat-from", MailFrom);
 						MailFrom = t0;
 						putNotice=ExitNoticeE;
+						if (MaxMsgXserverXHour>0) onionmit = J.getDomain(VM.onionMail);
 						} else { //MAT
 							Tag+="-MAT";
 							String flp = J.getLocalPart(MailFrom);
@@ -1166,6 +1317,12 @@ public class SrvIdentity {
 							putNotice=ExitNoticeE;
 							MailFrom = t0;
 						}
+					
+					if (MaxMsgXserverXHour>0 && onionmit!=null && onionmit.endsWith(".onion")) {
+						boolean puo = Tor2InetMsgCounter(onionmit);
+						if (!puo) throw new PException("@451 Limit of the server messages passed. Limit is "+MaxMsgXserverXHour+" messages x hour! Change your exit into the SETTINGS.");
+						}
+					
 					} else {
 						//Send via Exit
 						//Select Exit from settings
@@ -1201,17 +1358,18 @@ public class SrvIdentity {
 		
 		if (MX==null || MX.length==0) throw new Exception("@500 Can't find any MX record on `"+Server+"`");
 		Server = MX[0].Host;
-		
+				
 		Hldr=J.AddMsgID(Hldr, toInet ? ExitRouteDomain : Onion);
 		if (VmatToX!=null) if (VmatTo==null) VmatTo=VmatToX; else throw new PException("@500 R6008X1 Bad usage of VmatToX/VmatTo");
-		
+			
 		final HashMap <String,String> Hldr3 = J.FilterHeader(Hldr);
 		final String MailTo2 = MailTo;
 		final String MailFrom2 = MailFrom;
 		final boolean RVMATLookup2=RVMATLookup;
 		final String VmatTo2=VmatTo;
 		final boolean putNotice2=putNotice;
-				
+		
+		
 		SrvAction A = new SrvAction(this,MX,"Send-"+Tag) {
 				public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
 					HashMap <String,String> Hldr2 = Hldr3;
@@ -1286,6 +1444,15 @@ public class SrvIdentity {
 								
 						Hldr2.put("x-notice", st);
 						}
+					
+					if (!this.InternetConnection && VmatTo2==null) {
+						String dom = J.getDomain(MailFrom2);
+						if (dom.compareTo(Onion)==0) {
+							String localpart = J.getLocalPart(MailFrom2);
+							setSendingTORVMAT(localpart, Hldr2);
+							}
+						}
+							
 					
 					String t0 = J.CreateHeaders(Hldr2);
 					t0=t0.trim();
@@ -1423,7 +1590,7 @@ public class SrvIdentity {
 		H.put("lang", DefaultLang);
 		H.put("exit",EnterRoute ? "1":"0");
 		H.put("port", Integer.toString(ExitAltPort));
-		
+		H.put("pop3sub", ( POP3CanRegister ? "R":"0" ) + (POP3CanVMAT ? "V" : "0") + " "+NewUsrLastDayCnt+" "+NewUsrMaxXDay);
 		if (ExitEnterPolicyBlock!=null) {
 			String s="";
 			for (String k:ExitEnterPolicyBlock.keySet()) {
@@ -2035,14 +2202,57 @@ public class SrvIdentity {
 			int dx= ExitList.Length();
 			Log("Search Exit End, "+dx+" node found," +J.sPercMax(dx, cx, 100, 2)+"% of list");
 			setExitList(ExitList);
+			ExitStatTCR = 0; 
+			GetExitList();
 			}
 		
 		private ExitRouteList ExitListCache=null;
-		private long ExitRouteListTCR=0;
+		private volatile long ExitRouteListTCR=0;
+		private volatile long ExitStatTCR = 0;
+		
+		public volatile int statMaxExit = 0;
+		public volatile int statMaxExitTrust=0; 
+		public volatile int statMaxExitBad = 0;
+		public volatile int statMaxExitDown = 0;
 		
 		public ExitRouteList GetExitList() throws Exception {
-			if (ExitListCache==null)	 ExitListCache = LoadExitListS(); 
+			if (ExitListCache==null)	 ExitListCache = LoadExitListS();
+			long tcr = System.currentTimeMillis();
+			ExitRouteListTCR = tcr + 300000L;
+			if (Config.UseStatus && tcr>ExitStatTCR) {
+				ExitRouterInfo[] a = ExitListCache.getAll();
+				int cx = a.length;
+				int ed=0;
+				int eb=0;
+				int ex=0;
+				int et=0;
+				for (int ax=0;ax<cx;ax++) {
+					if (a[ax].isBad) {
+						eb++;
+						continue;
+						}
+					
+					if (a[ax].isDown) {
+						ed++;
+						continue;
+						}
+					
+					if (a[ax].isTrust) et++;
+					ex++;
+					}
+				ExitStatTCR=tcr+60000L;
+				statMaxExit = ex;
+				statMaxExitTrust=et; 
+				statMaxExitBad = eb;
+				statMaxExitDown = ed;
+				if (Config.Debug) Log("Update Exit stats");
+				}
+			
 			return ExitListCache;
+			}
+		
+		public void Garbage() {
+			if ( System.currentTimeMillis()>ExitRouteListTCR) ExitListCache=null;
 			}
 		
 		public synchronized ExitRouteList LoadExitListS() throws Exception { return LoadExitList(); }
@@ -2084,7 +2294,72 @@ public class SrvIdentity {
 			return true;
 		}
 		
-		public String UserMSGParam(String local,String par,String val) throws Exception {
+		public String HourCode(String local) {
+			long h = (Config.TimeSpoof+ System.currentTimeMillis())/3600000L;
+			long i = local.hashCode();
+			h^=Subs[4][4];
+			h^=i;
+			h=h^h<<1;
+			h^=TimerSpoofFus.hashCode();
+			return Long.toString(Long.toString(h,36).hashCode(),16);
+			}
+		
+		public HashMap <String,String> UserSetParamG(String local,HashMap <String,String> np) throws Exception {
+			HashMap <String,String> H = UsrGetConfig(local);
+			if (H==null) H = new HashMap <String,String>();
+			String error="";
+			for (String k:np.keySet()) {
+				String par = np.get(k);
+				if (par.contains(":")) continue;
+				if (":usevmat:torvmat:novmatautoset:".contains(":"+k+":")) {
+					try {
+						boolean bit = Config.parseY(par);
+						H.put(k, bit ? "yes":"no");
+						} catch(Exception E) { error+="Invalid value for `"+par+"`\n"; 	}
+					continue;
+					}
+				
+				if (k.compareTo("clear")==0) {
+					if (":all:usevmat:torvmat:novmatautoset:exitdomain:exitonion:".contains(par)) {
+						if (par.compareTo("all")==0) {
+							for (String k2: new String[] {"usevmat","torvmat","novmatautoset","exitdomain","exitonion" }) if (H.containsKey(k2)) H.remove(k2);
+							}
+						if (":usevmat:torvmat:novmatautoset:exitdomain:exitonion:".contains(":"+par+":") && H.containsKey(par)) H.remove(par);
+						}
+					continue;
+				}
+				
+				if (k.compareTo("exitdomain")==0) {
+				ExitRouteList el = GetExitList();
+				if (!el.containsDomain(par)) {
+					error+="Unknown exit `"+par+"` at this time\n";
+					continue;
+					}
+				ExitRouterInfo ef = el.getByDomain(par);
+				if (ef.isBad) {
+					error+="Bad exit `"+par+"`\n";
+					continue;
+					}
+				
+				if (ef.isDown) {
+					error+="Exit `"+par+"` is down\n";
+					continue;
+					}
+				H.put(k,par);
+				H.put("exitonion", ef.onion);
+				continue;
+				}	
+			
+			error+="Can't set parameter `"+k+"`\n";
+			}
+		
+		UsrSetConfig(local, H);
+		H.put("_error_", error);
+		return H;
+		}
+		
+		/*
+		public String UserMSGParam(String local,String par,String val) throws Exception { //TODO Da rivedere
 			par=par.toLowerCase().trim();
 			HashMap <String,String> H = UsrGetConfig(local);
 			String v=val.trim();
@@ -2120,7 +2395,7 @@ public class SrvIdentity {
 			for(String K:H.keySet()) txt+=K+": "+H.get(K)+"\n";
 			return txt;
 		}
-		
+		*/
 		
 		//////////////
 				
@@ -3387,10 +3662,21 @@ byte[][] Cobj = new byte[][] {
 					M.mail=J.getMail(Re.Msg[0], false);
 					M.onionMail=J.getMail(Re.Msg[1],true);
 					M.passwd=Re.Msg[2];
+					M.server=this.Server;
 					
 					if (M.mail==null || !M.mail.contains("@"+vmatDom)) throw new Exception("@500 Invalid VMAT address in reply `"+M.mail+"`");
 					if (M.onionMail==null || M.onionMail.compareTo(localpart+"@"+Onion)!=0) new Exception("@500 Invalid mail address in reply `"+M.onionMail+"`");
 					if (M.passwd.length()==0) throw new Exception("@500 Invalid password in VMAT reply");
+					
+					int cx = Re.Msg.length;
+					if (cx>3) {
+						cx-=3;
+						String rsa = new String();
+						for (int ax=0;ax<cx;ax++) rsa+=Re.Msg[ax+3].trim();
+						M.sign = J.Base64Decode(rsa);
+						rsa=null;
+						}
+					
 					this.RES = new Object[] { M };
 					}
 			} ;
@@ -3402,8 +3688,28 @@ byte[][] Cobj = new byte[][] {
 			VirtualRVMATEntry M =(VirtualRVMATEntry) A.RES[0];
 			if (M==null) throw new Exception("@500 No VMAT Data");
 			VMAT.recipientSetRVMAT(localpart, M.mail);
+			VMAT.saveRVMATinTor(localpart, M);
+			boolean setDef=true;
+			try {
+				HashMap <String,String> Conf = UsrGetConfig(localpart);
+				if (Conf!=null) { 
+					if (!Conf.containsKey("torvmat")) Conf.put("torvmat", "yes");
+					if (Conf.containsKey("novmatautoset")) try { setDef = true ^ Config.parseY(Conf.get("novmatautoset")); } catch(Exception I) {}
+					} else {
+						Conf = new HashMap <String,String>();
+						Conf.put("torvmat", "yes");
+						Conf.put("novmatautoset", "no");
+					}
+				this.UsrSetConfig(localpart, Conf);
+				} catch(Exception E) {
+					Config.EXC(E, Nick+".RegVMAT/Conf"); 
+				}
+			
+			if (setDef) VMAT.setRVMATinTor(localpart, J.getDomain(M.mail));
 			return M;
 		}		
+		
+		
 		
 		public void VMATEnable(String vmat,String localpart,final String passwd,final boolean stat) throws Exception {
 			if (VMAT==null) throw new Exception("VMATEnable: VMAT Disabled");
@@ -3702,6 +4008,61 @@ byte[][] Cobj = new byte[][] {
 			RL=null;
 			return ex;
 			}
+		
+		public boolean setSendingTORVMAT(String localpart, final HashMap <String,String> Hldr) {
+			try {
+				HashMap <String,String> Conf = UsrGetConfig(localpart);
+				boolean use = true; //XXX Setta come default yes per utenti mindless!
+				VirtualRVMATEntry VM=null;
+				if (Conf!=null && Conf.containsKey("torvmat")) try { use = Config.parseY( Conf.get("torvmat")); } catch(Exception I) {}
+				if (use)  VM = VMAT.loadRVMATinTor(localpart);	
+				if (Config.Debug) Log("TORVMAT Session " +( VM==null ? "NO":"YES")); 
+				
+				if (VM!=null) {
+					Hldr.put("from", VM.mail);
+					Hldr.put("x-vmat-server", VM.server);
+					if (VM.sign!=null && VM.sign.length>0){
+						String s0[] = new String[] { J.Base64Encode(VM.sign) };
+						s0=J.WordWrapNT(s0[0], 64);
+						s0 = new String[] { J.Implode(" ", s0) };
+						Hldr.put("x-vmat-sign",s0[0]);
+						s0=null;
+						}
+					return true;
+					}
+				} catch(Exception E) {
+					Config.EXC(E, Nick+".setSendingVMAT `"+Long.toString(localpart.hashCode(),36)+"`");
+				}
+			return false;
+		}
+		
+		//fufufa!!!
+		public ExitRouterInfo selectExit4User(String localpart,final HashMap <String,String> Hldr ) throws Exception {
+			String dou=null;
+						
+			HashMap <String,String> Conf = UsrGetConfig(localpart);
+			if (Conf!=null && Conf.containsKey("exitdomain")) dou=Conf.get("exitdomain");
+			
+			ExitRouteList RL= GetExitList();
+			ExitRouterInfo ex = null;
+			if (dou!=null) {
+					ex= RL.selectExitByDomain(dou, false);
+					if (ex!=null && Conf!=null && Conf.containsKey("usevmat")) {
+						boolean use=false;
+						try { use = Config.parseY(Conf.get("usevmat")); } catch(Exception XE) {}
+						if (use) {
+							VirtualRVMATEntry VM = VMAT.SenderVirtualRVMATEntryLoad(localpart+"@"+Onion);
+							if (VM!=null) {
+								Hldr.put("from", VM.mail);
+								Hldr.put("x-rvmat-server", VM.server);
+								}
+							}
+						}
+					}
+			if (ex==null) ex= RL.selectBestExit();
+			RL=null;
+			return ex;
+			}
 
 		public String mailTor2Inet(String onionMail,String exitDom) throws Exception {
 			VirtualRVMATEntry VM = VMAT.SenderVirtualRVMATEntryLoad(onionMail);
@@ -3753,6 +4114,9 @@ byte[][] Cobj = new byte[][] {
 				};
 				
 			A.DoInSSL=true;
+			A.ForceTKIM=false;
+			A.DoInTKIM=false;
+			
 			try {
 				A.Do();
 				if (A.RES!=null) {
@@ -3769,6 +4133,91 @@ byte[][] Cobj = new byte[][] {
 					Log("Can't Lookup via `"+A.Server+"` E: "+E.getMessage());
 					}
 			return null;
+		}
+		
+		public boolean Tor2InetMsgCounter(String srv) {
+			int h = srv.hashCode();
+			int z = -1;
+			int tcr = (int) ((Config.TimeSpoof+ System.currentTimeMillis())/3600000L);
+			int cx = LimSrvMHour.length;
+			
+			if (cx>256) {
+				int c0=0;
+				for (int ax=0;ax<cx;ax++) {
+					if (LimSrvMHash[ax]==0) c0++;
+					if (c0>32) break;
+					}
+				if (c0>32) {
+						if (Config.Debug) Log("Redim-- exit counters");
+						redimCounter();
+						}
+				}
+			
+			for (int ax=0;ax<cx;ax++) {
+				if (LimSrvMHour[ax]!=0 && tcr>LimSrvMHour[ax]) {
+					LimSrvMHour[ax]=0;
+					LimSrvMMsg[ax]=0;
+					LimSrvMHash[ax]=0;
+					}
+				
+				if (LimSrvMHash[ax]==h) { 
+					if (LimSrvMHour[ax]==tcr) {
+						LimSrvMMsg[ax]++;
+						if (LimSrvMMsg[ax]>=MaxMsgXserverXHour) return false;
+						}
+					return true;
+					}
+			
+				if (z==-1 && LimSrvMHash[ax]==0) z=ax;
+				}
+			
+			if (z!=-1) {
+				LimSrvMHour[z]=tcr;
+				LimSrvMMsg[z]=1;
+				LimSrvMHash[z]=h;
+				return true;
+				}
+			
+			if (Config.Debug) Log("Redim++ exit counters");
+			int[] a = new int[cx+1];
+			int[] b = new int[cx+1];
+			int[] c = new int[cx+1];
+			System.arraycopy(LimSrvMHour, 0, a, 0, cx);
+			System.arraycopy(LimSrvMMsg, 0, b, 0, cx);
+			System.arraycopy(LimSrvMHash, 0, c, 0, cx);
+			a[cx]=tcr;
+			b[cx]=1;
+			c[cx]=h;
+			LimSrvMHash=c;
+			LimSrvMMsg=b;
+			LimSrvMHour=a;
+			return true;
+			}  
+		
+		private synchronized void  redimCounter() {
+			int cx = LimSrvMHour.length;
+			int[] a = new int[cx];
+			int[] b = new int[cx];
+			int[] c = new int[cx];
+			int dx=0;
+			for (int ax=0;ax<cx;ax++) {
+				if (LimSrvMHash[ax]!=0) {
+					a[dx] = LimSrvMHour[ax];
+					b[dx] = LimSrvMMsg[ax];
+					c[dx] = LimSrvMHash[ax];
+					dx++;
+					}
+				}
+			if (dx==cx) return;
+			int[] d = new int[dx];
+			int[] e = new int[dx];
+			int[] f = new int[dx];
+			System.arraycopy(a, 0, d, 0, dx);
+			System.arraycopy(b, 0, e, 0, dx);
+			System.arraycopy(c, 0, f, 0, dx);
+			LimSrvMHash=c;
+			LimSrvMMsg=b;
+			LimSrvMHour=a;
 		}
 		
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify

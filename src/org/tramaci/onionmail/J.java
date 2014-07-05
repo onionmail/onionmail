@@ -30,6 +30,7 @@ import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.sql.Date;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -55,18 +56,18 @@ public class J {
 						"from|to|sender|mailing-list|list-id|errors-to|precedence|x-priority|sensitivity|"+
 						"importance|x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
 						"list-help|content-transfer-encoding|errors-to|return-receipt-to|thread-index|"+
-						"content-language|disposition-notification-to|x-original-sender|x-lastcount|"+
+						"content-language|disposition-notification-to|x-original-sender|x-lastcount|x-vmat-server|"+
 						"x-y-counter|message-id|cc|bcc|reply-to|x-ssl-transaction|x-hellomode|disposition-notification-to|"+
-						"organization|list-unsubscribe|list-subscribe|envelope-to|x-ssl-transaction|auto-submitted|"+
-						"x-generated|return-path|error-to|envelope-to|ccn|tkim-server-auth|x-vmat-address|x-failed-recipients|";
+						"organization|list-unsubscribe|list-subscribe|envelope-to|x-ssl-transaction|auto-submitted|x-vmat-sign|"+
+						"x-generated|return-path|errors-to|envelope-to|ccn|tkim-server-auth|x-vmat-address|x-failed-recipients|";
 		
 	public static final String NoFilterHost = 
-						"|return-path|envelope-to|subject|"+
+						"|return-path|envelope-to|subject|content-type|mime-version|content-transfer-encoding|"+
 						"from|to|sender|mailing-list|list-id|errors-to|precedence|"+
 						"x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
-						"list-help|errors-to|return-receipt-to|thread-index|"+
+						"list-help|errors-to|return-receipt-to|thread-index|x-vmat-server|"+
 						"disposition-notification-to|x-original-sender|"+
-						"message-id|cc|bcc|reply-to|disposition-notification-to|error-to|"+
+						"message-id|cc|bcc|reply-to|disposition-notification-to|errors-to|x-vmat-sign|"+
 						"|list-unsubscribe|list-subscribe|envelope-to|x-vmat-address|x-failed-recipients|";
 	
 	private final static char[] ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
@@ -428,19 +429,19 @@ public class J {
 	
 		for ( String K :h.keySet() ) {
 			String k1 = "|"+K.replace("|","")+"|";
-			String tmp="<<ONIONMAIL"+Long.toString(Stdio.NewRndLong()&0x7FFFFFFFFFFFFFFFL,36)+">>";
+
 			if (AllowedHeaders.contains(k1)) {
 				K=K.toLowerCase();
 				String v = h.get(K);
-				if (!NoFilterHost.contains(k1)) {
-					v = IPFilter(v);
-					v=v.replaceAll("[A-Za-z0-9\\-\\_]{2,40}\\.[A-Za-z]{2,3}", tmp);
-					}
+				if (!NoFilterHost.contains(k1)) v = IPFilter(v);
 				if (K.compareTo("message-id")==0) continue;
-				v=v.replace(tmp, "filtered.onionmail.info");
 				Q.put(K, v);
 			}
 		}
+		if (Q.containsKey("x-vmat-server")) {
+			String q = Q.get("x-vmat-server");
+			if (!q.matches("[0-9a-z]{16}\\.onion")) Q.put("x-vmat-server", "iam.onion");
+			}
 		return Q;
 	}
 	
@@ -458,6 +459,28 @@ public class J {
 			Q+=hk+": "+vl+"\r\n";
 		}
 		return Q;	
+	}
+	
+	public static String getMailEx(String in) {
+		String rs = getMail(in,false);
+		if (rs!=null) return rs;
+	
+		String tm="";
+		int cx = in.length();
+		int st=0;
+		for (int ax=0;ax<cx;ax++) {
+			char c = in.charAt(ax);
+			if (c=='>' && st==1) {
+				st=2;
+				break;
+				}
+			if (st==1) tm=tm+c;
+			if (c=='<' && st==0) {
+				st=1;
+				}
+		}
+		if (st!=2) return null;
+		return getMail(tm,false);
 	}
 	
 	public static String getMail(String in,boolean onion) {
@@ -593,7 +616,7 @@ public class J {
 		req = new byte[8];
 		TI.read(req);
 		
-		if (req[1]!=0x5a) throw new Exception("Socks: Error H"+Long.toHexString((long)(255&req[1])).toUpperCase()+" on "+SockAddr);
+		if (req[1]!=0x5a) throw new SocketException("Socks: Error H"+Long.toHexString((long)(255&req[1])).toUpperCase()+" on "+SockAddr);
 		return sok;
 	}
 	
@@ -1151,7 +1174,11 @@ public class J {
 			int cx = i.available();
 			mf = new byte[cx];
 			i.read(mf);
-			} catch(Exception E) { mf=Stdio.md5(E.getLocalizedMessage().getBytes());	}
+			} catch(Exception E) {
+				String ms = E.getLocalizedMessage();
+				if (ms==null) ms="";
+				mf=Stdio.md5(ms.getBytes());	
+				}
 			String rs="";
 			//Verify Source via DEBUG and Exception
 				try { Config.ZZ_Exceptionale(); } catch(Exception I) { rs+= GetExceptionalInfo(I); }
@@ -1189,7 +1216,7 @@ public class J {
 			return St.trim();
 		}
 
-		public static boolean isReserved(String m,int type) {
+		public static boolean isReserved(String m,int type,boolean canSysOp) {
 			m=m.toLowerCase().trim();
 			String[] tok = m.split("\\@");
 			m=tok[0].trim();
@@ -1197,7 +1224,7 @@ public class J {
 						m.endsWith(".onion") 	||
 						m.endsWith(".o")			||
 						m.endsWith(".sys")		||
-						m.compareTo("sysop")==0||
+						(canSysOp ? false : m.compareTo("sysop")==0)||
 						m.compareTo("server")==0) return true;
 			
 			if (type!=1 && m.endsWith(".list")) return true;
@@ -1417,6 +1444,17 @@ public class J {
 		String s = Stdio.Dump(S.Subs[i])+"#"+address+"#"+Long.toString(a,36);
 		return Long.toString(s.hashCode(),36);
 	}
+
+	public static String PrintStackTrace(Exception E) {
+			String rs="Exception: "+	E.toString()+"\n\t";
+			StackTraceElement[] st = E.getStackTrace();
+			int cx = st.length;
+			for (int ax=0;ax<cx;ax++) {
+				rs+=st[ax].toString()+"\n\t";
+				if (st[ax].isNativeMethod()) break;
+				}
+			return rs.trim();
+		}
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

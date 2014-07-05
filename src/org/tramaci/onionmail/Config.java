@@ -20,7 +20,6 @@
 package org.tramaci.onionmail;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,18 +28,20 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
-import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import org.bouncycastle.openpgp.PGPEncryptedData;
 
 	public class Config {
+		public int TextCaptchaMode = TextCaptcha.MODE_NOISE | TextCaptcha.MODE_SWY | TextCaptcha.MODE_SYM | TextCaptcha.MODE_INV;
+		public String TextCaptchaFile = null;
+		public int TextCaptchaSize=5;
+		
+		public boolean UseStatus=true;//TODO Config
 		public boolean UseKernel=true;
 		public boolean	ExitCheckViaTor = false;						
 		public int GarbageFreq = 2000;									//Frequenza di Garbage collector per le Onion e le connessioni inattive.
@@ -84,9 +85,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int DefaultPort = 80;											//Default port.
 		public boolean Debug = false;									//Debug log
 		public boolean LogStdout = false;								//Copia log in stdout
-				
-		public boolean RUNSMTP = true;		
-		
+	
 		public int MaxSMTPSession = 10;
 		public int MaxSMTPSessionTTL = 600000;
 		public int MaxSMTPSessionInitTTL = 10000;
@@ -130,8 +129,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		
 		public PublicKey SK = null;
 		public boolean BlackFlg = false;
-		
-		public boolean RunDNSServer = false;
+	
 		public int ControlPort = 9100;
 		public InetAddress ControlIP = null; //InetAddress.getByAddress(new byte[] { 127,0,0,1 });
 		public int MaxTTLControlSession=86400;
@@ -152,7 +150,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public String ResPath=null; 
 	
 		public HashMap <String,String> SSLCtrl = new HashMap<String, String>();
-		public PublicKey KeyLog = null;
+
 		
 		public int SMTPPreHelloWait=500;
 		public String[] FriendServer= new String[0];
@@ -177,7 +175,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public boolean VerfySenderViaSimulation=true;
 		public boolean NoBootFromSameMachine=false;
 		public boolean AutoDeleteReadedMessages=true;
-				
+		
+		public RSALog RLOG = null;
+		
+		private HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
+		
 		public static void echo(String st) { System.out.print(st); }
 		
 		public static int parseInt(String st,String name) throws Exception {
@@ -325,6 +327,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			C.SMPTServer[ne].EnabledVMAT="\n";
 			C.SMPTServer[ne].DisabledVMAT="\n";
 			C.SMPTServer[ne].AutoDeleteReadedMessages = C.AutoDeleteReadedMessages;
+			
+			for (String k:C.VMATErrorPolicy.keySet()) C.SMPTServer[ne].VMATErrorPolicy.put(k, C.VMATErrorPolicy.get(k));
+			
 			HashMap <String,Integer> P = Config.copypol(SP);
 			
 			String li = null;
@@ -407,6 +412,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
+						if (cmd.compareTo("publicip")==0 || cmd.compareTo("exitip")==0) {
+										C.SMPTServer[ne].ExitIP = Config.ParseIp(tok[1]);
+										continue;
+										}
+						
 						if (cmd.compareTo("newlstxday")==0) { 
 										String str[] = tok[1].split("\\s+");
 										int xd = Config.parseInt(str[0], "lists", 0, 65535);
@@ -417,6 +427,17 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										if (xh!=0 || xd!=0) C.SMPTServer[ne].NewLstEnabled=true;
 										continue;
 										}		
+												
+						if (cmd.compareTo("maxmsgxuserxhour")==0) {
+							if (tok[1].toLowerCase().contains("no")) C.SMPTServer[ne].MaxMsgXUserXHour=0; else C.SMPTServer[ne].MaxMsgXUserXHour=Config.parseInt(tok[1], "messages", 1,65535);
+							continue;
+							}
+						
+						if (cmd.compareTo("maxmsgexitxhour")==0) {
+							if (tok[1].toLowerCase().contains("no")) C.SMPTServer[ne].MaxMsgXserverXHour=0; else C.SMPTServer[ne].MaxMsgXserverXHour=Config.parseInt(tok[1], "messages", 1,65535);
+							continue;
+							}
+						
 						
 						if (cmd.compareTo("rmxcache")==0) { 
 										String str[] = tok[1].split("\\s+");
@@ -489,6 +510,16 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									line=Config.ParseExitList(C,br,line,P);
 									continue;
 									}
+						
+						if (cmd.compareTo("canpop3register")==0) { 
+										C.SMPTServer[ne].POP3CanRegister = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("canpop3vmat")==0) { 
+										C.SMPTServer[ne].POP3CanVMAT = Config.parseY(tok[1]);
+										continue;
+										}
 						
 						if (cmd.compareTo("vmatallow")==0) {
 									Object[] o = Config.ParseLines(C,br,line,"Incomplete VMATAllow section");
@@ -583,6 +614,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
+						if (cmd.compareTo("vmaterr")==0 && tok.length>1) {
+							String[] tk = tok[1].split("\\s+");
+							if (tk.length<2) throw new Exception("Syntax error");
+							tk[0]=tk[0].toUpperCase();
+							tk[1]=tk[1].toUpperCase();
+							if (!" HIDE STAR SHOW ".contains(" "+tk[1]+" ")) throw new Exception("Invalid value `"+tk[1]+"`");
+							if (!" SRV_ERR1 N_VMAT FALSE_VMAT FALSE_SENDER1 FALSE_SENDER2 NOT_VER * ".contains(" "+tk[0]+" ")) throw new Exception("Invalid vmat value `"+tk[0]+"`");
+							int bits = 3;
+							if (tk[1].contains("HIDE")) bits=0;
+							if (tk[1].contains("STAR")) bits=1;
+							if (tk[1].contains("SHOW")) bits=2;
+							C.SMPTServer[ne].VMATErrorPolicy.put(tk[0], bits);
+							continue;
+							}
+						
 						if (cmd.compareTo("servertype")==0) {
 										tok[1]=tok[1].toLowerCase().trim();
 										if (tok[1].compareTo("custom")==0) continue;
@@ -610,11 +656,27 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 											C.SMPTServer[ne].CanRelay=false;
 											continue;
 											}
-										
-										
 										continue;
 										}
-								
+							
+						if (cmd.compareTo("verspoof")==0) {
+								String st= tok[1].trim()+".0.0.0.0";
+								String vr[] = st.split("\\.+");
+								long vc=0;
+								String vrs="";
+								for (int ax=0;ax<4;ax++) {
+									int a = J.parseInt(vr[ax].trim());
+									vc<<=16;
+									vc|=a&65535;
+									vrs+=Integer.toString(a)+" ";									
+									}
+								vrs=vrs.trim();
+								Main.Version = vrs;
+								Main.VersionID = vc;
+								Main.VersionExtra="";
+								continue;
+								}
+						
 						if (cmd.compareTo("timespoof")==0) {
 							String[] TOK = tok[1].trim().split("\\s+");
 							int cl =TOK.length;
@@ -774,7 +836,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						}
 				
 				C.SMPTServer[ne].BlackList=new IPList(C.SMPTServer[ne],"spam.ip");
-								
+				
+				if (C.SMPTServer[ne].DisabledVMAT.trim().length()==0 && C.SMPTServer[ne].EnabledVMAT.trim().length()==0) {
+					C.SMPTServer[ne].EnabledVMAT="\n*\n";
+					}
+				
 				} catch(Exception E) {
 					String ms = E.getMessage();
 					if (ms.startsWith("@")) {
@@ -791,6 +857,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		}
 		
 		
+		
 		public static Config LoadFromFile(String filepath) throws Exception {
 
 			BufferedReader br;
@@ -799,6 +866,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			C.MaxHosts=0;
 			String RunBanner=null;
 			HashMap <String,Integer> Poly = new HashMap <String,Integer>();
+			
+			C.VMATErrorPolicy.put("SRV_ERR1", 1);
+			C.VMATErrorPolicy.put("N_VMAT", 1);
 			
 			String SMTPS="\n";
 			String Friends="\n";
@@ -971,8 +1041,44 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("ssljavahasbug")==0) { fc=true; C.SSLJavaHasBug=Config.parseY(tok[1]); }								
 								if (cmd.compareTo("usebootsequence")==0) { fc=true; C.UseBootSequence=Config.parseY(tok[1]); }
 								if (cmd.compareTo("aeskeyroundextra")==0) { fc=true; C.AESKeyRoundExtra=Config.parseInt(tok[1],"Round", 0, 15); }		
-								if (cmd.compareTo("rsakeygenbc")==0) { fc=true; Main.RSAGenBC=Config.parseY(tok[1]); }
+								if (cmd.compareTo("rsakeygenbc")==0) { fc=true;; }
 								if (cmd.compareTo("usekernel")==0) { fc=true; C.UseKernel	=Config.parseY(tok[1]); }
+								if (cmd.compareTo("usestatus")==0) { fc=true; C.UseStatus	=Config.parseY(tok[1]); }
+								
+								if (cmd.compareTo("rsalog")==0 && tok.length>1) {
+									fc=true;
+									String lf = J.MapPath(CPath, tok[1]);
+									if (!new File(lf).exists()) throw new Exception("RSA Log doesn't exits `"+lf+"`\n\tUse --gen-log to create");
+									String pw;
+									if (tok.length<3) {
+										Main.echo("\nTo open RSA log in write mode i need the passphrase.\n\tPassphrase:> ");
+										BufferedReader In = J.getLineReader(System.in);
+										pw = In.readLine();
+										pw=pw.trim();
+										} else pw=tok[2].trim();
+									C.RLOG = new RSALog(lf,pw.getBytes(),false);																		
+									}
+								
+								if (cmd.compareTo("textcaptcha")==0) {
+									fc=true;
+									int a=0;
+									
+									if (tok.length<3) throw new Exception("Wrong parameters number");
+									tok[1]=tok[1].toUpperCase().trim();
+									if (tok[1].contains("X")) a |= TextCaptcha.MODE_SWX;
+									if (tok[1].contains("Y")) a |= TextCaptcha.MODE_SWY;
+									if (tok[1].contains("N")) a |= TextCaptcha.MODE_NOISE;
+									if (tok[1].contains("I")) a |= TextCaptcha.MODE_INV;
+									if (tok[1].contains("S")) a |= TextCaptcha.MODE_SYM;
+									if (tok[1].contains("R")) a |= TextCaptcha.MODE_RANDOM;
+									if (tok[1].contains("8")) a |= TextCaptcha.MODE_UTF8;
+									if (a==0) a=TextCaptcha.MODE_SWX|TextCaptcha.MODE_SWY|TextCaptcha.MODE_NOISE|TextCaptcha.MODE_SYM;
+									
+									C.TextCaptchaMode=a;
+									C.TextCaptchaFile = J.MapPath(CPath, tok[2]);
+									TextCaptcha.LoadFonts(C.TextCaptchaFile);
+									if (tok.length>3) C.TextCaptchaSize = Config.parseInt(tok[3], "characters", 4, 9);
+									}								
 								
 								if (cmd.compareTo("randomheart")==0) { fc=true; Main.RandomHeart=J.MapPath(CPath, tok[1]); }
 								
@@ -990,12 +1096,25 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("messagesgarbageevery")==0) { fc=true; C.MessagesGarbageEvery=60000L*Config.parseInt(tok[1], "minutes", 1,1440); }
 								if (cmd.compareTo("rootpass")==0) { fc=true; C.RootPass=tok[1].trim(); }
 								if (cmd.compareTo("smtpprehellowait")==0) { fc=true; C.SMTPPreHelloWait=Config.parseInt(tok[1], "milliseconds", 0, 2000); }
-								if (cmd.compareTo("rundns")==0) { fc=true; C.RunDNSServer=Config.parseY(tok[1]); }
+								if (cmd.compareTo("rundns")==0) { fc=true;  }
 								if (cmd.compareTo("listthreadsmax")==0) { fc=true; C.ListThreadsMax=Config.parseInt(tok[1],"Threads", 0, 256); }
 							//	if (cmd.compareTo("serverblacklist")==0) { fc=true; C.ServerBlackList=J.MapPath(CPath, tok[1]); }
 								if (cmd.compareTo("passwordmaxstrangerchars")==0) { fc=true; C.PasswordMaxStrangerChars=Config.parseInt(tok[1],"Chars", 1, 256); }
 								if (cmd.compareTo("maxdofriendold")==0) { fc=true; C.MaxDoFriendOld=Config.parseInt(tok[1],"Minutes", 1, 1440); }
 								
+								if (cmd.compareTo("vmaterr")==0) {
+									if (tok.length<3) throw new Exception("Syntax error");
+									tok[1]=tok[1].toUpperCase();
+									tok[2]=tok[2].toUpperCase();
+									if (!" HIDE STAR SHOW ".contains(" "+tok[2]+" ")) throw new Exception("Invalid value `"+tok[2]+"`");
+									if (!" SRV_ERR1 N_VMAT FALSE_VMAT FALSE_SENDER1 FALSE_SENDER2 NOT_VER * ".contains(" "+tok[1]+" ")) throw new Exception("Invalid vmat value `"+tok[1]+"`");
+									int bits = 3;
+									if (tok[2].contains("HIDE")) bits=0;
+									if (tok[2].contains("STAR")) bits=1;
+									if (tok[2].contains("SHOW")) bits=2;
+									C.VMATErrorPolicy.put(tok[1], bits);
+									fc=true;
+									}
 								
 								if (cmd.compareTo("passwordsize")==0) { fc=true; C.PasswordSize=Config.parseInt(tok[1],"Chars", 7, 256); }
 								if (cmd.compareTo("minbootderks")==0) { fc=true; C.MinBootDerks=Config.parseInt(tok[1],"Servers", 1, 16); }
@@ -1160,7 +1279,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("dnsenablemx")==0) { fc=true; C.DNSEnableMX = Config.parseY(tok[1]); }
 								if (cmd.compareTo("dnsaddamx")==0) { fc=true;  C.DNSAddAMX = Config.parseY(tok[1]); }
 								if (cmd.compareTo("dnsinaddr")==0) { fc=true; C.DNSInAddr = Config.parseY(tok[1]); }
-								if (cmd.compareTo("runsmtp")==0) { fc=true; C.RUNSMTP = Config.parseY(tok[1]); }
+								if (cmd.compareTo("runsmtp")==0) { fc=true; }
 								if (cmd.compareTo("debug")==0) { fc=true; C.Debug = Config.parseY(tok[1]); }
 								if (cmd.compareTo("logtostdout")==0) { fc=true; C.LogStdout = Config.parseY(tok[1]); }
 					
@@ -1237,12 +1356,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				
 				Friends=Friends.trim();
 				C.FriendServer = Friends.split("\\n+");
+				if (C.UseStatus && !C.UseKernel) {
+					C.GlobalLog(Config.GLOG_All, "MAIN", "UseStatus without UseKernel: Wrong option, enabling UseKernel\n");
+					C.UseKernel=true;
+					}
 				
 				if (feedIsGood) exitgood+=","+J.Implode(",",C.FriendServer)+",";				
 				int cx = C.SMPTServer.length;
 				exitgood=exitgood.replace(',','\n').trim();
 				exitbad=exitbad.replace(',','\n').trim();
 				for (int ax=0;ax<cx;ax++) {
+					if (C.UseStatus) try {
+						String st = "StatusF:\tQ\n";
+						Stdio.file_put_bytes(C.SMPTServer[ax].Maildir+"/status", st.getBytes());
+						} catch(Exception Fe) { C.SMPTServer[ax].Log("Can't write status: "+Fe.getCause()); }
+					
 					String a = C.SMPTServer[ax].ExitGood!=null ? C.SMPTServer[ax].ExitGood.replace(',','\n') : "";
 					String b = C.SMPTServer[ax].ExitBad!=null ? C.SMPTServer[ax].ExitBad.replace(',','\n') : "";
 					a=Config.nlStringSum(a, exitgood);
@@ -1298,7 +1426,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						RunBanner=RunBanner.replace("\\\\", "\\");
 						echo(RunBanner+"\n");
 						}
-															
+					
+					C.VMATErrorPolicy=null;										
 					
 					return C;
 			} catch(Exception E) {
@@ -1399,7 +1528,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			return re;
 			}
 		
-		private static InetAddress ParseIp(String st) throws Exception {
+		public  static InetAddress ParseIp(String st) throws Exception {
 			try {
 				String[] tok = st.split("\\.");
 				if (tok.length!=4) throw new Exception();
@@ -1809,12 +1938,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		@SuppressWarnings("deprecation")
 		public void GlobalLog(int type, String zone,String st) { 
 			st=st.trim();
+			if (RLOG!=null) try {
+				RLOG.write(System.currentTimeMillis() + TimeSpoof, (int)Thread.currentThread().getId(), type, zone,st.trim());
+				return;
+				} catch(Exception E) {
+				Main.echo("RSALog Error: "+E.toString()+"\n");	
+				}
+			
 			String[] stl=st.split("\\n+");
 			int cx= stl.length;
 			st="";
 			for (int ax=0;ax<cx;ax++) st+="\n\t"+stl[ax];
 			st=st.trim();
 			if (cx>1) st+="\n";
+			
+			
 			
 			/*
 			Meglio un'istanza ed una funzione o due istanze??
@@ -1842,13 +1980,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			String l = h+" "+J.Spaced(J.Limited(tid,8), 8)+" "+J.Spaced(t, 5)+" "+J.Spaced(zone, 32)+" "+st+"\n";
 			
 			if (LogFile==null) echo(l); else try {
-						if (KeyLog!=null) LogInRSA(l); else LogInPlain(l);
+						LogInPlain(l);
 						} catch(Exception E) {
 							Main.echo("Log Error: "+E.toString()+"\n");
 							Main.echo(l);
 							}
 		}
-	
+					
 		private synchronized void LogInPlain(String l) throws Exception {
 			l=l.trim();
 			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LogFile, true)));
@@ -1861,50 +1999,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				}
 			
 		}
-		
-		private synchronized void LogInRSA(String l) throws Exception {
-			l=l.trim();
-			byte [] lb = l.getBytes();
-			lb = Stdio.RSAEncDataP(lb, KeyLog, 64);
-			int sz = 0x8000 | lb.length;
-			RandomAccessFile F = new RandomAccessFile(LogFile,"rw");
-			try {
-				F.seek(F.length());
-				F.writeShort(sz);
-				F.write(lb);
-				F.close();
-			} catch(Exception E) {
-				try { F.close(); } catch(Exception I) {}
-				throw E;
-				}
-		}
-	
-		private PrivateKey LogKp=null;
-		private RandomAccessFile FileLogRead=null;
-		
-		public void OpenLogFileForRead(PrivateKey K) throws Exception {
-			LogKp=K;
-			FileLogRead = new RandomAccessFile(LogFile,"r");
-			FileLogRead.seek(0);
-			}
-		
-		public void CloseLog() {
-			LogKp=null;
-			try { FileLogRead.close(); } catch(Exception i) {}
-			FileLogRead=null;
-			System.gc();
-			}
-		
-		public String ReadLog() throws Exception {
-			int x = FileLogRead.readUnsignedShort();
-			if (x==0) return null;
-			x&=0x7FFF;
-			byte[] bl = new byte[x];
-			FileLogRead.read(bl);
-			bl = Stdio.RSADecDataP(bl, LogKp,64);
-			return new String(bl);
-		}
-	
+				
 		public static String nlStringSum(String a,String b) {
 				a=a.toLowerCase().trim();
 				b=b.toLowerCase().trim();
