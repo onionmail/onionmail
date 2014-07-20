@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="us">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>About OnionMail</title>
+	<link href="/css/global.css" rel="stylesheet">
+	<style>
+	.custom1 {
+	        text-align: center;
+		}
+	.custom1 img { border: none; margin: 20px; }
+	.custom1 span { font-size: 50px; color: #048; font: corsivo; }
+	</style>
+</head>
+<body>
+<div id="textpage">
+<div id="mmpreback">
+<div id="mmenucont">
+
+<table id="toptable">
+
+	<tr>
+	<td id="toplogo"><a href="/"><img src="/img/ONMP.gif" alt="OnionMail"></a></td>
+	<td id="topsez" class="topsez">
+	<div><a href="/what.html">Help</a></div>
+	<div><a href="/register.etex">Sign UP</a></div>
+	<div><a href="/manifesto.html">Manifesto</a></div>
+	<div><a href="/info.etex">Info</a></div>
+	<div><a href="/contacts.etex">Contacts</a></div>		
+	<div class="cli"></div>
+	</td>
+	</tr>
+	</table>
+</div>
+</div>
+
+<div class="oline"></div>
+<div class="pagetit">About OnionMail</div><div class="mytext" id="maintext">
+<div class="custom1">
+OnionMail is a project produced by <a href="http://tramaci.org" target="_blank">tramaci.org</a> and <a href="http://mes3hacklab.org" target="_blank">mes3hacklab</a>.<br>
+To get more informations about OnionMail see the <a href="http://onionmail.info" target="_blank">web page of project</a>.<br>
+<a href="http://onionmail.info" target="_blank"><img src="/img/ONMP.gif" alt="" style="width: 110px;" align="middle"></a><span>+</span>
+<a href="http://tramaci.org" target="_blank"><img src="/img/TRM110.gif" alt="Tramaci.Org" align="middle"></a><span>+</span>
+<a href="http://mes3hacklab.org" target="_blank"><img src="/img/M3HL.gif" alt="mes3hacklab" align="middle"></a><br>
+<b><!--#NICK#--> is a OnionMail server that is not managed by the communities mentioned above.</b><br>
+To get more information about who manages <!--#NICK#--> visit the <a href="<!--@yourlink@-->">contact page</a> or send an email to these address:<br>
+sysop [at] <!--#ONION#--><br>
+OR<br>
+sysop.<!--#ONION#--> [at] onionmail.info<br>
+<br>
+</div>
+<br><br></div>
+</div>          
+	<div id="bottomoline"></div>
+	<div id="bottompage">
+		<div style="font-family: ocr; color: #048; text-align: center;">
+		<!--#NICK#--> OnionMail Server at <!--#ONION#-->
+		</div>	
+	</div>
+
+	
+</body>
+</html>

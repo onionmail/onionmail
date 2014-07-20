@@ -101,30 +101,7 @@ public class ControlSession extends Thread{
 			int pa = Tok.length;
 			
 			///////////////////
-			
-/*	if (cmd.compareTo("dlr")==0) {
-		Reply(true,"Delirio in corso...");
-		Reply(SRVS[0].Boot());
-		}*/
-			
-		/*	if (cmd.compareTo("fuffa")==0) {
-				
-				 RemoteKSeedInfo[] xy = SRVS[0].RemoteDoKCTLAction("del",new String( Stdio.file_get_bytes("/sdcard/dns/test.txt")) , "l3xzz25unf54s7ii.onion","Z*Sc?Ynp}_-&5kK%");
-				int qcx= xy.length;
-				for (int ax=0;ax<qcx;ax++) Reply(xy[ax].Ok,xy[ax].Confirm);
-			}
-			*/
-	
-	/*
-	if (cmd.compareTo("dlr")==0) {
-		//
-		
-		Reply(true,"prova");
-		Reply(SRVS[0].Boot(),"boot");
-		
-	}
-	*/
-			
+
 			if (cmd.compareTo("ver")==0) { Reply(true,Main.getVersion()); continue; }
 			if (cmd.compareTo("vers")==0) { Reply(true,Main.CompiledBy+" "+Main.getVersion()); continue; }
 			
@@ -226,8 +203,109 @@ public class ControlSession extends Thread{
 		if (cmd.compareTo("quit")==0) break;
 		if (cmd.compareTo("access")==0) { ReplyAccess(); continue; }
 		
+		
+		
+		if (cmd.compareTo("captcha")==0) {
+			if ( TextCaptcha.isEnabled()) {
+				CaptchaCode C= TextCaptcha.generateCaptcha(Config.TextCaptchaSize, Config.TextCaptchaMode);
+				String s = C.image.trim();
+				s+="\n\n"+C.code.trim().toLowerCase();
+				ReplyA(true,"CAPTCHA",s.split("\\n"));
+				} else {
+							int a = (int) (511&Stdio.NewRndLong());
+							int b = (int) (511&Stdio.NewRndLong());
+							if ((a&256)!=0) a=-(a & 255);
+							if ((b&256)!=0) b=-(b & 255);
+							int c = a+b;
+							String[] tok = new String[] { 
+											"Equation: " ,
+											Integer.toString(a),
+											b<0 ? "" : "+" ,
+											Integer.toString(b),
+											"=",
+											Integer.toString(c)}
+											;
+							
+							c = (int) (Stdio.NewRndLong()&3)%3;
+							c = 1+(c*2);
+							String sol = tok[c];
+							tok[c]="X";
+							String cap="";
+							for (int al=0;al<6;al++) cap+=" "+tok[al]+" ";
+							ReplyA(true,"CAPTCHA",new String[] { 
+									"Please solve the following equation to prove you're human. ",
+									cap.trim(),
+									"What is the value of X?",
+									"",
+									sol})
+									;
+				}
+			continue;
+		}
+		
 		if (CurSrv!=-1) {	/// Server
 		
+				if (cmd.compareTo("vmatreg")==0 && pa>1) {
+					String onim = Tok[1].trim();
+					String user=J.getLocalPart(onim);
+					String srvm= J.getDomain(onim);
+					
+					if (user==null || srvm==null) {
+						Reply(false,"Invalid mail address");
+						continue;
+						}
+					
+					if (srvm.endsWith(".onion")) {
+						Reply(false,"Invalid mail server");
+						continue;
+						}
+					
+					if (
+						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 
+						user.compareTo("server")==0 					|| 
+						user.endsWith(".onion") 								|| 
+						user.endsWith(".o") 									||
+						user.endsWith(".sys")									||
+						user.endsWith(".sysop")								||
+						user.startsWith(".") 									|| 
+						user.endsWith(".") 										|| 
+						user.contains("..")) 									{
+				
+						Reply(false,"Invalid user Name");
+						return;
+					}
+					
+					ExitRouteList EL = SRVS[CurSrv].GetExitList();
+					ExitRouterInfo SE = EL.selectBestExit();
+					String rs=null;
+					if (SE!=null && SE.canVMAT) try {
+						
+						VirtualRVMATEntry RVM = SRVS[CurSrv].VMATRegister(onim,user);
+						if (RVM!=null) {
+							rs="vmat: 1\n";
+							rs+="vmatmail: "+RVM.mail+"\n";
+							rs+="vmatpass: "+RVM.passwd+"\n";
+							} else rs+="vmat: 0\n";
+						} catch(Exception E) {
+								if (Config.Debug) E.printStackTrace();
+								String msge=E.getMessage();
+								if (msge==null) msge="null";
+								if (msge.startsWith("@")) {
+										Log("VMATRegister: Error "+msge.substring(1)); 
+										Reply(false,msge);
+										} else {
+											Config.EXC(E, "Control.VMAT");
+											Reply(false,"VMAT Error");
+										}
+								
+								rs=null;
+								continue;
+								}
+					
+					if (rs==null) Reply(false,"VMAT Error"); else ReplyA(true,"VMAT",rs.split("\\n+"));
+					continue;
+				}
+			
 				if (cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
 							
 				if (cmd.compareTo("getkey")==0) {
@@ -517,22 +595,11 @@ public class ControlSession extends Thread{
 			if (CurSrv==-1) Reply(false); else ReplyAccess();
 			continue;
 			}
-	/*	
-		if (cmd.compareTo("mkcert")==0 && pa==2) {
-			String pwl = J.GenPassword(Config.PasswordSize,Config.PasswordMaxStrangerChars);
-			Config.CreateUserCert(Tok[1], pwl);
-			Reply(true,pwl);
-			}	 
-		
-		*/
-		
+			
 		if (cmd.compareTo("trustdb")==0) {
 			SA_TRUST();
 			continue;
 			}
-				
-		
-		
 				
 		Reply(false,"WTF ???");
 	}

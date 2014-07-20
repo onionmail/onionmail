@@ -124,7 +124,7 @@ public class MultiDeliverThread extends Thread {
 		try { this.interrupt(); } catch(Exception E) {};
 		
 		String fd=null;
-		try { 
+		if (Message!=null) try { 
 				Message.Destroy(Mid.Config.MailWipeFast);
 				} catch(Exception E) { 
 						Mid.Config.EXC(E, Mid.Nick+".DultiDevEnd");

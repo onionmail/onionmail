@@ -107,6 +107,10 @@ public class SrvSMTPSession extends Thread {
 	public String[] MultiRCPTTo = null;
 	public int MultiRCPTToLength=0;
 	
+	public int serverMode = 0;
+	public int tryLogin=0;
+	public boolean falseLogin=false;
+	
 	SrvSMTPSession(Config C,SrvIdentity id,Socket s,SMTPServer Pae) throws Exception {
 		super();
 		ParentServer=Pae;
@@ -121,8 +125,17 @@ public class SrvSMTPSession extends Thread {
 		MultiRCPTTo=new String[Mid.MultiDeliverMaxRCPTTo];
 		byte[] b = RemoteIP.getAddress();
 		if (b[0]==127) IPisLocal=true;
+		serverMode=Pae.serverMode;
 		start();
 		}
+	
+	public void ExtraSpam(int p) {
+		InetAddress sp = con.getInetAddress();
+					if (sp.getAddress()[0]!=127) try {
+						if (Mid.BlackList!=null) Mid.BlackList.setIP(sp, p);
+						Log("Extra SPAM Points "+p+" for: `"+J.IP2String(sp)+"` HELO  `"+HelloData+"`\n");
+						} catch(Exception I) { Config.EXC(I, "AddSpamPoint "+Mid.Nick); }
+	}
 	
 	public void run() {
 		
@@ -289,6 +302,8 @@ public class SrvSMTPSession extends Thread {
 		boolean AuthEd=false;
 		KUKIAuth=false;
 		
+		if (Config.Debug) Log(Config.GLOG_Event, "New session for `"+J.IP2String(RemoteIP)+"`");
+		
 		SessionKUKI = J.RandomString(32);
 		
 		String t0 = Mid.Banner;
@@ -298,9 +313,9 @@ public class SrvSMTPSession extends Thread {
 			if (ist!=0) throw new PException("@500 SMTP Sync error. I must talk first!");
 			}
 		
-		if (Mid.EnterRoute && !IPisLocal) t0=t0.replace("${SERVER}", Mid.ExitRouteDomain); else t0=t0.replace("${SERVER}", Mid.Onion);
+		if (Mid.EnterRoute && !IPisLocal) t0=t0.replace("${SERVER}", Mid.MXDomain==null ? Mid.ExitRouteDomain :  Mid.MXDomain); else t0=t0.replace("${SERVER}", Mid.Onion);
 		t0=t0.replace("${NICK}", Mid.Nick);
-		t0=t0.replace("${SOFTWARE}", "OnionMail "+Main.getVersion());
+		t0=t0.replace("${SOFTWARE}", "OnionMail "+( Mid.NoVersion ? "1.0.0 10010000"  : Main.getVersion()));
 		t0=t0.replace("${DATE}",Mid.TimeString());
 			
 		Send("220 "+t0);
@@ -390,7 +405,11 @@ public class SrvSMTPSession extends Thread {
 				try {
 						SL = LibSTLS.AcceptSSL(con, Mid.SSLServer, Mid.Onion);
 					} catch(Exception E) {
-						throw new PException("@500 Invalid SSL Session: "+E.toString());
+						if (Config.Debug) {
+							Log(Config.GLOG_Bad,"LibSTLS: "+E.getMessage());
+							E.printStackTrace();
+							}
+						throw new Exception("@500 Invalid SSL Session: "+E.toString());
 						}
 				con=SL;
 				O=null;
@@ -604,9 +623,7 @@ public class SrvSMTPSession extends Thread {
 					
 					if(
 							vmata.endsWith(".onion")	||
-							vmata.endsWith(".list")		||
 							vmata.endsWith(".sys")		||
-							vmata.endsWith(".app")		||
 							vmata.compareTo("server")==0 
 							) throw new PException("@500 Invalid VMAT mail address `"+vmata+"`") ;
 							
@@ -614,17 +631,21 @@ public class SrvSMTPSession extends Thread {
 					
 					if(
 							Tok[3].endsWith(".onion")	||
-							Tok[3].endsWith(".list")		||
 							Tok[3].endsWith(".sys")		||
-							Tok[3].endsWith(".app")		||
 							Tok[3].compareTo("server")==0 
 							) throw new PException("@500 Invalid mail address `"+Tok[3]+"`") ;
 					
 					Tok[3] = Tok[3]+"@"+HelloData.toLowerCase().trim();
 					String vmail = J.getMail(Tok[3], true);
 					if (vmail==null) throw new PException("@500 Invalid mail address for VMAT");
-									
-				
+					
+					if (Tok[3].contains(".")) {
+						String[] x0 = Tok[3].split("\\.");
+						String ext = x0[x0.length-1];
+						ext="."+ext;
+						if (!Tok[2].endsWith(ext)) Tok[2]+=ext;
+						} else if (Tok[2].contains(".")) throw new PException("@500 Invalid vmat address for this address type");
+																			
 					String passwd =  J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
 					VirtualMatEntry M = Mid.VMAT.subscribe(vmata, vmail,passwd);
 					if (M==null) {
@@ -783,12 +804,36 @@ public class SrvSMTPSession extends Thread {
 				KUKIAuth = SMTP_TKIM();
 				continue;
 				}
-						
-			if (!TLSON && Tok[0].compareTo("AUTH LOGIN")==0) {
+					
+			if (/*!TLSON &&*/ Tok[0].compareTo("AUTH LOGIN")==0) {
+				tryLogin++;
+				if (tryLogin>3) ExtraSpam(1);
+				if (tryLogin>5) {
+					ExtraSpam(50);
+					falseLogin=true;
+					Send("334 VXNlcm5hbWU6");
+					Login = I.readLine();
+					Send("334 UGFzc3dvcmQ6");
+					Password = I.readLine();
+					Login=null;
+					Send("235 ok, go ahead, it is important to be convinced!"); 
+					continue;
+					}
 				if (AuthEd) {
 					Send("503 Why!");
 					continue;
 					}
+				
+				if (serverMode != SMTPServer.SM_TorServer) {
+					Send("503 Can't login to an EXIT/ENTER server.");
+					continue;
+					}
+				
+				if (!TLSON) {
+					Send("503 Authentication too weak, use STARTTLS!");
+					continue;
+					}
+				
 				Send("334 VXNlcm5hbWU6");
 				Login = I.readLine();
 
@@ -811,7 +856,7 @@ public class SrvSMTPSession extends Thread {
 				
 				AuthEd=true;
 				
-				if (Mid.MaxMsgXUserXHour>0) try {
+				if (Mid.MaxMsgXUserXHour>0 && Login!=null) try {
 					HashMap <String,String> cnt = Mid.UsrGetConfig(Login);
 					if (cnt!=null) {
 						String cd = cnt.get("hcode");
@@ -822,7 +867,9 @@ public class SrvSMTPSession extends Thread {
 								}
 							}
 						}
-					} catch(Exception E) { Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`"); }
+					} catch(Exception E) { 
+							Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`");
+							}
 				
 				if (AuthEd) Send("235 ok, go ahead"); else throw new PException("@451 Too many messages sent. Your limit is "+Mid.MaxMsgXUserXHour+" messages x hour!");
 				
@@ -830,6 +877,17 @@ public class SrvSMTPSession extends Thread {
 			}
 			
 			if (Tok[0].compareTo("AUTH PLAIN")==0) {
+				
+				tryLogin++;
+				if (tryLogin>3) ExtraSpam(1);
+				if (tryLogin>5) {
+					ExtraSpam(50);
+					falseLogin=true;
+					Login=null;
+					Send("235 ok, go ahead, it is important to be convinced!"); 
+					continue;
+					}
+				
 				if (AuthEd) {
 					Send("503 Why!");
 					continue;
@@ -838,6 +896,17 @@ public class SrvSMTPSession extends Thread {
 					Send("500 Syntax Error");
 					continue;
 					}
+												
+				if (serverMode != SMTPServer.SM_TorServer) {
+					Send("503 Can't login to an EXIT/ENTER server.");
+					continue;
+					}
+				
+				if (!TLSON) {
+					Send("503 Authentication too weak, use STARTTLS!");
+					continue;
+					}
+				
 				String s0 = new String(J.Base64Decode(Tok[1]),"UTF-8");
 				String[] Tk = s0.split("\\00",3);
 				if (Tk.length!=3) {
@@ -1100,6 +1169,9 @@ public class SrvSMTPSession extends Thread {
 			}
 		
 	///////// 		-- Transport --
+	
+	if (falseLogin) throw new PException("@999 FUCK OFF");
+			
 	if (MailTo==null || MailFrom==null) throw new PException("@503 valid RCPT command must precede DATA");
 			
 	if (RouteFrom == XRouteLocal) {
@@ -2148,7 +2220,7 @@ public class SrvSMTPSession extends Thread {
 		}
 	
 	private void BeginClose() throws Exception {
-		Send("221 "+((Mid.EnterRoute&&!IPisLocal) ? Mid.ExitRouteDomain : Mid.Onion)+" closing connection");
+		Send("221 "+((Mid.EnterRoute&&!IPisLocal) ? ( Mid.MXDomain==null ? Mid.ExitRouteDomain :  Mid.MXDomain) : Mid.Onion)+" closing connection");
 		closeh();
 		}
 
@@ -3105,8 +3177,17 @@ public class SrvSMTPSession extends Thread {
 		return can;
 		}
 	
-		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}
-		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"SMTPS "+Mid.Nick + (MailFrom!=null ? "/A_"+Long.toString(MailFrom.hashCode(),36) : ""), st); 	}
+		private String LogPart() {
+			String re="SMTPS/";
+			if (serverMode==SMTPServer.SM_InetServer) re+="I";
+			if (serverMode==SMTPServer.SM_InetAlt) re+="A";
+			if (serverMode==SMTPServer.SM_TorServer) re+="T";
+			re+=" "+Mid.Nick;
+			if (MailFrom!=null) re+="/A_"+Long.toString(MailFrom.hashCode(),36);
+			return re;
+		}
+		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
+		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
 		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

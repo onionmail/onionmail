@@ -1174,10 +1174,9 @@ public class J {
 			int cx = i.available();
 			mf = new byte[cx];
 			i.read(mf);
-			} catch(Exception E) {
-				String ms = E.getLocalizedMessage();
-				if (ms==null) ms="";
-				mf=Stdio.md5(ms.getBytes());	
+			} catch(Exception E) { 
+				String st = E.getLocalizedMessage();
+				mf=Stdio.md5( st==null ? new byte[0] : st.getBytes() );	
 				}
 			String rs="";
 			//Verify Source via DEBUG and Exception
@@ -1455,6 +1454,6 @@ public class J {
 				}
 			return rs.trim();
 		}
-	
+			
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

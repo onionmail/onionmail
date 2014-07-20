@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<clientConfig version="1.1">
+  <emailProvider id="%ONION%">
+    <domain>%ONION%</domain>
+    <displayName>%NICK% OnionMail server</displayName>
+    <displayShortName>%NICK%</displayShortName>
+    <incomingServer type="pop3">
+      <hostname>%ONION%</hostname>
+      <port>110</port>
+      <socketType>STARTTLS</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILLOCALPART%</username>
+    </incomingServer>   
+    <outgoingServer type="smtp">
+      <hostname>%ONION%</hostname>
+      <port>25</port>
+      <socketType>STARTTLS</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILLOCALPART%</username>
+    </outgoingServer>
+  </emailProvider>
+</clientConfig>

@@ -66,8 +66,12 @@ public class SrvPop3Session extends Thread {
 
 		Mid.StatPop3++;
 		String inf="";
-		try { this.ZZ_Exceptionale(); } catch(Exception E) { inf = J.GetExceptionalInfo(E); }
-		inf = Stdio.Dump(Stdio.md5(inf.getBytes()));
+		if (Mid.NoVersion) {
+			inf="N/A";
+			} else {
+			try { this.ZZ_Exceptionale(); } catch(Exception E) { inf = J.GetExceptionalInfo(E); }
+			inf = Stdio.Dump(Stdio.md5(inf.getBytes()));
+			}
 		inf +=" "+Mid.GetRunString();
 			
 		Reply(true,"POP3 "+Mid.Onion+" INF "+inf);
@@ -111,7 +115,6 @@ public class SrvPop3Session extends Thread {
 				}
 			
 			if (Mid.POP3CanRegister && Tok[0].compareTo("RQUS")==0) {
-				Log("ccc");
 				try { SA_REQUSR(); } catch(Exception E) {
 					String msg= E.getMessage();
 					if (msg==null) msg="NULL";

@@ -2,8 +2,8 @@
 Use:
 	onionmail [-q] [-f <config file>] [-v] [-p <password>] [-ndk] 
 		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp] [-pi]
-		[-rpf <remotePasswdFile>]
-		[--gen-rpass] [-sp]
+		[-rpf <remotePasswdFile>] [-bm]
+		[--gen-rpass] [-sp] [-rc <file> ]
 		[--rpass-server]
 		
 	onionmail [-q] --gen-passwd 
@@ -70,4 +70,58 @@ Use:
 			the passphrase to store.
 
 	--rpass-server	Do the remote passphrase server (one session only).
+	-rc <file>	Counter file. Increase the number into the file
+			when OnionMail start.
 
+	--bm		Batch mode:
+			The batch mode is used with -q to run OnionMail in
+			simple way to implements batch script.
+
+			When OnionMail starts in batch mode, OnionMail read
+			some header lines by STDIN. These haders are termiated
+			by an empty line. The scructure of the headers is like
+			mail headers (it use the same routine).
+
+	List of OnionMail's batch headers:
+	Name			Type	Meaning
+	%NICK%-pgp-root		path	Set the public PGP ASCII armor key file
+					root user (use full path).
+	%NICK%-pgp-key		path	Set the server's PGP ASCII armor key 
+					file (public and private in the 
+					same file).
+	%NICK%-pgp-pass		str	Set the server's PGP key passphrase.
+	%NICK%-pass		str	Set the server's password.
+	%NICK%-delkey		pres	Delete the ASCII armor key files.
+	global-autoclose	pres	Terminate OnionMail after batch 
+					oprations.
+	global-autodelete	pres	Wipe RAM data of this headers.
+	global-echo		str	Print a string to STDOUT.
+	global-stderr		str	Print a string to STDERR.
+	global-selpass		str	Set the global password.
+	global-pass		bool	Set the -sp flag.
+	global-setpgp-root	bool	Set the ROOT public key.
+	global-setpgp		bool	Set the servers key.
+	global-setndk		bool	Don't delete sysop.txt and keyblock.txt.
+
+	You must replace %NICK% with server's nick name.
+	Types:
+	Path	Full path of a file.
+	Str	String.
+	Bool	Boolean (Valid values: Y, N, YES, NO, TRUE, FALSE, 0, 1)
+	Pres	The presence of header activate the function.
+		(The parameter will discard).
+
+	When OnionMail ir ready to read the headers is send a line to 
+	the STDOUT contains OM:[DATA] string.
+	When the header reding is complete OnionMail reply: OM:[DATA_OK]
+
+	Other OnionMail's batch reply:
+	OM:[DATA]	Ready to read.
+	OM:[ERR]	Invalid PGP key.
+	OM:[PGP_ERR]	PGP Error on key.
+	OM:[PGP_OK]	PGP Key accepted (followed by nickname of the server).
+	OM:[DATA_OK]	Header readed and accepted.
+	OM:[ERROR]	Fatal error.
+	OM:[DELETE]	OnionMail has delete all headers in RAM.
+	OM:[COMPLETE]	Operation complete.
+	OM:[RUNNING]	OnionMail till running.

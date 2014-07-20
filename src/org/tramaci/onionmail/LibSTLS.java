@@ -54,10 +54,103 @@ import org.bouncycastle.x509.X509V3CertificateGenerator;
 @SuppressWarnings("deprecation")
 public class LibSTLS {
 
-	public static final String BC = "BC";
-	public static final String Version = "LibSTLS V 1.1"; 
+	public static final String BC = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
+	public static final String Version = "LibSTLS V 1.3"; 
+	private static final String openJBugAlgo=" TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384 ";
+	public  static boolean noEDC = false;
 	
 	public static void AddBCProv() { Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider()); 	} 
+	private static String disabledCiphers=null; 
+	private static String disabledProtocols=null;
+	
+	public static boolean j7regression=false;
+	public static boolean openJBug = false;
+	public static boolean Debug=false;
+	public static boolean useBC = true;
+	
+	public static void setDisabledChipers(String[] arr) {
+		String st="\n";
+		int cx=arr.length;
+		for (int ax=0;ax<cx;ax++) {
+			String c = arr[ax].toUpperCase().trim();
+			st+=c+"\n";
+			} 
+		disabledCiphers=st;
+		}
+	
+	public static void setDisabledProtocols(String[] arr) {
+		String st="\n";
+		int cx=arr.length;
+		for (int ax=0;ax<cx;ax++) {
+			String c = arr[ax].toUpperCase().trim();
+			st+=c+"\n";
+			} 
+		disabledProtocols=st;
+		}
+	
+	public static void setCiphers(SSLSocket ssl) throws Exception {
+		String[] lst;
+		
+		if (j7regression) {
+			lst=new String[] {
+					"SSL_RSA_WITH_RC4_128_MD5",
+					"SSL_RSA_WITH_RC4_128_SHA",
+					"TLS_RSA_WITH_AES_128_CBC_SHA",
+					"TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
+					"TLS_DHE_DSS_WITH_AES_128_CBC_SHA",
+					"SSL_RSA_WITH_3DES_EDE_CBC_SHA",
+					"SSL_DHE_RSA_WITH_3DES_EDE_CBC_SHA",
+					"SSL_DHE_DSS_WITH_3DES_EDE_CBC_SHA",
+					"SSL_RSA_WITH_DES_CBC_SHA",
+					"SSL_DHE_RSA_WITH_DES_CBC_SHA",
+					"SSL_DHE_DSS_WITH_DES_CBC_SHA",
+					"SSL_RSA_EXPORT_WITH_RC4_40_MD5",
+					"SSL_RSA_EXPORT_WITH_DES40_CBC_SHA",
+					"SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
+					"SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA",
+					"TLS_EMPTY_RENEGOTIATION_INFO_SCSV"};
+			} else  lst = ssl.getSupportedCipherSuites();
+		
+		String tmp="";
+		int cx = lst.length;
+		for (int ax=0;ax<cx;ax++) {
+			if (lst[ax].contains("_anon_")) continue;
+			
+			if (
+						noEDC && (
+								lst[ax].contains("_ECDHE_") || 
+								lst[ax].contains("_ECDSA_") ||
+								lst[ax].contains("_ECDH_")		)
+								) continue;
+			
+			if (openJBug && openJBugAlgo.contains(lst[ax].toUpperCase())) continue;
+			if (disabledCiphers!=null) {
+				String t = lst[ax].toUpperCase();
+        	  	if (disabledCiphers.contains("\n"+t+"\n")) continue;
+				}
+			tmp+=lst[ax]+"\n";
+			}
+		tmp=tmp.trim();
+		lst=tmp.split("\\n+");
+		tmp=null;
+		ssl.setEnabledCipherSuites(lst);
+		
+		if (disabledProtocols!=null) {
+			lst = ssl.getSupportedProtocols();
+			tmp="";
+			cx = lst.length;
+			for (int ax=0;ax<cx;ax++) {
+				String p = lst[ax].toUpperCase();
+				if (disabledProtocols.contains("\n"+p+"\n")) continue;
+				tmp+=lst[ax]+"\n";
+				}
+			tmp=tmp.trim();
+			lst=tmp.split("\\n+");
+			tmp="";
+			ssl.setEnabledProtocols(lst);
+			}
+		
+		}
 	
 	public static SSLSocketFactory GetSSLForServer(X509Certificate C,KeyPair KP) throws Exception { //OK
 		String passwd=Long.toString(Stdio.NewRndLong(),36);
@@ -81,7 +174,8 @@ public class LibSTLS {
 	}
 	
 	public static SSLSocketFactory GetSSLForClient(X509Certificate C) throws Exception {
-		SSLContext sc = SSLContext.getInstance("TLS");
+		SSLContext sc;
+		sc = SSLContext.getInstance("TLS");
 		
 		TrustManager[] trustAllCerts = new TrustManager[] { 
 				    new X509TrustManager() {     
@@ -114,7 +208,8 @@ public class LibSTLS {
 	}
 	
 	public static SSLSocketFactory GetSSLForClient() throws Exception { //OK
-		SSLContext sc = SSLContext.getInstance("TLS");
+		SSLContext sc;
+		sc = SSLContext.getInstance("TLS");
 		
 		TrustManager[] trustAllCerts = new TrustManager[] { 
 				    new X509TrustManager() {     
@@ -175,22 +270,15 @@ public class LibSTLS {
            
             return sf;
 	}
-
+	
 	public static SSLSocket ConnectSSL(Socket con,SSLSocketFactory sf,String Host) throws Exception { //OK
 	      SSLSocket sslSocket = (SSLSocket) (sf.createSocket(con, Host, con.getPort(), true));
           sslSocket.setUseClientMode(true);
-          String tmp = "";
-          String[] cs = sslSocket.getSupportedCipherSuites();
-          int cx = cs.length;
-          for (int ax=0;ax<cx;ax++) {
-        	  	if (!cs[ax].contains("_anon_")) tmp+=cs[ax]+"\n";
-          		}
-            tmp=tmp.trim();
-            cs=tmp.split("\\n+");
-            sslSocket.setEnabledCipherSuites(cs);
+          LibSTLS.setCiphers(sslSocket);
             try {
             	sslSocket.startHandshake();
             	} catch(Exception E) {
+            		if (Debug) E.printStackTrace();
             		if (E.getMessage().toLowerCase().contains("could not generate dh keypair")) {
             				throw new PException("JAVA SSL BUG: JDK-7044060 Update your JDK!"); 
             		} else throw E;
@@ -201,7 +289,8 @@ public class LibSTLS {
 	public static SSLSocket AcceptSSL(Socket con,SSLSocketFactory sf,String Host) throws Exception { //OK
 	        SSLSocket sslSocket = (SSLSocket) (sf.createSocket(con, Host, con.getPort(), true));
             sslSocket.setUseClientMode(false);
-            sslSocket.setEnabledCipherSuites(sslSocket.getSupportedCipherSuites());
+            //sslSocket.setEnabledCipherSuites(sslSocket.getSupportedCipherSuites());
+            LibSTLS.setCiphers(sslSocket);
             sslSocket.startHandshake();
             return sslSocket;
 	}
@@ -316,7 +405,7 @@ public class LibSTLS {
 		return cert2;	
 	} 
 	
-	public boolean isAnOnionMailCertificate(X509Certificate C,String onion) throws Exception {
+	public static boolean isAnOnionMailCertificate(javax.security.cert.X509Certificate C,String onion) throws Exception {
 		BigInteger ser = C.getSerialNumber();
 		byte[] sr = ser.toByteArray();
 		ser=null;
@@ -452,8 +541,10 @@ public class LibSTLS {
 		for (int ax=0;ax<cx;ax++) {
 			try {
 				PublicKey P = C[ax].getPublicKey();
-				stat=1;
-				C[ax].verify(P,"BC");
+				if (host.endsWith(".onion") && isAnOnionMailCertificate(C[ax],host)) {
+					stat=1;
+					C[ax].verify(P,"BC");
+					}
 				stat=2;
 				C[ax].checkValidity();
 				stat=3;

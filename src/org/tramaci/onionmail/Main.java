@@ -22,6 +22,7 @@
 //TODO Rimuovere TorDnsLocalProxy e sostituire con NTU2
 
 package org.tramaci.onionmail;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -30,7 +31,6 @@ import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.lang.management.ManagementFactory;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -47,17 +47,18 @@ import java.util.concurrent.TimeUnit;
 import javax.crypto.SecretKey;
 
 public class Main {
-	Config Config = new Config();
+	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0004_0006_01C6L;
-	public static String Version="1.4.7.454B";
-	public static String VersionExtra="";
+	public static long VersionID = 0x0001_0006_0000_029BL;
+	public static String Version="1.6.0.667";
+	public static String VersionExtra="~dev";
 
 	public static SMTPServer[] SMTPS = null;
 	public static POP3Server[] POP3S = null;
 	public static org.tramaci.onionmail.MailingList.ListThread[] ListThreads = null;
 	public static MultiDeliverThread[] MultiTthread = null;
-	
+	public static HTTPServer[] HTTP = null;
+
 	public static ControlService CS = null;
 	public static ControlService[] CSP = null; 
 	
@@ -206,7 +207,7 @@ public class Main {
 	private boolean TermCmd()   {
 		boolean stat1=false;
 		try {
-			echo("Closing previous hinstances:\t");
+			echo("Closing previous instances:\t");
 			Socket s = new Socket(Config.ControlIP,Config.ControlPort);
 			s.setSoTimeout(5000);
 			BufferedReader i = J.getLineReader(s.getInputStream());
@@ -277,9 +278,10 @@ public class Main {
 	@SuppressWarnings("static-access")
 	public void Start(String fc) throws Exception {
 		int numSrv=0;
+		int mht=0;
 		try {
-			Config = Config.LoadFromFile(fc);
 			
+			Config = Config.LoadFromFile(fc);
 			if (Oper==Main.Oper_KCTL) {
 				echo("Remote KCTL operation\nPaste here the KCTL Sequence:\n");
 				String kctl = J.ASCIISequenceReadI(System.in, Const.ASC_KB_KCTL);
@@ -337,10 +339,14 @@ public class Main {
 			if (st.startsWith("@")) {
 			echo(st.substring(1)+"\n");	
 			} else echo("Config error "+E.getMessage()+"\n");
+			
+			//E.printStackTrace();
+			
 			System.exit(2);
 			}
 		
 		if (Oper==Main.Oper_Gen_ServerS) { 
+				if (Main.ConfVars!=null) echo("OM:[COMPLETE] ");
 				echo("\nOperation complete!\n");
 				System.exit(0);
 				}	
@@ -351,11 +357,10 @@ public class Main {
 			}
 		
 		if (!J.TCPRest(Config.TorIP, Config.TorPort)) {
+			if (Main.ConfVars!=null) echo("OM:[ERROR] ");
 			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"`\n");
 			System.exit(2);
 			}
-				
-		
 			
 		ListThreads= new org.tramaci.onionmail.MailingList.ListThread[Config.ListThreadsMax];
 		MultiTthread = new MultiDeliverThread[Config.ListThreadsMax];
@@ -379,6 +384,7 @@ public class Main {
 			for (int ax=0;ax<cx;ax++) Config.SMPTServer[ax].OnTheSameMachine = otsm;
 			
 			int bx=0;
+			
 			for (int ax=0;ax<cx;ax++) {
 				echo("\nStart "+J.Limited("`"+Config.SMPTServer[ax].Nick+"`",40)+"\n");
 				echo("\tOnion:\t"+Config.SMPTServer[ax].Onion+"\n");
@@ -395,17 +401,18 @@ public class Main {
 				try {
 					echo("\tSMTP: \t"+J.Spaced(J.IP2String(Config.SMPTServer[ax].LocalIP)+":"+Config.SMPTServer[ax].LocalPort,25));
 					SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_TorServer);
-					echo("\tOk\n");
+					echo("\ttor\tOk\n");
 					bx++;
 					if (Config.SMPTServer[ax].EnterRoute) {
 						String x = Config.SMPTServer[ax].ExitIP==null ? "0.0.0.0" : J.IP2String(Config.SMPTServer[ax].ExitIP);
 						echo("\tSMTP: \t"+J.Spaced(x+":"+Config.SMPTServer[ax].LocalPort,25));
 						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_InetServer);
-						echo("\tOk\n");
+						echo("\tinet\tOk\n");
 						bx++;
 						echo("\tSMTP: \t"+J.Spaced(x+":"+Config.SMPTServer[ax].ExitAltPort,25));
 						SMTPS[bx] = new SMTPServer(Config,Config.SMPTServer[ax],SMTPServer.SM_InetAlt);
-						echo("\tOk\n");
+						echo("\tialt\tOk\n");
+						
 						bx++;
 						}
 					
@@ -419,6 +426,7 @@ public class Main {
 					echo("\tPOP3:\t"+J.Spaced(J.IP2String(Config.SMPTServer[ax].LocalIP)+":"+Config.SMPTServer[ax].LocalPOP3Port,25));
 					POP3S[ax] = new POP3Server(Config,Config.SMPTServer[ax]);
 					echo("\tOK\n");
+					if (Config.SMPTServer[ax].HasHTTP) mht++;
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "POP3."+Config.SMPTServer[ax].Nick);
@@ -433,6 +441,16 @@ public class Main {
 				System.exit(2);
 			}
 		
+		HTTP = new HTTPServer[mht+1];
+		int bx=0;
+		for (int ax=0;ax<Config.SMPTServer.length;ax++) {
+			if (!Config.SMPTServer[ax].HasHTTP) continue;
+			echo("HTTP Server: \t"+Config.SMPTServer[ax].Nick+"\t"+J.IP2String(Config.SMPTServer[ax].LocalIP)+":"+Config.SMPTServer[ax].LocalHTTPPort+"\t");
+			HTTP[bx] = new HTTPServer(Config,Config.SMPTServer[ax]);
+			echo("Ok\n");
+			bx++;
+			}
+			
 		SMTPServer[] sa = new SMTPServer[numSrv];
 		System.arraycopy(SMTPS, 0, sa, 0,  numSrv);
 		SMTPS=sa;
@@ -445,15 +463,14 @@ public class Main {
 			int cx = Config.SMPTServer.length;
 			int dx=0;
 			String t0="\n";
-			echo("Public control ports:\n");
-			
+						
 			for (int ax=0;ax<cx;ax++) if (Config.SMPTServer[ax].PublicControlIP!=null) dx++;
 			Main.CSP = new ControlService[dx];
 			
 			for (int ax=0;ax<cx;ax++) { 
 				if (Config.SMPTServer[ax].PublicControlIP!=null) {
-					String t1=Config.SMPTServer[ax].PublicControlIP+":"+Config.SMPTServer[ax].PublicControlPort;
-					echo("\t"+J.Spaced(Config.SMPTServer[ax].Nick, 32));
+					String t1=J.IP2String(Config.SMPTServer[ax].PublicControlIP)+":"+Config.SMPTServer[ax].PublicControlPort;
+					echo("Public control port:\t"+J.Spaced(Config.SMPTServer[ax].Nick, 32));
 					echo(J.Spaced(J.IP2String(Config.SMPTServer[ax].PublicControlIP)+":"+Config.SMPTServer[ax].PublicControlPort,25));
 					
 					if (t0.contains("\n"+t1+"\n")) {
@@ -463,9 +480,7 @@ public class Main {
 					
 					Main.CSP[ax] = new ControlService(Config ,Config.SMPTServer[ax],Config.SMPTServer[ax].PublicControlPort,Config.SMPTServer[ax].PublicControlIP);
 					echo("Ok\n");
-					
 					}
-				echo("\n");
 				}
 			} catch(Exception BE) {
 				echo("Error "+BE.getMessage()+"\n");
@@ -487,6 +502,25 @@ public class Main {
 						}
 	
 	Config.GlobalLog(Config.GLOG_All, "MAIN", "OnionMail is running!");
+	
+	if (Main.ConfVars!=null) {
+		boolean ac= Main.ConfVars.containsKey("global-autoclose");
+		
+		if (Main.ConfVars.containsKey("global-autodelete")) {
+			for (String k:Main.ConfVars.keySet()) {
+				Main.ConfVars.put(k, "");
+				Main.ConfVars.remove(k);
+				}
+			System.gc();
+			Main.ConfVars=null;
+			System.gc();
+			Main.echo("OM:[DELETE]\n");
+			}
+		Main.echo("OM:[COMPLETE]\n");
+		if (ac) System.exit(0);
+		Main.echo("OM:[RUNNING]\n");
+		}
+	
 	Thread.sleep(2000);		
 	SelfTest();
 	if (Config.UseKernel) startKernel(); 
@@ -537,15 +571,7 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-						
-				try {
-						byte[] ff0 = Stdio.file_get_bytes("/sdcard/onionmailbuild");
-						int ff1 = Integer.parseInt(new String(ff0).trim());
-						ff1++;
-						ff0 = Integer.toString(ff1).getBytes();
-						Stdio.file_put_bytes("/sdcard/onionmailbuild",ff0);
-					} catch(Exception I) { I.printStackTrace(); }
-						
+								
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -578,7 +604,28 @@ public static void main(String args[]) {
 							}
 						ax++;
 						}
-								
+				
+				if (cmd.compareTo("-rc")==0  && (ax+1)<args.length) {
+					ax++;
+					String x = args[ax];
+					
+					try {
+							byte[] ff0;
+							if (new File(x).exists()) ff0= Stdio.file_get_bytes(x); else ff0=new byte[] { 48 };
+							int ff1 = Integer.parseInt(new String(ff0).trim());
+							ff1++;
+							ff0 = Integer.toString(ff1).getBytes();
+							Stdio.file_put_bytes(x,ff0);
+						} catch(Exception I) { Main.echo("-RC: Counter error `"+x+"' "+I.getMessage()+"\n"); }
+				
+					fm=true;
+				}
+				
+				if (cmd.compareTo("-bm")==0) {
+					BatchMode();
+					fm=true;
+					}
+				
 				if (cmd.compareTo("-v")==0) { 
 						fm=true;
 						verbose=true;
@@ -767,23 +814,22 @@ public static void main(String args[]) {
 						}
 					System.exit(0);
 					}
-				
-				if (cmd.compareTo("--scanport")==0 && (ax+3)<args.length) {
-					ScanFreePort(J.parseInt(args[ax+1]),J.parseInt(args[ax+2]),J.parseInt(args[ax+3]));
-					System.exit(0);
-				}
-				
+										
 				if (cmd.compareTo("-?")==0) { 
 						Helpex();  
 						return; 
 						}
 				
-				if (cmd.compareTo("--gen-rpass")==0) try {
-					starterCreation();
-					System.exit(0);
-					} catch(Exception E) { EXCM(E); }
+				if (cmd.compareTo("--gen-rpass")==0) {
+					try {
+						starterCreation();
+						System.exit(0);
+						} catch(Exception E) { EXCM(E); }
+					fm=true;
+					}
 				
 				if (cmd.compareTo("--rpass-server")==0 && (ax+2)<args.length) try {
+					fm=true;
 					Config G = new Config();
 					G.DefaultPort=8000;
 					G.Debug = verbose;
@@ -821,6 +867,7 @@ public static void main(String args[]) {
 				if (N.Config.Debug) EXC(E,"Main");
 				} else EXC(E,"Main");
 			echo("Fatal Error: "+E.getMessage()+"\n");
+			if (Main.ConfVars!=null) Main.echo("OM:[ERROR] "+E.getMessage()+"\n");
 			}
       }
 
@@ -1006,14 +1053,21 @@ public static void main(String args[]) {
 							} //MultiDeliver
 					
 						if (TextCaptcha.isEnabled()) try  { TextCaptcha.Garbage(false); } catch(Exception E) { Config.EXC(E, "TextCaptcha.Garbage"); }
-											
+					
+						int cx = Main.HTTP.length;
+						/*
+						for (int ax=0;ax<cx;ax++) try {
+							if (HTTP[ax]==null) continue;
+							HTTP[ax].Garbage();
+							} catch(Exception KH) { Config.EXC(KH, "Kernel:HTTP"); }
+						*/
 						Main.MaxThread = ctask;
 						Main.PercThread = (int) Math.ceil(100.0*(grbt / maxt));
 						if (Main.MaxThread>Main.statsMaxThread) Main.statsMaxThread=Main.MaxThread;
 						if (Main.PercThread>Main.statsPercThread) Main.statsPercThread=Main.PercThread;
 						//if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", ctask+" T.c., "+grbt+" T.r., "+Main.PercThread+"%");
 				
-						int cx = Config.SMPTServer.length;
+						cx = Config.SMPTServer.length;
 						
 						if (Config.UseStatus && Main.statusHash==null)  Main.statusHash = new long[cx];
 						for (int ax=0;ax<cx;ax++) {
@@ -1313,6 +1367,20 @@ public static void main(String args[]) {
 		try { srv.close();  } catch(Exception Ie) {}
 		}
 			
+	private static void BatchMode() throws Exception {
+		Main.echo("OM:[DATA] Stdin headers\n");
+		BufferedReader In = J.getLineReader(System.in);
+		ConfVars = J.ParseHeaders(In);
+		Main.echo("OM:[DATA_OK] Processing\n");
+		if (ConfVars.containsKey("global-pass")) Main.SetPass = ConfVars.get("global-pass");
+		if (ConfVars.containsKey("global-selpass")) Main.SelPass = Config.parseY(ConfVars.get("global-pass"));
+		if (ConfVars.containsKey("global-setpgp-root")) Main.PGPRootMessages = Config.parseY(ConfVars.get("global-setpgp-root"));
+		if (ConfVars.containsKey("global-setpgp")) Main.SetPGPSrvKeys = Config.parseY(ConfVars.get("global-setpgp"));
+		if (ConfVars.containsKey("global-setndk")) Main.NoDelKeys = Config.parseY(ConfVars.get("global-setndk"));
+		if (ConfVars.containsKey("global-echo")) Main.echo (ConfVars.get("global-echo")+"\n");
+		if (ConfVars.containsKey("global-stderr")) System.err.print(ConfVars.get("global-stderr")+"\n");
+	}
+	
 	private static void EXCM(Exception E) {
 		String msg = E.getMessage();
 		if (msg==null) msg="Unknown";

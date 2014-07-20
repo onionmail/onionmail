@@ -22,20 +22,22 @@ package org.tramaci.onionmail;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.URLEncoder;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
@@ -48,19 +50,29 @@ import javax.crypto.SecretKey;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
-import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
 import org.tramaci.onionmail.MailBox.Message;
 import org.tramaci.onionmail.MailingList.MLUserInfo;
-
 
 public class SrvIdentity {
 	public String Nick = "null";
 	public String Onion="null.onion";
+	public String MXDomain=null;
 	public InetAddress LocalIP = null;
 	public InetAddress ExitIP = null;
 	public boolean NewCreated = false;
 	public boolean POP3CanRegister=true;
 	public boolean POP3CanVMAT=true;
+	public boolean NoVersion = true;
+	
+	public boolean HasHTTP=false;
+	public int LocalHTTPPort = 80;		
+	public String HTTPServerName=null;
+	public String HTTPBasePath=null;
+	public String HTTPLogFile=null;
+	
+	public HashMap <String,Boolean> HTTPCached = new HashMap <String,Boolean>();
+	public HashMap <String,Integer> HTTPAccess = new HashMap <String,Integer>();
+	public HashMap <String,String> HTTPETEXVar = new HashMap <String,String>();
 	
 	public boolean CanRelay=false;
 	
@@ -190,6 +202,8 @@ public class SrvIdentity {
 	public int ExitAltPort = 10025;		
 	public boolean ExitNotMultipleServerDelivery = false; 
 	
+	public String PGPKeyServers=null;
+	
 	public HashMap <String,Application> Applications = null;
 	
 //	public HashMap <String,String> NextCheck = new HashMap<String,String>();
@@ -217,6 +231,10 @@ public class SrvIdentity {
 	public HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 	
 	public int Status = 0;
+	public boolean AutoPGP=true;
+	public boolean AutoPGPUpdate=false;
+	public String AutoPGPID = "%n OnionMail Server";
+	
 	public static final int ST_NotLoaded=0;		//A
 	public static final int ST_Loaded=1;				//B
 	public static final int ST_Running=2;				//C
@@ -462,7 +480,7 @@ public class SrvIdentity {
 		File F = new File(Maildir);
 		if (!F.exists()) F.mkdirs();
 			
-		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed","head","net" }) {
+		for (String p : new String[] { "", "usr" , "inbox" , "keys" , "log", "feed","head","net" ,"tmp"}) {
 			F = new File(Maildir+"/"+p);
 			F.mkdir();
 			F.setExecutable(true, true);
@@ -527,7 +545,7 @@ public class SrvIdentity {
 		s+="\nhash: "+Long.toHexString(s.hashCode())+"\n";
 				
 		Stdio.file_put_bytes(Maildir+"/server.tex",s.getBytes() );
-		
+		setAutoConfig();
 	}
 	
 	public boolean CheckServerPresent() throws Exception {
@@ -574,7 +592,7 @@ public class SrvIdentity {
 		
 		if (TimeFrom<1) TimeFrom = System.currentTimeMillis() - (86400000L * Math.abs(Stdio.NewRndLong() % 365)+86400000L);
 		if (TimeTo<1) TimeTo =  System.currentTimeMillis() + (86400000L * Math.abs(Stdio.NewRndLong() % 365)+315360000000L);
-		
+	
 		MyCert = LibSTLS.CreateCert(new KeyPair(SPK,SSK), Onion, TimeFrom, TimeTo, at);
 		LibSTLS.SaveCert(Maildir+"/head/data", Sale, MyCert);
 		
@@ -659,6 +677,16 @@ public class SrvIdentity {
 			
 		Status |= SrvIdentity.ST_Running;
 		StartProcs();
+		setAutoConfig();
+		if (AutoPGP) {
+				if (!new File(Maildir+"/head/hldr").exists()) SrvAutoPGPKeys();
+				if (AutoPGPUpdate && new File(Maildir+"/head/hldr").exists()) try {
+					PGPSendKey("server", Maildir+"/IDList");
+					} catch(Exception E) {
+						Log("PGPSendKey Error: "+E.getMessage());
+						if (Config.Debug) E.printStackTrace();
+					}
+				}
 		}
 	
 	private String UFname(String local) throws Exception {
@@ -1513,7 +1541,7 @@ public class SrvIdentity {
 		A.DoInTKIM = !toInet;
 		A.ForceSSL= !toInet;
 		A.ForceTKIM = false;
-		A.HostName = toInet ? ExitRouteDomain : Onion;
+		A.HostName = toInet ? (MXDomain==null ? ExitRouteDomain : MXDomain) : Onion;
 		A.InternetConnection = toInet;
 		A.currentExit=ex;
 		A.Do();
@@ -3591,17 +3619,41 @@ byte[][] Cobj = new byte[][] {
 		// Log functions
 
 		public void SrvSetPGPKeys() {
-			Main.echo("\nDo you want to insert a PGP Public & Private key for server`"+Nick+"`\n\tYes, No ?");
-					boolean re=false;
-					BufferedReader In = J.getLineReader(System.in);
+			boolean bm= Main.ConfVars!=null;
+			if (bm) bm = Main.ConfVars.containsKey(Nick+"-pgp-key");
+			
+			if (!bm) Main.echo("\nDo you want to insert a PGP Public & Private key for server`"+Nick+"`\n\tYes, No ?");
+			boolean re=false;
+			BufferedReader In = J.getLineReader(System.in);
 					
-					try { re = Config.parseY(In.readLine().trim().toLowerCase()); } catch(Exception I) { Main.echo("NO\n"); }
+			if (bm) re=true; else try { re = Config.parseY(In.readLine().trim().toLowerCase()); } catch(Exception I) { Main.echo("NO\n"); }
+			
 					if (re) try {
-						Main.echo("Enter the ASCII file name: >");
-						String Pat = In.readLine().trim();
+						String Pat;
+						if (bm) {
+							Pat = Main.ConfVars.get(Nick+"-pgp-key");
+							if (Pat.length()==0) {
+								String x ="OM:[ERR] Invalid PGP key path on header `"+Nick+"-pgp-key"+"`";
+								Main.echo(x+"\n");
+								throw new Exception(x);
+								}
+						} else {
+							Main.echo("Enter the ASCII file name: >");
+							Pat= In.readLine().trim();
+							}
 						Pat = new String(Stdio.file_get_bytes(Pat));
-						Main.echo("Enter the Passphrase: >");
-						String Pass = In.readLine().trim();
+						String Pass;
+						if (bm && Main.ConfVars.containsKey(Nick+"-pgp-pass")) {
+							Pass = Main.ConfVars.get(Nick+"-pgp-pass");
+							Main.ConfVars.put(Nick+"-pgp-pass", J.RandomString(64));
+							System.gc();
+							Main.ConfVars.remove(Nick+"-pgp-pass");
+							System.gc();
+						} else {
+							Main.echo("Enter the "+Nick+"'s PGP KEY Passphrase: >");
+							Pass = In.readLine().trim();
+							}
+						
 						String Priv = J.ParsePGPPrivKey(Pat);
 						Pat = J.ParsePGPKey(Pat);
 						UserSetPGPKey(Pat, "server",true);
@@ -3609,14 +3661,76 @@ byte[][] Cobj = new byte[][] {
 						byte[] b = Pass.getBytes("UTF-8");
 						b=Stdio.AESEncMulP(Sale, b);
 						Stdio.file_put_bytes(Maildir+"/head/hldr", b);
-						Main.echo("PGP Keys for `"+Nick+"` is set!\n");
+						Main.echo((bm ?"OM:[PGP_OK]"+Nick+" ":"" )+"PGP Keys for `"+Nick+"` is set!\n");
 						} catch(Exception EX) {
 							String ms = EX.getMessage();
-							Main.echo("Error: "+ms+"\n");
-							Log(Config.GLOG_Server, "Can't set GPG Keys: "+ms);
+							Main.echo((bm ?"OM:[PGP_ERR]"+Nick+" ":"" )+"Error: "+ms+"\n");
+							Log(Config.GLOG_Server, "Can't set PGP Keys: "+ms);
 							if (Config.Debug) EX.printStackTrace();
 						}
+					
+				if (bm) {
+					if (Main.ConfVars.containsKey(Nick+"-delkey")) {
+						String[] x = new String[] { Nick+"-pgp-key" , Nick+"-pgp-pass" , Nick+"-delkey" };
+						String pg = Main.ConfVars.get(Nick+"-pgp-key" );
+						if (pg!=null) try { J.Wipe(pg, false); } catch(Exception E) { Config.EXC(E, Nick+".DelPGPKeys"); }
+						for(String k:x) {
+							Main.ConfVars.put(k, J.RandomString(32));
+							System.gc();
+							Main.ConfVars.put(k, "");
+							Main.ConfVars.remove(k);
+							}
+						System.gc();
+					}
+				}
 		}
+		
+		public void SrvAutoPGPKeys() throws Exception {
+			
+			Log("Generating new PGP KeyPair");
+			
+			ByteArrayOutputStream Public = new ByteArrayOutputStream();
+			ByteArrayOutputStream Private = new ByteArrayOutputStream();
+			long r = Stdio.NewRndLong() % 365;
+			r=r*86400;
+			
+			String id;
+			if (AutoPGPID!=null) {
+				String st = AutoPGPID.trim();
+				st = ExpandStr(st);
+				st=st.replace('<', ' ');
+				st=st.replace('>', ' ');
+				st=st.trim();
+				st+=" <server@"+Onion+">";
+				id=st;
+				} else id="server@"+Onion;
+			
+			String Pws = PGPKeyGen.KeyGen(
+						new Date(Time()),
+						id,
+						Public, 
+						Private)
+						;
+			
+			String Pub = new String(Public.toByteArray());
+			UserSetPGPKey(Pub, "server",true);
+			UserSetPGPKey(new String(Private.toByteArray()), Const.SRV_PRIV,true);
+			byte[] b = Pws.getBytes("UTF-8");
+			b=Stdio.AESEncMulP(Sale, b);
+			Stdio.file_put_bytes(Maildir+"/head/hldr", b);
+			Pws=J.RandomString(Pws.length());
+			Pws=null;
+			Stdio.file_put_bytes(Maildir+"/publicKey.asc", Pub.getBytes());
+			Private.reset();
+			Private.close();
+			Private=null;
+			Private=Public;
+			Public.reset();
+			Public=null;
+			Private=null;
+			System.gc();
+			Log("PGP KeyPair generated!");
+			}
 		
 		public String GetPassPhrase() throws Exception {
 			byte[] b = Stdio.file_get_bytes(Maildir+"/head/hldr");
@@ -4219,6 +4333,180 @@ byte[][] Cobj = new byte[][] {
 			LimSrvMMsg=b;
 			LimSrvMHour=a;
 		}
+
+public void setAutoConfig() {
+		try {
+			String fp = Maildir+"/config-v1.1.xml";
+			if (new File(fp).exists()) return;
+			
+			InputStream I=  SrvIdentity.class.getResourceAsStream("/resources/config-v1.1.xml.src");
+			BufferedReader S = J.getLineReader8(I);
+			String buf="";
+			while(true) {
+							String li=S.readLine();
+							if (li==null) break;
+							buf+=li+"\r\n";
+							}
+			I.close();
+			buf=buf.replace("%ONION%", Onion);
+			buf=buf.replace("%NICK%", Nick);
+			Stdio.file_put_bytes(fp, buf.getBytes("UTF-8"));
+		} catch(Exception E) {
+			Config.EXC(E, Nick+".setAutoConfig");
+			if (Config.Debug) E.printStackTrace();
+			}
+	}
+		
+	public int PGPSendKey(String usr,String dfile) throws Exception {
+		int rs=0;
+		String dn;
+		if (new File(dfile).exists()) dn = new String( Stdio.file_get_bytes(dfile) ); else dn=" ";
+			
+		String ls = PGPKeyServers;
+		if (ls==null) ls=Config.PGPKeyServers; 
+		if (ls==null) throw new PException("@550 No PGP keyservers!");
+		String[] KS =Config.StringList(ls);
+		int cx = KS.length;
+		
+		String hs = "@"+Long.toString(ls.hashCode(),36)+"@";
+		String mhs=hs;
+		
+		if (dn.contains(" "+hs+" ")) return 0;
+		
+		for (int ax=0;ax<cx;ax++) {
+			String li =KS[ax].toLowerCase().trim();
+			hs = Long.toString(li.hashCode(),36);
+			
+			if (dn.contains(" "+hs+" ")) { 
+					rs++; 
+					continue;
+					}
+			
+			if (li.length()==0) {
+				rs++ ;
+				continue;
+				}
+			
+			li=li+":11371";
+		
+			String tok[] = li.split("\\:");
+			int port = J.parseInt(tok[1]);
+			li = tok[0].trim();
+			if (port<1 || port>65535) continue;
+			if (PGPSendKey(usr,li,port)) { 
+					rs++;
+					dn+=hs+" ";
+					}
+		}
+		
+	if (rs==cx) dn+=mhs+" ";
+	Stdio.file_put_bytes(dfile, dn.getBytes());
+	
+	return rs;
+	} 
+
+	public boolean PGPSendKey(String usr,String server,int port) throws Exception {
+		String y;
+		usr=usr.toLowerCase().trim();
+		if ("@sysop@server@".contains("@"+usr+"@")) y = usr+"@"+Onion; else y=Long.toString(usr.hashCode(),36);
+		Log("Sending PGP public key `"+y+"` to `"+server+":"+port+"`");
+		String PGP = UserGetPGPKey(usr);
+		if (PGP==null) {
+			Log("No PGP KEY available for `"+y+"`");
+			return false;
+			}
+		
+		PGP = PGPSpoofNSA(PGP,true);
+		PGP = PGP.trim()+"\r\n";
+		PGP="keytext=" + URLEncoder.encode(PGP, "ISO-8859-1");
+		
+		int cx = PGP.length();
+		PGP="POST /pks/add HTTP/1.0\r\n"+
+				"Host: "+server+ (port!=80 ? ":"+port : "")+"\r\n"+
+				"Content-Type: application/x-www-form-urlencoded\r\n"+
+				"Content-Length: "+cx+"\r\n\r\n"+ PGP;
+		
+		Socket RS=null;
+		OutputStream O=null;
+		BufferedReader I=null;
+		InputStream is =null;
+		try {
+			if (EnterRoute) {
+				if (ExitIP!=null) RS = new Socket(server,port,ExitIP,0); else RS = new Socket(server,port);
+				} else RS =  J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, server,port);
+			RS.setSoTimeout(3000);
+			O  = RS.getOutputStream();
+			is = RS.getInputStream();
+			I = J.getLineReader(is);
+			O.write(PGP.getBytes());
+			PGP=null;
+			PGP = I.readLine();
+			String[] tok = PGP.split("\\s+",3);
+			if (tok.length<3) throw new PException("Inalid HTTP reply");
+			int status = J.parseInt(tok[1]);
+			if (status!=200) throw new PException("HTTP status: "+status+" "+tok[2]);
+			HashMap <String,String> Hldr = J.ParseHeaders(I);
+			boolean bit=true;
+			if (Hldr.containsKey("x-hkp-results-count")) {
+					String x =Hldr.get("x-hkp-results-count").trim();
+					Log("HKP Results Count: "+x);
+					if (J.parseInt(x)<1) bit=false;
+					}
+			int cl = 0;
+			if (Hldr.containsKey("content-length")) cl = J.parseInt(Hldr.get("content-length"));
+			if (cl>2048) cl=2048;
+			byte[] bf = new byte[cl];
+			is.read(bf);
+			bf=null;
+			try { O.close(); } catch(Exception Ig) {}
+			try { I.close(); } catch(Exception Ig) {}
+			try { is.close(); } catch(Exception Ig) {}
+			try { RS.close(); } catch(Exception Ig) {}
+			return bit;
+			} catch(Exception E) {
+			if (O!=null) try { O.close(); } catch(Exception Ig) {}
+			if (I!=null) try { I.close(); } catch(Exception Ig) {}
+			if (is!=null) try { is.close(); } catch(Exception Ig) {}
+			if (RS!=null) try { RS.close(); } catch(Exception Ig) {}
+			if (E instanceof PException) {
+				Log("KeyServer: "+E.getMessage()+"\n");
+				} else {
+				Config.EXC(E, Nick+"."+"PGPSendKey");
+				if (Config.Debug) E.printStackTrace();
+				}
+			return false;
+			}
+	}
+
+public String ExpandStr(String in) {
+	String rs=new String();
+	int cx = in.length();
+	for (int ax=0;ax<cx;ax++) {
+		char c = in.charAt(ax);
+		if (c=='%' && ax+1!=cx) {
+			ax++;
+			c=in.charAt(ax);
+			
+			if (c=='n') rs+=Nick;
+			if (c=='o') rs+=Onion;
+			if (c=='x' && EnterRoute) rs+=ExitRouteDomain;
+			if (c=='m' && EnterRoute) rs+=MXDomain;
+			if (c=='t') rs+=TimeString();
+			if (c=='v' && !NoVersion) rs+=Main.getVersion();
+			if (c=='T') rs+=EnterRoute ? "EXIT":"NORMAL";
+			if (c=='E') rs+=EnterRoute ? "Exit":"";
+			if (c=='s') rs=rs.trim();
+			try {
+				if (c=='h') rs+=LibSTLS.GetCertHash(MyCert); 
+				} catch(Exception I) {}
+			
+			if (c=='%') rs+="%";
+			} else {
+			rs+=c;	
+			}
+		}
+	return rs;
+}
 		
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

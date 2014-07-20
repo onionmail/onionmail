@@ -22,25 +22,46 @@ import java.net.InetAddress;
 
 
 public class NetArea {
-	private InetAddress IP = null;
+
 	private int FirstIp = 0;
 	private int Mask = 0;
-	
-	private static final int REV = 0xFFFFFFFF;
+	private int nBits=0;
 	
 	NetArea(InetAddress ip, int bits) {
-		IP = ip;
+		nBits=bits;
 		FirstIp = IP2Long(ip.getAddress());
-		Mask = 1<<(bits&31);
-		Mask--;
-	}
+		long ax = 0xFFFFFFFF00000000L>>bits;
+		ax&=0x00000000FFFFFFFFL;
+		Mask = (int)ax;
+		FirstIp&=Mask;
+		}
 	
+	public static NetArea ParseNet(String st) throws Exception {
+			try {
+				String[] tok = st.split("\\/");
+				st=tok[0];
+				int Nbt;
+				if (tok.length==1) Nbt=32; else Nbt= Integer.parseInt(tok[1]);
+				if (Nbt<0 || Nbt>32) throw new Exception();
+				tok = st.split("\\.");
+				if (tok.length!=4) throw new Exception();
+				byte[] b = new byte[4];
+				for (int ax=0;ax<4;ax++) {
+					int c = Integer.parseInt(tok[ax]);
+					if (c<0 || c>255) throw new Exception();
+					b[ax]=(byte)(255&c);
+				}
+				if (Nbt<0 || Nbt>0xFFFFFFFFL) throw new Exception();
+				return new NetArea( InetAddress.getByAddress(b) ,Nbt);
+				
+				} catch(Exception E) {
+					throw new Exception("Invalid CIDR Network Area `"+st+"`");
+				}
+		}
+		
 	public boolean isInNet(int ip) {
-		int c = ip&255;
-		if (c==0 || c==255) return false;
-		ip &=REV ^ Mask;
-		int t = FirstIp&(REV ^ Mask);
-		return ip == t;
+		int t = ip&Mask;
+		return FirstIp == t;
 		}
 			
 	public boolean isInNet(byte[] ip) { return isInNet(IP2Long(ip)); }
@@ -49,23 +70,27 @@ public class NetArea {
 	
 	public int getMask() { return Mask; }
 	
-	public InetAddress getFirstIP() { return IP; }
+	public InetAddress getFirstIP() throws Exception { return InetAddress.getByAddress(Long2IP(FirstIp+1)); }
 	
 	public int getNumberOfFirstIP() {
-		return FirstIp & Mask;
-	}
+		int ax= 32-nBits;
+		ax = 1<<ax;
+		ax--;
+		return ax;
+		}
 	
-	public InetAddress getNetIP()  {
-		int c = FirstIp & (REV^ Mask);
-		try {
-			return InetAddress.getByAddress(Long2IP(c));
-		} catch(Exception E) { return IP; }
-	}
-	
+	public InetAddress getNetIP() throws Exception { return InetAddress.getByAddress(Long2IP(FirstIp)); }
+		
 	public String getString() {
 		try {
-			return InetAddress.getByAddress(Long2IP(FirstIp)).toString()+ "/"+Mask;
+			return InetAddress.getByAddress(Long2IP(FirstIp)).toString()+ "/"+nBits;
 		} catch(Exception E) { return "?"; }
+	}
+	
+	public String toString() {
+		try {
+			return J.IP2String(InetAddress.getByAddress(Long2IP(FirstIp)))+"/"+nBits;
+		} catch(Exception E) { return ""; }
 	}
 	
 	public static byte[] Long2IP(int dta) {

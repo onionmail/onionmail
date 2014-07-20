@@ -135,8 +135,14 @@ public class SMTPServer extends Thread {
 			try {
 					con = srv.accept();
 					if (Identity.BlackList!=null) {
-						if (Identity.BlackList.getIP(con.getInetAddress())>5) {
+						int spams=Identity.BlackList.getIP(con.getInetAddress());
+						if (spams>5) {
 							try {
+								if (spams>10) {
+									con.close();
+									Log(Config.GLOG_Spam,"IP fast blocked! `"+J.IP2String(con.getInetAddress())+"`");
+									continue;
+									}
 								con.setSoTimeout(100);
 								con.getOutputStream().write("451 Greylisted, please try again in 86400 seconds\r\n".getBytes());
 								Identity.StatSpam++;

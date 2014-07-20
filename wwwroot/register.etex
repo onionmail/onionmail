@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="us">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title>Sign UP</title>
+	<link href="/css/global.css" rel="stylesheet">
+    	<script src="/js/global.js"></script>
+
+<!-- NSESSION -->
+
+<style>
+.cappa {
+        position: relative;
+	width: 550px; margin: auto; padding: 10px; border-radius: 10px; border: #048 1px solid;
+	overflow: hidden;
+        }
+.cappa pre {
+	border: #048 1px solid;
+	padding: 10px;
+	border-radius: 8px;
+	}
+
+.cappa div {
+	border: #048 1px solid;
+	padding: 10px;
+	border-radius: 8px;
+	}
+		
+.cappa p { text-align: center; font-weight: bold;}
+.cappa p:before { content: "< "; color: #084; }
+.cappa p:after { content: " >"; color: #084; }
+
+.posta { width: 100%; height: 100%; margin: 0px; padding: 0px;}
+.posta td { font-size: 9pt; font-family: verdana; width: 50%; text-align: right;}
+.posta input { border: #048 1px solid; padding: 4px; border-radius: 4px; }
+.posta input[type=submit] { background-color: #48f; }
+#minfo { font-size: 8pt !important; color: #804 !important; } 
+.perro { color: #f00; text-align: center; } 
+#aspetta {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	text-align: center;
+	display: none;
+	background-color: #fff;
+	border: none;
+	}	
+</style>	
+<script>
+function aspettami() {
+	var o = document.getElementById('aspetta');
+	o.style.display='block';
+	}
+</script>
+</head>
+<body>
+<div id="textpage">
+<div id="mmpreback">
+<div id="mmenucont">
+
+<table id="toptable">
+
+	<tr>
+	<td id="toplogo"><a href="/"><img src="/img/ONMP.gif" alt="OnionMail"></a></td>
+	<td id="topsez" class="topsez">
+        <div><a href="/what.html">Help</a></div>
+	<div><a href="/rulez.etex">Rulez</a></div>
+	<div><a href="/manifesto.html">Manifesto</a></div>
+	<div><a href="/info.etex">Info</a></div>
+	<div><a href="/contacts.etex">Contacts</a></div>
+	<div><a href="/about.etex">About</a></div>		
+	<div class="cli"></div>
+	</td>
+	</tr>
+	</table>
+</div>
+</div>
+
+<div class="oline"></div>
+<div class="pagetit">Sign UP</div><div class="mytext" id="maintext">
+
+<div class="cappa">
+<p>Captcha code</p>
+<!--#CAPTCHA#-->
+<div id="minfo">
+You will be shown a picture in ascii art, you will need to recognize the characters and enter the code.<br>
+Be careful there may be some strange symbols to ignore.<noscript> This process is slow! Don't worry. Do not leave this page!<br>
+		<br>Now we are generating your internal keys and other random stuff.</noscript>
+</div>
+<p>Create Your <!--#NICK#--> Mail Account</p>
+<div>
+<form method="POST" action="/newuser.etex" onsubmit="aspettami()">
+<table class="posta">
+	<tr><td>Login:</td><td><input type="text" name="om-localpart" size="40"></td></tr>
+	<tr><td>Captcha:</td><td><input type="text" name="om-cap" size="40"></td></tr>
+	<tr><td>(*) Voucher code:</td><td><input type="text" name="om-voucher" size="40"></td></tr>
+	<tr><td colspan="2"><input type="submit" name="ok" value="Sign UP"></td></tr>		
+</table>
+</form>
+<span style="font-size: 8pt;">* = Not required.</span>
+</div> 
+<div id="aspetta">
+<br><br><b>Please wait...</b><br>
+		<br>Your user will be created within 200 seconds.<br>
+		<img src="/img/ajax.gif" alt="Loading...">
+		<br>This process is slow! Don't worry. Do not leave this page!<br>
+		<br>Now we are generating your internal keys and other random stuff.<br>
+</div>
+</div>
+<div class="perro"><!--$erro$--></div>
+
+<br><br></div>
+</div>          
+	<div id="bottomoline"></div>
+	<div id="bottompage">
+		<div style="font-family: ocr; color: #048; text-align: center;">
+		<!--#NICK#--> OnionMail Server at <!--#ONION#-->
+		</div>	
+	</div>
+
+	
+</body>
+</html>

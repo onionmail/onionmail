@@ -182,7 +182,7 @@ public class MailBox {
 		Message M = new Message();
 		byte[][] H =new byte[1][];
 		try { H[0] =Index.BlockRead(ix); } catch(Exception E) {
-			Main.EXC(E, "BadBlock in `"+M.FileName+"` id "+M.DbId);
+			Config.EXC(E, "BadBlock in `"+M.FileName+"` id "+M.DbId+" mb `"+LocalPart+"`");
 			M.DbId=ix;
 			M.deleted=true;
 			M.Subject="Bad Block "+M.DbId;
@@ -253,7 +253,7 @@ public class MailBox {
 		Message M = new Message();
 		byte[][] H =new byte[1][];
 		try  { H[0] =Index.BlockRead(ix); } catch(Exception E) {
-			Main.EXC(E, "MsgOpen `"+M.FileName+"` id "+M.DbId);
+			Config.EXC(E, "MsgOpen `"+M.FileName+"` id "+M.DbId+ " mb `"+LocalPart+"`");
 			M.deleted=true;
 			M.MailFrom="???";
 			M.RcptTo="???";

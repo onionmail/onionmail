@@ -406,8 +406,8 @@ public class VirtualMAT {
 		for (ax=0;ax<4;ax++) {
 			fn = DbFile(loc);
 			if (new File(fn).exists()) {
-					if (ax==0) loc+="-";
-					loc+=(char) 0x61 + (int) (rnd % 25);
+					if (ax==0) loc="-"+loc;
+					loc=((char) 0x61 + (int) (rnd % 25))+loc;
 					rnd<<=6;
 					} else break;
 			}
