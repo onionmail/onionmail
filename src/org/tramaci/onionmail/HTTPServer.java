@@ -228,7 +228,7 @@ public class HTTPServer extends Thread {
 		}
 		
 		private void SaveStat() throws Exception {
-			int x = (int)((System.currentTimeMillis()+Identity.TimerSpoof)/86400L);
+			int x = (int)((System.currentTimeMillis()+Identity.TimerSpoof)/86400000L);
 			
 			byte[] dta = Stdio.MxAccuShifter(new byte[][] {
 							Stdio.Stosxi(new int[] { Hits,  Errs, StatCDay, StatCHour,x },4)			,
@@ -245,7 +245,7 @@ public class HTTPServer extends Thread {
 		
 		private void LoadStat() {
 			try {
-				int x = (int)((System.currentTimeMillis()+Identity.TimerSpoof)/86400L);
+				int x = (int)((System.currentTimeMillis()+Identity.TimerSpoof)/86400000L);
 				String fs = Identity.Maildir+"/wwwstats";
 				if (!new File(fs).exists()) return;
 				byte[] dta = Stdio.file_get_bytes(fs);
