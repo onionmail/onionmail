@@ -57,7 +57,8 @@ public class LibSTLS {
 	public static final String BC = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
 	public static final String Version = "LibSTLS V 1.3"; 
 	private static final String openJBugAlgo=" TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384 ";
-	public  static boolean noEDC = false;
+	public static boolean noEDC = false;
+	public static boolean noDSDSA = false;
 	
 	public static void AddBCProv() { Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider()); 	} 
 	private static String disabledCiphers=null; 
@@ -121,6 +122,12 @@ public class LibSTLS {
 								lst[ax].contains("_ECDHE_") || 
 								lst[ax].contains("_ECDSA_") ||
 								lst[ax].contains("_ECDH_")		)
+								) continue;
+			
+			if (
+						noDSDSA &&(
+								lst[ax].contains("_DHE_")	||
+								lst[ax].contains("_DH_")		)
 								) continue;
 			
 			if (openJBug && openJBugAlgo.contains(lst[ax].toUpperCase())) continue;
@@ -590,5 +597,25 @@ public class LibSTLS {
 		return rs;
 		}
 
+	public static boolean TestJavaDiMerdaBug(boolean verbose) {
+		String[] Algo = { "RSA" , "DH" , "DSA" };
+		if (verbose) Main.echo("Testing KeyPairGenerator:\n");
+		String jdmso="";
+		boolean rs=false;
+		for(String cAlg :Algo) try {
+			jdmso=cAlg;
+			if (verbose) Main.echo("\t"+cAlg+" test ...\t");
+			KeyPairGenerator test = KeyPairGenerator.getInstance(cAlg);
+			test.initialize(2048,SecureRandom.getInstance("SHA1PRNG"));
+			KeyPair kp = test.generateKeyPair();
+			if (verbose) Main.echo("OK ("+kp.getPublic().getAlgorithm()+")\n");
+			} catch(Exception E) {
+				if (verbose) Main.echo("Error: "+E.getMessage()+"\n"); else Main.echo("Error on "+jdmso+"  Algorithm\n");
+				rs=true;
+			}
+		if (verbose) Main.echo("Test complete KeyPairGenerator is " + (rs ? "BAD" : "GOOD") +"\n");
+		return rs;		
+		}
+	
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

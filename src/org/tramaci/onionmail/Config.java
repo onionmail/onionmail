@@ -1262,7 +1262,36 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("ssljava6regression")==0) { fc=true; LibSTLS.j7regression=Config.parseY(tok[1]); }
 								if (cmd.compareTo("sslopenjbug")==0) { fc=true; LibSTLS.openJBug=Config.parseY(tok[1]); }
 								if (cmd.compareTo("sslnoedc")==0) { fc=true; LibSTLS.noEDC=Config.parseY(tok[1]); }
-								if (cmd.compareTo("sslusebc")==0) { fc=true; LibSTLS.useBC=Config.parseY(tok[1]); } //TODO Not used!
+								if (cmd.compareTo("sslnodsa")==0) { fc=true; LibSTLS.noDSDSA=Config.parseY(tok[1]); }
+								if (cmd.compareTo("sslautotest")==0) { 
+										fc=true;
+										if (Config.parseY(tok[1])) {
+											String f0 = filepath+".sslTest";
+											boolean rs=false;
+											boolean doTest;
+											if (new File(f0).exists()) try {
+													rs = Config.parseY(new String(Stdio.file_get_bytes(f0)).trim());
+													doTest=false;
+													} catch(Exception E) {
+														doTest=true;
+													} else doTest=true;
+											
+											if (doTest) rs = LibSTLS.TestJavaDiMerdaBug(C.Debug); 
+											
+											if (rs) {
+													LibSTLS.noDSDSA=true;
+													LibSTLS.noEDC=true;
+													}
+											
+											try {
+												String s= rs ? "yes":"no";
+												Stdio.file_put_bytes(f0, s.getBytes());
+												} catch(Exception I) {}
+											if (rs&&Main.ConfVars==null) Main.echo("Warning: BAD SSL Limitations in your JVM!\n");
+											} 
+										}
+								
+								if (cmd.compareTo("sslusebc")==0) { fc=true; LibSTLS.useBC=Config.parseY(tok[1]); } // Not used!
 																
 								if (cmd.compareTo("ssldisableciphersuites")==0) {
 									Object[] o = Config.ParseLines(C,br,line,"Incomplete SSLDisableCipherSuites section");

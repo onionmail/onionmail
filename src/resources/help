@@ -14,7 +14,9 @@ Use:
 	onionmail [-q] --gen-keyfile <file> <bits> --show-passwd
 	onionmail [-q] [-d] --reboot 
 	onionmail [-q] --kctl
-	onionmail [-q] [--pgp]
+	onionmail [-q] --pgp
+	onionmail -q --test-java-b
+	onionmail [-q] --test-java
 	
 	Options:      
 
@@ -68,6 +70,9 @@ Use:
 	--gen-rpass	Start remote passphrase files generator.
 			If this parameter is preceded by -sp you can choose
 			the passphrase to store.
+
+	--test-java	Test JAVA limitations on DH and DSA Key generation.
+	--test-java-b	Test JAVA and return a simple string.
 
 	--rpass-server	Do the remote passphrase server (one session only).
 	-rc <file>	Counter file. Increase the number into the file
@@ -125,3 +130,5 @@ Use:
 	OM:[DELETE]	OnionMail has delete all headers in RAM.
 	OM:[COMPLETE]	Operation complete.
 	OM:[RUNNING]	OnionMail till running.
+	OM:[TEST]GOOD	Java test Ok.
+	OM:[TEST]BAD	Java test Error.

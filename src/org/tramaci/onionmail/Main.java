@@ -669,6 +669,25 @@ public static void main(String args[]) {
 					CmdRunBoot=true;
 					}
 				
+				if (cmd.compareTo("--test-java")==0) {
+					boolean x = LibSTLS.TestJavaDiMerdaBug(true);
+					try {
+						String s= x ? "yes":"no";
+						Stdio.file_put_bytes(fc+".sslTest", s.getBytes());
+						} catch(Exception I) {}
+					System.exit(x ? 1 : 0);
+					}
+				
+				if (cmd.compareTo("--test-java-b")==0) {
+					boolean x = LibSTLS.TestJavaDiMerdaBug(false);
+					echo("OM:[TEST]" + (x ? "BAD":"GOOD")+"\n");
+					try {
+						String s= x ? "yes":"no";
+						Stdio.file_put_bytes(fc+".sslTest", s.getBytes());
+						} catch(Exception I) {}
+					System.exit(x ? 1 : 0);
+					}
+												
 				if (cmd.compareTo("--gen-log")==0 && (ax+1)<args.length) {
 					ax++;
 					fm=true;
@@ -907,24 +926,7 @@ public static void main(String args[]) {
 		Stdio.file_put_bytes(fpa, b);
 	
 	}
-	
-	private static void ScanFreePort(int From,int to,int nport) {
-		int[] rs = new int[nport];
-		int bp=0;
-		for (int ax=From;ax<to;ax++) {
-			try {
-				ServerSocket Test = new ServerSocket(ax,0,InetAddress.getByAddress(new byte[] {127,0,0,1}));
-				Test.close();
-				rs[bp++]=ax;
-				if (bp==nport) break;
-			} catch(Exception E) {}
-		}
-		if (bp<nport) echo("-ERR no all\n"); else echo("+OK\n");
-		for (int ax=0;ax<nport;ax++) if (rs[ax]==0) echo("-\n"); else echo("127.0.0.1:"+rs[ax]+"\n");
-		echo(".\n");
-		
-	}
-	
+
 	private static void Helpex() {
 		
 		InputStream i = Main.class.getResourceAsStream("/resources/help");
