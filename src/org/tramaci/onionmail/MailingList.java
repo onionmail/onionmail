@@ -373,7 +373,7 @@ public class MailingList {
 						Head.put("list-help","<mailto:server@"+Mid.Onion+"?subject=LIST%3A%20"+lst+"%20RULEZ>");
 						Head.put("list-post","<"+lst+">");
 						Head.put("message-id", J.RandomString(16)+"@"+Mid.Onion);
-						Head.put("X-Mailer", "OnionMail MailingList "+Main.getVersion());
+						Head.put("X-Mailer", "OnionMail MailingList "+(Mid.NoVersion ? "1.0.0" : Main.getVersion()));
 						Head.put("to", lst);
 						
 						if (Title.length()>0) {

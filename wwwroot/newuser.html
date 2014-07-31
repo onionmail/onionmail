@@ -132,20 +132,14 @@ function dynamo() {
 <div id="mmenucont">
 
 <table id="toptable">
-
-	<tr>
-	<td id="toplogo"><a href="/"><img src="/img/ONMP.gif" alt="OnionMail"></a></td>
-	<td id="topsez" class="topsez">
-        <div><a href="/what.html">Help</a></div>
-	<div><a href="/rulez.etex">Rulez</a></div>
-	<div><a href="/manifesto.html">Manifesto</a></div>
-	<div><a href="/info.etex">Info</a></div>
-	<div><a href="/contacts.etex">Contacts</a></div>
-	<div><a href="/about.etex">About</a></div>		
-	<div class="cli"></div>
-	</td>
-	</tr>
-	</table>
+<tr>
+<td id="toplogo"><a href="/"><img src="<!--@lefttop@-->" alt="OnionMail"></a></td>
+<td id="topsez" class="topsez">
+<$inc[/menu.denied.conf]$inc>		
+<div class="cli"></div>
+</td>
+</tr>
+</table>
 </div>
 </div>
 
@@ -194,10 +188,11 @@ You can use this address in the Tor network and in Internet.
 	</div>
 	</div>
 </div>          
-	<div id="bottomoline"></div>
-	<div id="bottompage">
-	<div style="font-family: ocr; color: #048; text-align: center;">
-	<!--#NICK#--> OnionMail Server at <!--#ONION#-->
-	</div></div>
+<div id="bottomoline"></div>
+<div id="bottompage">
+<div style="font-family: ocr; color: #048; text-align: center;">
+<!--#NICK#--> OnionMail Server at <!--#ONION#-->
+<br><img src="<!--@@counter-svg@-->" alt="counter">
+</div></div>
 <!-- KDESTROY -->
 </body></html>

@@ -21,19 +21,13 @@ package org.tramaci.onionmail;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.SecureRandom;
-import java.security.Security;
 import java.util.Date;
 import java.util.Iterator;
 
 import org.bouncycastle.bcpg.ArmoredOutputStream;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openpgp.PGPCompressedData;
 import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
 import org.bouncycastle.openpgp.PGPEncryptedData;

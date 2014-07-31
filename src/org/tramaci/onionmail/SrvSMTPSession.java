@@ -142,6 +142,7 @@ public class SrvSMTPSession extends Thread {
 		try {
 			
 			BeginSMTPSession();
+			Log("Complete");
 			if (con.isConnected()) {
 				if (!con.isClosed()) Send("421 CRDM 1");
 				closeh();
@@ -1259,7 +1260,7 @@ public class SrvSMTPSession extends Thread {
 			
 			f=J.getMailEx(f);
 			if (f==null) {
-				Log("Invalid from");
+				Log("Invalid from" + (Config.Debug ? " `"+Hldr.get("from")+"`" : ""));
 				return;
 				}
 			
@@ -1614,7 +1615,28 @@ public class SrvSMTPSession extends Thread {
 	
 	private void BeginRemoteDelivery() throws Exception {
 		HashMap <String,String> H = new HashMap <String,String>();
-		Mid.SendRemoteSession(MailTo, MailFrom, H, I, O,TormVmatTo);
+		try {
+			Mid.SendRemoteSession(MailTo, MailFrom, H, I, O,TormVmatTo); 
+			} catch(Exception E) {
+				if (
+						Mid.hasQueue 						&& 
+						E instanceof RetryUevent 	&&
+						TormVmatTo==null				&&
+						!MailTo.endsWith(".onion")		) {
+					
+					RetryUevent rt = (RetryUevent) E;
+					Log("Message queue: "+rt.SMTPError);
+					O.write("354 Enter message, ending with \".\" on a line by itself\r\n".getBytes());
+					HashMap <String,String> rh = ParseHeaders(I);
+					rh = J.FilterHeader(rh);
+					rh.put("x-queued", Mid.TimeString());
+					rh.put("x-remote-grey", rt.SMTPError);
+					Mid.Queue.Enqueue(MailFrom, MailTo, TormVmatTo, rh, I);
+					
+					Send("250 OK id="+J.RandomString(6)+"-"+J.RandomString(6)+"-"+J.RandomString(2));
+					
+				} else throw E;
+			} 
 		}
 			
 	private boolean VerifySMTPServer(String Server) {
@@ -2164,7 +2186,6 @@ public class SrvSMTPSession extends Thread {
 		for (int tr = 0 ;tr<=maxtry;tr++) { ////////////TODO ??? Delirio
 			li = I.readLine();
 			if (li==null || !con.isConnected()) Log("Remote connection close!");
-			
 			if (!con.isConnected()) throw new PException("@500 Connection lost");
 			if (li==null)  throw new PException("@500 Connection lost");
 			li=li.trim();
@@ -2809,7 +2830,7 @@ public class SrvSMTPSession extends Thread {
 							if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 							Mid.SendMessage(from, Re.Head,Re.Res);
 					} catch(Exception E) { 
-							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
+							Log("List token `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
 							throw new PException("@550 List message error");
 					}
 			Send("250 Id=nothing");
@@ -2827,9 +2848,10 @@ public class SrvSMTPSession extends Thread {
 							Re.Par.put("errors", OpErr);
 							Re = Re.GetH(H);
 							if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
+							Re.Head.put("subject","Re: "+Hldr.get("subject"));
 							Mid.SendMessage(from, Re.Head,Re.Res);	
 					} catch(Exception E) { 
-							Log("List unsubscribe `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
+							Log("List req `"+list+"@"+Mid.Onion+"` ("+from+") "+E.getMessage().replace("@", "")); 
 							throw new PException("@550 List message error");
 					}
 			Send("250 Id=nothing");
@@ -2853,7 +2875,7 @@ public class SrvSMTPSession extends Thread {
 			if (J.isReserved(from,0,true)) throw new PException(500,"Invalid user");
 			String pal = J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
 			boolean bit = ML.SetUsr(ML.NewInfo(MailingList.TYP_Usr, from.toLowerCase(), pal));
-			if (!bit) if (!bit) OpErr+="Can't subscribe: `"+from+"`\n";
+			if (!bit) OpErr+="Can't subscribe: `"+from+"`\n";
 			ML.Save();
 			ML.Close();
 			Par.put("password", pal);
@@ -2931,14 +2953,15 @@ public class SrvSMTPSession extends Thread {
 		ML.Close(); 
 		Added+="\n"+st;
 		}
-	
-	//if (Re==null) throw new PException(500,"Invalid list option");
-	
+
 	Re = DynaRes.GetHinstance(Config, act, Mid.DefaultLang);
 	Re.Par=Par;
 	Re = Re.GetH(H);
-	Re.Par.put("errors", OpErr);
 	Re.Res+=Added;
+	if (OpErr!=null && OpErr.length()>0) {
+		if (Re.Res.contains("%errors%")) Re.Res=Re.Res.replace("%errors%", OpErr); else Re.Res+="\r\nError:\r\n"+OpErr+"\r\n";
+		} else if (Re.Res.contains("%errors%")) Re.Res=Re.Res.replace("%errors%", "");
+	
 	if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
 	Mid.SendMessage(from, Re.Head,Re.Res);
 

@@ -17,6 +17,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+//TODO Bug fix: From header in VMAT mode!
+
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
@@ -148,6 +150,7 @@ public class MultiDeliverThread extends Thread {
 		
 	MultiDeliverThread(SrvIdentity Srv,String from, String[] to, HashMap <String,String> H,BufferedReader M) throws Exception {
 		Mid=Srv;
+		//Main.echo("DDD `"+from+"` "+H+"\n");
 		
 		if (Mid.EnterRoute) ExitDom = Mid.ExitRouteDomain; else {
 				ExitRouteList RL= Mid.GetExitList();
@@ -158,7 +161,8 @@ public class MultiDeliverThread extends Thread {
 		Hldr = H;
 		MailTo=to;
 		MailFrom=from.toLowerCase().trim();
-		MailFromInet = Srv.mailTor2Inet(MailFrom, ExitDom);
+		if (MailFrom.endsWith(".onion")) MailFromInet = Srv.mailTor2Inet(MailFrom, ExitDom); else MailFromInet=MailFrom; //XXX Verificare
+		
 		int cx=MailTo.length;
 		toTor = new boolean[cx];
 		Error = new String[cx];
@@ -187,11 +191,7 @@ public class MultiDeliverThread extends Thread {
 		HldrInet.put("errors-to","<>");
 		HldrInet.put("from", MailFromInet);
 		HldrInet.put("to",t);
-		
-		
-		
-		
-				
+						
 		Mid.Log("MultiDeliver Exit=`"+(ExitDom!=null ? ExitDom: "<N/A>")+"`");
 		
 		long t0 = System.currentTimeMillis();

@@ -12,20 +12,14 @@
 <div id="mmenucont">
 
 <table id="toptable">
-
-	<tr>
-	<td id="toplogo"><a href="/"><img src="/img/ONMP.gif" alt="OnionMail"></a></td>
-	<td id="topsez" class="topsez">
-	<div><a href="/rulez.etex">Rulez</a></div>
-	<div><a href="/register.etex">Sign UP</a></div>
-	<div><a href="/manifesto.html">Manifesto</a></div>
-	<div><a href="/info.etex">Info</a></div>
-	<div><a href="/contacts.etex">Contacts</a></div>
-	<div><a href="/about.etex">About</a></div>		
-	<div class="cli"></div>
-	</td>
-	</tr>
-	</table>
+<tr>
+<td id="toplogo"><a href="/"><img src="<!--@lefttop@-->" alt="OnionMail"></a></td>
+<td id="topsez" class="topsez">
+<$inc[/menu.denied.conf]$inc>		
+<div class="cli"></div>
+</td>
+</tr>
+</table>
 </div>
 </div>
 
@@ -50,6 +44,7 @@ OnionMail is an open source SMTP/POP3 compatible mail server with some functions
 	<div id="bottompage">
 		<div style="font-family: ocr; color: #048; text-align: center;">
 		<a href="http://onionmail.info" target="_blank">This is an OnionMail server</a>
+		<br><img src="<!--@@counter-svg@-->" alt="counter">
 		</div>	
 	</div>
 

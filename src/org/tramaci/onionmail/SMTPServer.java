@@ -171,7 +171,7 @@ public class SMTPServer extends Thread {
 			try {
 					Connection[si] = new SrvSMTPSession(Config,Identity,con,this);
 					} catch(Exception E) {
-					Log("SMTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n"); //TODO Cambiare ip2string
+					Log("SMTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n"); 
 					try { con.close(); } catch(Exception N) {}
 					continue;
 					}

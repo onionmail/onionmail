@@ -10,6 +10,7 @@ public class SrvManifest {
 	private HashMap<String,String> N=new  HashMap<String,String>();
 	public ExitRouterInfo[] network=null;
 	public ExitRouterInfo my = new ExitRouterInfo();
+	public String[] Friends = null;
 	
 	public HashMap <String,String> getHashMap(int mode) {
 		HashMap<String,String> rs=new  HashMap<String,String>();
@@ -111,6 +112,23 @@ public class SrvManifest {
 					network = new ExitRouterInfo[N.size()];
 					int ax=0;
 					for (String K:N.keySet()) network[ax++] =ExitRouterInfo.fromLegacy(K, N.get(K));
+					} else {
+					String rsf="\n";	
+					int cx = Re.Msg.length;
+					for (int ax=1;ax<cx;ax++) {
+						String li = Re.Msg[ax].toLowerCase().trim();
+						if (li.startsWith("@friend-")) {
+							String[] tok = li.split("\\:+");
+							if (tok.length>1) {
+								li = tok[1].trim();
+								if (li.matches("[a-z0-9]{16}\\.onion")) {
+									if (!rsf.contains("\n"+li+"\n")) rsf+=li+"\n";
+									}
+								}
+							}
+						}
+					rsf=rsf.trim();
+					Friends = rsf.split("\\n+");
 					}
 			my.onion = remo.toLowerCase().trim();
 		}

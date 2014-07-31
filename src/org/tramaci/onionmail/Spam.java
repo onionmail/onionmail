@@ -22,9 +22,6 @@ package org.tramaci.onionmail;
 import java.io.File;
 import java.util.zip.CRC32;
 
-import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
-
-
 public class Spam {
 
 	private Config Config = null;

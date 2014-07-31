@@ -60,7 +60,6 @@ function AJAXService(file,object,callback) {
 	HTTP1.send(post);
 }
 
-
 function toHTML(st) {
 	if (st==null) st="";
 	st=""+st;

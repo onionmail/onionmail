@@ -21,7 +21,6 @@ package org.tramaci.onionmail;
 
 import java.io.File;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.zip.CRC32;
 
 public class RemoteDerK {

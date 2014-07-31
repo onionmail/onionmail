@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 by Tramaci.Org
+ * Copyright (C) 2013-2014 by Tramaci.Org
  * LibSTLS V 1.0 © 2012 by EPTO (A)
  * This file is part of OnionMail (http://onionmail.info)
  * 
@@ -50,6 +50,7 @@ import javax.net.ssl.X509TrustManager;
 import javax.security.auth.x500.X500Principal;
 
 import org.bouncycastle.x509.X509V3CertificateGenerator;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 @SuppressWarnings("deprecation")
 public class LibSTLS {
@@ -60,7 +61,8 @@ public class LibSTLS {
 	public static boolean noEDC = false;
 	public static boolean noDSDSA = false;
 	
-	public static void AddBCProv() { Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider()); 	} 
+	public static void AddBCProv() { Security.addProvider(new BouncyCastleProvider()); 	}
+																										
 	private static String disabledCiphers=null; 
 	private static String disabledProtocols=null;
 	

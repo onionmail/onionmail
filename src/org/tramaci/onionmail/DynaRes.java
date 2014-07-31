@@ -51,14 +51,14 @@ public class DynaRes {
 			if (I==null) {
 				int cx = rs.lastIndexOf('-');
 				if (cx!=-1) {
-					rs=rs.substring(0,cx-1);
+					rs=rs.substring(0,cx); //XXX -1 
 					 I = GetInputST(C,rs+"-"+lang+".tex");
 					 if (I==null) I = GetInputST(C,rs+".tex");
 					}
 				}
 			
 			if (I==null) {
-					Main.echo("Unknown resource `"+rs+"`");
+					C.GlobalLog(Config.GLOG_Bad | Config.GLOG_Bad , "DynaRes", "Unknown resource `"+rs+"`");
 					DynaRes D = new DynaRes();
 					D.Default=true;
 					D.Head.put("subject", "DEFAULT `"+rs+"` MESSAGE");
@@ -149,7 +149,7 @@ public class DynaRes {
 		DynaRes D = new DynaRes();
 		D.Head=H;
 		D.Par=null;
-		D.Res=tmp; //XXX Vedere!
+		D.Res=tmp;
 		return D;
 		}
 

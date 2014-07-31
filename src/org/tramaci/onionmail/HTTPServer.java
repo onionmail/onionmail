@@ -24,6 +24,7 @@ import java.io.FileOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Date;
+import java.util.HashMap;
 
 public class HTTPServer extends Thread {
 	private Config Config;
@@ -40,6 +41,26 @@ public class HTTPServer extends Thread {
 	
 	public volatile int Hits=0;
 	public volatile int Errs=0;
+	public volatile int Count=0;
+	public volatile int CountStart = 0;
+	public volatile String CountColor="FF0000";
+	public volatile String CounterSvg="/counter.svg";
+	public volatile String LogonEtex="/logon.etex";
+	public volatile String Etex = ".etex"; //ADD .
+	public volatile String AdminIndex="/admin/index.etex";
+	public volatile String NewUserEtex="/newuser.etex";
+	public volatile String ErrorPage="/error.html";
+	public volatile String RegisterEtex="/register.etex";
+	public volatile String IndexFile="index.etex";
+	
+	public volatile short CountChWidth = 0;
+	public volatile short CountChHeight = 0;
+	public volatile short LastSavedCounter = 0;
+	public volatile boolean hideCounter=false;
+	
+	public HashMap <String,String> Headers = null;
+	
+	public volatile int[] CountD = new int[30];
 	public volatile short[] HitsH = new short[24];
 	public volatile short[] ErrsH = new short[24];
 	public volatile short[] HitsD = new short[30];
@@ -53,6 +74,7 @@ public class HTTPServer extends Thread {
 	public volatile int KeepAlive=5; //Seconds
 	public volatile int Pipelining=4;
 	public volatile int MaxReqBuf=8192;
+			
 	public static final int ACCESS_DENIED = 0;
 	public static final int ACCESS_USER = 1;
 	public static final int ACCESS_LIST = 2;
@@ -84,7 +106,170 @@ public class HTTPServer extends Thread {
 			}
 		
 		if (lf!=null) LogFile = new FileOutputStream(lf,true);
-
+		
+		String ev = Identity.HTTPBasePath+"/config.denied.conf";
+		if (new File(ev).exists()) try {
+	
+			String[] li = new String(Stdio.file_get_bytes(ev),"UTF-8").split("\\n+");
+			int cx = li.length;
+			for (int ax=0;ax<cx;ax++) {
+				li[ax]=li[ax].trim();
+				if (li[ax].length()==0) continue;
+				String[] tok;
+				if (li[ax].contains("#")) {
+					li[ax] = li[ax].substring(0,li[ax].indexOf('#')-1);
+					}
+				if (li[ax].length()==0) continue;
+				tok = li[ax].split("\\s+",2);
+				if (tok.length!=2) continue;
+				if (tok[0].startsWith("@")) {
+					
+					if (tok[0].compareTo("@countstart")==0) {
+						CountStart = J.parseInt(tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@countcolor")==0) {
+						if (tok[1].matches("[0-9a-fA-F]{6}"))  CountColor = tok[1].toUpperCase();
+						Identity.HTTPETEXVar.put(tok[0],"#"+tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@hidecounter")==0) {
+						hideCounter = Config.parseY(tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@etex-ext")==0) {
+						if (tok[1].matches("[0-9a-zA-Z]{1,8}"))  Etex = "."+tok[1];
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+				
+					if (tok[0].compareTo("@acc-del")==0) {
+						if (tok[1].compareTo("*")==0) {
+							Identity.HTTPAccess = new HashMap <String,Integer>();
+							} else {
+							Config.AddHTTPAccess(Identity.HTTPAccess, tok[1],0, Identity.HTTPBasePath);	
+							}
+						continue;
+						}
+					
+					if (tok[0].compareTo("@acc-root")==0) {
+						int a = Identity.HTTPAccess.containsKey(tok[1]) ? Identity.HTTPAccess.get(tok[1]) : 0;
+						Config.AddHTTPAccess(Identity.HTTPAccess, tok[1], a | HTTPServer.ACCESS_ROOT, Identity.HTTPBasePath);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@acc-usr")==0) {
+						int a = Identity.HTTPAccess.containsKey(tok[1]) ? Identity.HTTPAccess.get(tok[1]) : 0;
+						Config.AddHTTPAccess(Identity.HTTPAccess, tok[1], a | HTTPServer.ACCESS_USER, Identity.HTTPBasePath);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@acc-list")==0) {
+						int a = Identity.HTTPAccess.containsKey(tok[1]) ? Identity.HTTPAccess.get(tok[1]) : 0;
+						Config.AddHTTPAccess(Identity.HTTPAccess, tok[1],a | HTTPServer.ACCESS_LIST, Identity.HTTPBasePath);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@acc-ok")==0) {
+						int a = Identity.HTTPAccess.containsKey(tok[1]) ? Identity.HTTPAccess.get(tok[1]) : 0;
+						Config.AddHTTPAccess(Identity.HTTPAccess, tok[1], a| HTTPServer.ACCESS_OK, Identity.HTTPBasePath);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@acc-deny")==0) {
+						int a = Identity.HTTPAccess.containsKey(tok[1]) ? Identity.HTTPAccess.get(tok[1]) : 0;
+						Config.AddHTTPAccess(Identity.HTTPAccess, tok[1], a | HTTPServer.ACCESS_DENIED, Identity.HTTPBasePath);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@counter-svg")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].endsWith(".svg"))  CounterSvg = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@logon-etex")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].length()>1)  LogonEtex = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@admin-index")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].length()>1)  AdminIndex = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@newuser-etex")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].length()>1)  NewUserEtex = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@error-page")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].length()>1)  ErrorPage = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@register-etex")==0) {
+						if (!tok[1].startsWith("/")) tok[1]="/"+tok[1];
+						if (tok[1].length()>1)  RegisterEtex = tok[1]; else throw new Exception("Invalid value in line "+(ax+1)+" `"+tok[1]+"`");
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+						
+					if (tok[0].compareTo("@count-chw")==0) {
+						CountChWidth = (short) Config.parseInt(tok[1], "pixels x character", 4, 256);
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@count-chh")==0) {
+						CountChHeight = (short) Config.parseInt(tok[1], "pixels", 4, 256);
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@index")==0) {
+						if (
+								!tok[1].matches("[a-zA-Z0-9_\\-\\.]+") 	|| 
+								tok[1].contains("..")	||
+								tok[1].startsWith(".") 		) throw new Exception("Invalid index file `"+tok[1]+"`");
+						IndexFile = tok[1];
+						Identity.HTTPETEXVar.put(tok[0],tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@header")==0) {
+						tok = tok[1].split("\\:",2);
+						if (tok.length!=2) throw new Exception("Invalid header in line "+(ax+1));
+						tok[0]=tok[0].trim();
+						tok[1]=tok[1].trim();
+						if (Headers==null) Headers=new HashMap <String,String>();
+						Headers.put(tok[0], tok[1]);
+						continue;
+						}
+					
+					WebLog("Error in line "+(ax+1)+" `"+tok[0]+"` Unknown command.");
+					} else Identity.HTTPETEXVar.put(tok[0].trim(), tok[1].trim());
+				}
+			} catch(Exception E) {
+				WebLog("Error in Config.Denied "+E.getMessage());
+				Log("Error in Config.Denied "+E.getMessage()); 
+				if (Config.Debug) E.printStackTrace();
+			}
+		
+		Identity.HTTPETEXVar.put("@randstart",Long.toString(Stdio.NewRndLong()));	
+		
 		srv = new ServerSocket(Identity.LocalHTTPPort,0,Identity.LocalIP); 
 		
 		running=true;
@@ -125,8 +310,6 @@ public class HTTPServer extends Thread {
 	public void run() {
 		
 		Socket con=null;
-		
-		//long tcr = System.currentTimeMillis();
 		
 		while(running) {
 			Garbage();	
@@ -189,7 +372,7 @@ public class HTTPServer extends Thread {
 			
 		}
 	
-		public void UpdateStats(boolean fErr)  {
+		public synchronized void UpdateStats(boolean fErr,boolean byCnt)  {
 			try {
 				long tcr = System.currentTimeMillis() + Identity.TimerSpoof;
 				int cday =(int) (Math.floor(tcr/86400000L) % 30);
@@ -199,12 +382,13 @@ public class HTTPServer extends Thread {
 				if (cday!=StatCDay) {
 					StatCDay=(short) cday;
 					ErrsD[StatCDay]=0;
-					HitsD[StatCDay]++;
+					HitsD[StatCDay]=0;
+					CountD[StatCDay]=0;
 					save=true;
 					}
 				
 				if (chour!=StatCHour) {
-					StatCHour=(short)chour;
+					StatCHour=(short) chour;
 					ErrsH[StatCHour]=0;
 					HitsH[StatCHour]=0;
 					save=true;
@@ -215,12 +399,24 @@ public class HTTPServer extends Thread {
 					ErrsH[StatCHour]++;
 					ErrsD[StatCDay]++;
 					} else {
-					Hits++;
-					HitsH[StatCHour]++;
-					HitsD[StatCDay]++;
+					
+					if (byCnt) {
+						CountD[StatCDay]++;
+						Count++;
+						} else {
+							HitsH[StatCHour]++;
+							HitsD[StatCDay]++;
+							Hits++;
+						}
 					}
 				
-				if (save) SaveStat();
+				if (save) {
+						short lsc = (short) (Math.floor(tcr/20000L) % 4);
+						if (lsc!=LastSavedCounter) {
+							SaveStat();
+							LastSavedCounter=lsc;
+							}
+						}
 			} catch(Exception E) {
 				WebLog("Can't update stats "+E.getMessage());
 			}
@@ -231,11 +427,12 @@ public class HTTPServer extends Thread {
 			int x = (int)((System.currentTimeMillis()+Identity.TimerSpoof)/86400000L);
 			
 			byte[] dta = Stdio.MxAccuShifter(new byte[][] {
-							Stdio.Stosxi(new int[] { Hits,  Errs, StatCDay, StatCHour,x },4)			,
+							Stdio.Stosxi(new int[] { Hits,  Errs, StatCDay, StatCHour,x, Count  },4)			,
 							Stdio.Stosw(HitsH)											,
 							Stdio.Stosw(ErrsH)											,
 							Stdio.Stosw(HitsD)											,
-							Stdio.Stosw(ErrsD)											}
+							Stdio.Stosw(ErrsD)											,
+							Stdio.Stosxi(CountD, 4)									}
 							,
 							HTTPServer.MAGIC_STATS)
 							;
@@ -260,12 +457,13 @@ public class HTTPServer extends Thread {
 					StatCDay=-1;
 					StatCHour=-1;
 					}
-				
+				if (H.length>5) Count=H[5];
 				H=null;
 				HitsH = Stdio.Lodsw(F[1]);
 				ErrsH = Stdio.Lodsw(F[2]);
 				HitsD = Stdio.Lodsw(F[3]);
 				ErrsD = Stdio.Lodsw(F[4]);
+				if (F.length>5) CountD = Stdio.Lodsxi(F[5], 4);
 				F=null;
 				} catch(Exception E) {
 					WebLog("Can't load stats "+E.getMessage());
@@ -275,9 +473,10 @@ public class HTTPServer extends Thread {
 					ErrsD = new short[30];
 					}
 		}
+		public void WebLog(String St) { WebLog(false,St); }
 		
 		@SuppressWarnings("deprecation")
-		public void WebLog(String St) {
+		public void WebLog(boolean pox,String St) {
 			Date D = new Date(System.currentTimeMillis() + Config.TimeSpoof);
 			String h = (D.getYear()+1900)+"-"+
 							J.Int2Str(D.getMonth()+1,2)+"-"+
@@ -288,6 +487,7 @@ public class HTTPServer extends Thread {
 							J.Int2Str((int)(System.currentTimeMillis() % 1000),4);
 			String tid = Long.toHexString(Thread.currentThread().getId());
 			h += " "+J.Spaced(J.Limited(tid,8), 8)+" ";
+			h += pox ? "W ": "S ";
 			if (LogMultiServer) h+=Identity.Nick+" \t";
 			h+=St.trim()+"\n";
 			

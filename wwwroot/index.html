@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="us">
 <head>
 	<meta charset="utf-8">
@@ -75,7 +76,6 @@ function NewTarget(o) {
 	return o;
 	}	
 
-
 function LoopNZ() {
 	Set.tmp=null;
 	var j = Cloud.length;
@@ -120,7 +120,6 @@ function StartInfo() {
 	Set.infoE.style.top=r+'px';
 	r = mt_rand(0,Color.length,1);
 	Set.infoE.style.color='#'+Color[r];
-		
 	Set.AX++;
 	}
 
@@ -242,10 +241,7 @@ function Start() {
 	w = e.clientWidth;
 	x = Math.floor((Set.width/2)-(w/2));
 	e.style.left=x+'px';
-	
 }
-
-
 
 </script>
 <style type="text/css">
@@ -401,7 +397,7 @@ function Start() {
 	}
 	
 #prmenu div { height: 2.2em; margin-right: 10px; margin-left: 10px; float: left; }
-#prmenu div a { font-size: 2em; line-height: 2.2em; color: #048; text-decoration: none; font-family: ocr; }
+#prmenu div a { font-size: 2em; line-height: 2.2em; color: #048; text-decoration: none; font-family: corsivo; }
 #prmenu div a:before { content: "< "; color: #480; }
 #prmenu div a:after { content: " >"; color: #480; }
 #prmenu div a:hover { color: #48f; }
@@ -411,7 +407,7 @@ function Start() {
 	left: 0px;
 	bottom: 2px;
 	width: 100%;
-	height: 24px;
+	height: 40px;
 	overflow: hidden;
 	text-align: center;
 	}
@@ -434,14 +430,13 @@ function Start() {
 	display: none;
 	}
 
-
 </style>
 </head>
 <body onload="Start()" onresize="Resize()">
 <div id="mainc">
 <div class="googlerindexer"><h1><!--#NICK#--> OnionMail server</h1><br><h1>Onion Mail</h1><br>
 <h2>Encrypted mail Tor server hidden service.</h2><br>
-<img src="/img/OM-BL.gif" alt="OnionMail">
+<img src="<!--@mainlogo@-->" alt="OnionMail">
 </div>
 
 <div id="animain">
@@ -454,37 +449,29 @@ function Start() {
 		<div id="cied"><img src="img/CIED.png" alt="" id="ciedx"></div>
 		<div id="mrkd">&nbsp;</div>
 		</div>
-	<div id="logoc"><img src="img/OM-BL.gif" alt="OnionMail" id="logocx"></div> 
+	<div id="logoc"><img src="<!--@mainlogo@-->" alt="OnionMail" id="logocx"></div> 
 </div>
 
 <div id="pwb">
 	<a href="<!--@yourlink@-->"><img src="<!--@yourlogo@-->" alt="Logo"></a>
 	</div>
 	<div id="dwn">
-		<a href="/register.etex"><img src="img/signup.png" alt=""></a>
+		<a href="<!--@@register-etex@-->"><img src="img/signup.png" alt=""></a>
 		<div>
-		<a href="/register.etex"><b>Sign UP</b></a><br>
-		<a href="/register.etex"><b>To <!--#NICK#--></b></a>
+		<a href="<!--@@register-etex@-->"><b>Sign UP</b></a><br>
+		<a href="<!--@@register-etex@-->"><b>To <!--#NICK#--></b></a>
 		</div>
 	</div>
 	
 	
 <div id="prmenu">
-<div><a href="/what.html">Help</a></div>
-<div><a href="/rulez.etex">Rulez</a></div>
-<div><a href="/register.etex">Sign UP</a></div>
-<div><a href="/manifesto.html">Manifesto</a></div>
-<div><a href="/info.etex">Info</a></div>
-<div><a href="/contacts.etex">Contacts</a></div>
-<div><a href="/about.etex">About</a></div>
+<$inc[/menu.denied.conf]$inc>
 <div class="cli"></div>
 </div>
 <div id="infoiaten">
 <a href="http://onionmail.info" target="_blank">This is an OnionMail server.</a>
+<br><img src="<!--@@counter-svg@-->" alt="counter">
 </div>
-<div style="width: 1px; height: 1px; overflow: hidden;">
 </div>
-</div>
-
 </body>
 </html>

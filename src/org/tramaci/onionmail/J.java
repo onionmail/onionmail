@@ -59,6 +59,7 @@ public class J {
 						"content-language|disposition-notification-to|x-original-sender|x-lastcount|x-vmat-server|"+
 						"x-y-counter|message-id|cc|bcc|reply-to|x-ssl-transaction|x-hellomode|disposition-notification-to|"+
 						"organization|list-unsubscribe|list-subscribe|envelope-to|x-ssl-transaction|auto-submitted|x-vmat-sign|"+
+						"x-mat-from|x-tor-vmat-error|x-vmat-sign|x-tor-vmat-verified|x-failed-recipients"+
 						"x-generated|return-path|errors-to|envelope-to|ccn|tkim-server-auth|x-vmat-address|x-failed-recipients|";
 		
 	public static final String NoFilterHost = 
@@ -66,7 +67,8 @@ public class J {
 						"from|to|sender|mailing-list|list-id|errors-to|precedence|"+
 						"x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
 						"list-help|errors-to|return-receipt-to|thread-index|x-vmat-server|"+
-						"disposition-notification-to|x-original-sender|"+
+						"disposition-notification-to|x-original-sender|tkim-server-auth|"+
+						"x-mat-from|x-tor-vmat-error|x-vmat-sign|x-tor-vmat-verified|"+
 						"message-id|cc|bcc|reply-to|disposition-notification-to|errors-to|x-vmat-sign|"+
 						"|list-unsubscribe|list-subscribe|envelope-to|x-vmat-address|x-failed-recipients|";
 	
@@ -260,6 +262,17 @@ public class J {
 		if (C.getValue()!=crc) throw new Exception("@500 Corrupted ASCII data");
 		return data;	
 	}
+	
+	public static HashMap<String,String> ParseHeaders(InputStream I) throws Exception {
+		String in="";
+		for (int ax=0;ax<MaxHeaderLine;ax++) {
+			String li = J.fgets(I, 256);
+			if (li==null) break;
+			in+=li+"\n";
+			if (li.length()==0) break;
+		}
+		return ParseHeaders(in.split("\\n"));
+	} 	
 	
 	public static HashMap<String,String> ParseHeaders(BufferedReader I) throws Exception {
 		String in="";
@@ -633,7 +646,7 @@ public class J {
 		return false;
 	}
 	
-	public static String MailInet2Onion(String MailFrom,String ExitDomain) throws Exception { //TODO Verifica!
+	public static String MailInet2Onion(String MailFrom,String ExitDomain) throws Exception { //XXX Verifica!
 		String E = "@503 Invalid Onion Exit Route Mail Address '"+MailFrom+"'";
 		String lo = getLocalPart(MailFrom);
 		if (getDomain(MailFrom).compareTo(ExitDomain)!=0) throw new Exception(E);
@@ -831,6 +844,22 @@ public class J {
 		return q;
 	}
 
+	public static byte[] PackStringArray(String[] ar) throws Exception {
+		int cx = ar.length;
+		byte[][] s = new byte[cx][];
+		for (int ax=0;ax<cx;ax++) s[ax] = ar[ax].getBytes();
+		return Stdio.MxAccuShifter(s,0xc801,true);
+		}
+	
+	public static String[] UnPackStringArray(byte[] b) throws Exception {
+		byte[][] s = Stdio.MxDaccuShifter(b, 0xc801);
+		int cx = s.length;
+		String[] rs = new String[cx];
+		for (int ax=0;ax<cx;ax++) rs[ax] = new String(s[ax]);
+		s=null;
+		return rs;
+		}
+	
 	public static byte[] HashMapPack(HashMap <String,String> M) throws Exception {
 		int cx= M.size();
 		byte[][] a = new byte[cx][];
@@ -1454,6 +1483,34 @@ public class J {
 				}
 			return rs.trim();
 		}
-			
+
+	public static String RemoveMailAddress(String i) {
+		int a = i.indexOf('<');
+		if (a<0) return i;
+		int b = i.indexOf('@');
+		if (b<0) return i;
+		int c = i.indexOf('>');
+		if (c<0) return i;
+		String i1  =i.substring(0,a);
+		String i2 = i.substring(a,c);
+		String i3 = i.substring(c);
+		return i1+"<"+Long.toString(i2.hashCode(),36)+">"+i3;
+		}
+
+	public static String fgets(InputStream I,int max) throws Exception {
+		String st="";
+		for (int ax=0;ax<max;ax++) {
+			int ch = I.read();
+			if (ch==-1) return null;
+			if (ch==13) {
+				I.read();
+				break;
+				}
+			if (ch==10) break;
+			st+=(char)ch;
+			}
+		return st;
+	}
+	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

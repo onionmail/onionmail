@@ -41,7 +41,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int TextCaptchaMode = TextCaptcha.MODE_NOISE | TextCaptcha.MODE_SWY | TextCaptcha.MODE_SYM | TextCaptcha.MODE_INV;
 		public String TextCaptchaFile = null;
 		public int TextCaptchaSize=5;
-		
+		public String AlternatePositionSysOpTxt=null;
+		public boolean AlternateKeyBlock=false;
+		public int MaxQueueSize = 10;
+		public int QueueTimeOut = 120;
+		public int QueueThreads = 4;
+				
 		public int MaxHTTPSession = 10; 
 		public long MaxHTTPReq=12000;
 		public long MaxHTTPRes=15000;
@@ -54,9 +59,10 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public HashMap <String,Boolean> HTTPCached = new HashMap <String,Boolean>();
 		public HashMap <String,String> MIMETypes = new HashMap <String,String>();
 		public HashMap <String,String> HTTPETEXVar = new HashMap <String,String>();
+		public HashMap <String,Integer> HTTPAccess = new HashMap <String,Integer>();
 		public String HTTPBasePath=null;
 		
-		public boolean UseStatus=true;//TODO Config
+		public boolean UseStatus=true;
 		public boolean UseKernel=true;
 		public boolean	ExitCheckViaTor = false;						
 		public int GarbageFreq = 2000;									//Frequenza di Garbage collector per le Onion e le connessioni inattive.
@@ -174,7 +180,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				
 		public String[] SPAMSrvCheck = new String[] {};
 				
-		public int MaxDoFriendOld=60; //TODO in config minuti Par/Conf 
+		public int MaxDoFriendOld=60;  
 		public boolean SSLJavaHasBug = false; 
 		
 		public boolean UseBootSequence = true;
@@ -348,10 +354,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			C.SMPTServer[ne].HTTPBasePath  = C.HTTPBasePath;
 			for (String k:C.HTTPCached.keySet()) C.SMPTServer[ne].HTTPCached.put(k, C.HTTPCached.get(k));
 			for (String k:C.HTTPETEXVar.keySet()) C.SMPTServer[ne].HTTPETEXVar.put(k, C.HTTPETEXVar.get(k));
-			
+			for (String k:C.HTTPAccess.keySet()) C.SMPTServer[ne].HTTPAccess.put(k, C.HTTPAccess.get(k));
 			for (String k:C.VMATErrorPolicy.keySet()) C.SMPTServer[ne].VMATErrorPolicy.put(k, C.VMATErrorPolicy.get(k));
 			
 			HashMap <String,Integer> P = Config.copypol(SP);
+			boolean isBasePathSet=false;
 			
 			String li = null;
 			boolean onioned=false;
@@ -418,8 +425,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								else if (x.contains("public")) C.SMPTServer[ne].ManifestInfo.put("httpmode","public"); else throw new Exception("Invalid ManifestWeb mode");
 							continue;
 							}
-						
-						
+											
 						if (cmd.compareTo("exitroutedomain")==0) {  
 										if (!tok[1].matches("[a-zA-Z0-9\\.\\-]{2,40}\\.[a-zA-Z0-9]{2,6}")) throw new Exception("Invalid domain `"+tok[1]+"`");
 										C.SMPTServer[ne].ExitRouteDomain = tok[1].toLowerCase().trim();
@@ -434,6 +440,26 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						
 						if (cmd.compareTo("newusrenabled ")==0) { 
 										C.SMPTServer[ne].NewUsrEnabled  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("showfriends ")==0) { 
+										C.SMPTServer[ne].ShowFriends  = Config.parseY(tok[1]);
+										continue;
+										}
+										
+						if (cmd.compareTo("friendly ")==0) { 
+										C.SMPTServer[ne].Friendly  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("ssltestdate")==0) { 
+										C.SMPTServer[ne].CheckCertValidity  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("retrytime")==0) { 
+										C.SMPTServer[ne].RetryTime  = Config.parseInt(tok[1], "minutes", 5,1440);
 										continue;
 										}
 						
@@ -470,6 +496,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										}
 												
 						if (cmd.compareTo("httpaccess")==0) {
+										if (!isBasePathSet) throw new Exception("Can't define SMTP/WebPage HTTPAccess without  SMTP/WebPage HTTPBasePath");
 										String st = tok[1].toLowerCase().trim();
 										String tk[] = st.split("\\s+");
 										if (tk.length<2) throw new Exception("Invalid HTTPAccess");
@@ -480,7 +507,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										if (tk[0].contains("u")) x|=HTTPServer.ACCESS_USER;
 										if (tk[0].contains("r")) x|=HTTPServer.ACCESS_ROOT;
 										if (tk[0].contains("d")) x=HTTPServer.ACCESS_DENIED;
-										C.SMPTServer[ne].HTTPAccess.put(tok[1], x);
+										Config.AddHTTPAccess(C.SMPTServer[ne].HTTPAccess, tk[1], x, C.SMPTServer[ne].HTTPBasePath);
 										continue;
 										}
 						
@@ -496,6 +523,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										File Ft = new File(C.SMPTServer[ne].HTTPBasePath);
 										if (!Ft.exists()) throw new Exception("Path not found `"+C.SMPTServer[ne].HTTPBasePath+"`");
 										if (!Ft.isDirectory()) throw new Exception("Not a directory `"+C.SMPTServer[ne].HTTPBasePath+"`");
+										isBasePathSet=true;
 										continue;
 										}
 						
@@ -509,7 +537,17 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										if (xh!=0 || xd!=0) C.SMPTServer[ne].NewUsrEnabled=true;
 										continue;
 										}					
-																	
+											
+						if (cmd.compareTo("httprootlogin")==0) {
+										C.SMPTServer[ne].HTTPRootLogin=tok[1];
+										continue;
+										}
+						
+						if (cmd.compareTo("httprootpass")==0) {
+										C.SMPTServer[ne].HTTPRootPass=tok[1];
+										continue;
+										}
+						
 						if (cmd.compareTo("newlstenabled ")==0) { 
 										C.SMPTServer[ne].NewLstEnabled  = Config.parseY(tok[1]);
 										continue;
@@ -561,8 +599,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							if (tok[1].toLowerCase().contains("no")) C.SMPTServer[ne].MaxMsgXserverXHour=0; else C.SMPTServer[ne].MaxMsgXserverXHour=Config.parseInt(tok[1], "messages", 1,65535);
 							continue;
 							}
-						
-						
+												
 						if (cmd.compareTo("rmxcache")==0) { 
 										String str[] = tok[1].split("\\s+");
 										int rmxSz  = Config.parseInt(str[0], "servers", 0,65535);
@@ -960,12 +997,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							}
 						
 						echo("Creating new SMTP Server `"+C.SMPTServer[ne].Nick+"` \t ... ");
-						C.SMPTServer[ne] = C.CreateServer(C.SMPTServer[ne] );
+						C.SMPTServer[ne] = C.CreateServer(C.SMPTServer[ne],C);
 						echo(" Done!\n\n");
 						
 						} else {
 						if (!F.isDirectory()) throw new Exception("Invalid file or directory `"+C.SMPTServer[ne].Maildir+"` please remove it!");
-						C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne]);
+						C.SMPTServer[ne] = C.InitServer(C.SMPTServer[ne],C);
 						if (Main.SetPGPSrvKeys)	C.SMPTServer[ne].SrvSetPGPKeys();
 						}
 				
@@ -1172,12 +1209,47 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									if (t0<Main.VersionID) Main.echo("Warning: Config file for incompatible version");
 									
 								}
+							
+								
+							if (cmd.compareTo("altenratesysopdir")==0) {
+									fc=true; 
+									C.AlternatePositionSysOpTxt = J.MapPath(CPath, tok[1]);
+									File tt = new File(C.AlternatePositionSysOpTxt);
+									if (tt.exists()) {
+											if (!tt.isDirectory()) throw new Exception("The parameter must be a directory `"+C.AlternatePositionSysOpTxt+"`");
+											} else {
+											tt.mkdirs();
+											tt.mkdir();
+											if (!tt.exists()) throw new Exception("Can't create directory `"+C.AlternatePositionSysOpTxt+"`");
+											}
+									if (!C.AlternatePositionSysOpTxt.endsWith("/")) C.AlternatePositionSysOpTxt+="/";
+									}
+							
+							if (cmd.compareTo("alternatekeyblocktoo")==0) {
+									fc=true;
+									if (C.AlternatePositionSysOpTxt==null) throw new Exception("AlternateKeyBlockToo without AlternateSysOpDir");
+									C.AlternateKeyBlock = Config.parseY(tok[1]);
+									}
 								
 							if (cmd.compareTo("portnames")==0) {fc=true; C.IANAPortFile = J.MapPath(CPath, tok[1]); }
 							if (cmd.compareTo("netdefaultdeny")==0) { fc=true; C.NetDisallowAll=Config.parseY(tok[1]); }
 							if (cmd.compareTo("dnslogquery")==0) { fc=true; C.DNSLogQuery=Config.parseY(tok[1]); }
 							if (cmd.compareTo("mailwipefast")==0) { fc=true; C.MailWipeFast=Config.parseY(tok[1]); }
-							
+														
+							if (cmd.compareTo("httpaccess")==0) {
+										if (C.HTTPBasePath==null) throw new Exception("Can't define HTTPAccess without HTTPBasePath");
+										if (tok.length<3) throw new Exception("Invalid HTTPAccess");
+										tok[1]=tok[1].toLowerCase();
+										int x = 0;
+										if (tok[1].contains("k")) x=HTTPServer.ACCESS_OK;
+										if (tok[1].contains("l")) x|=HTTPServer.ACCESS_LIST;
+										if (tok[1].contains("u")) x|=HTTPServer.ACCESS_USER;
+										if (tok[1].contains("r")) x|=HTTPServer.ACCESS_ROOT;
+										if (tok[1].contains("d")) x=HTTPServer.ACCESS_DENIED;
+										Config.AddHTTPAccess(C.HTTPAccess,tok[2],x, C.HTTPBasePath);
+										fc=true;
+										}
+
 							if (cmd.compareTo("httpcache")==0) {
 									C.HTTPCached.put(tok[1], true);
 									fc=true; 
@@ -1940,7 +2012,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			F.close();
 		}
 	
-		private SrvIdentity InitServer(SrvIdentity NewServer) throws Exception {
+		private SrvIdentity InitServer(SrvIdentity NewServer,Config C) throws Exception {
 			
 			if (Main.CmdRunBoot) {
 				if (new File( NewServer.Maildir+"/head/boot").exists()) {
@@ -1950,8 +2022,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 					Main.echo(" Can't reboot `"+NewServer.Nick+"` No boot files\n");
 					}
 			}
+			
+			String kbf;
+			if (C.AlternateKeyBlock && C.AlternatePositionSysOpTxt!=null) 
+						kbf=C.AlternatePositionSysOpTxt+"/"+NewServer.Nick+"/keyblock.txt";
+				 		else 
+				 		kbf=NewServer.Maildir+"/keyblock.txt";
 						
-			String kbf = NewServer.Maildir+"/keyblock.txt";
 			String kb="";
 			String li;
 			if (new File(kbf).exists()) kb = new String(Stdio.file_get_bytes(kbf)); else {
@@ -1983,9 +2060,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			
 		}
 			
-		private SrvIdentity CreateServer(SrvIdentity NewServer) throws Exception {
+		private SrvIdentity CreateServer(SrvIdentity NewServer,Config C) throws Exception {
 			
 				byte[][] InirS =SrvIdentity.CreateSK(NewServer.Onion);
+				boolean bm = Main.ConfVars!=null;
+				
+				if (!bm) Main.echo("Please wait...\n");
 				
 				NewServer.Create(InirS.clone());
 				NewServer.Open(InirS.clone());
@@ -1995,7 +2075,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				String p3 = J.GenPassword(80, 64);
 				
 				BufferedReader In = J.getLineReader(System.in);
-				boolean bm = Main.ConfVars!=null;
+				
 				if (bm) bm = Main.ConfVars.containsKey(NewServer.Nick+"-pass");
 				
 				if (Main.SelPass || bm) {
@@ -2050,6 +2130,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						}
 				}
 				
+				if (Main.ConfVars==null) Main.echo("Creating SysOp user Please wait...\n");
+				
 				HashMap <String,String> P = new HashMap <String,String>();
 				P.put("lang", NewServer.DefaultLang);
 				P.put("flag", Const.USR_FLG_ADMIN);
@@ -2100,7 +2182,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				byte[] t2 =SrvIdentity.KSEncode(InirS, p3.getBytes());
 				p2 = J.ASCIISequenceCreate(t2, "KEYBLOCK");
 				
-				Stdio.file_put_bytes(NewServer.Maildir+"/keyblock.txt",p2.getBytes());
+				String KeyBlockTxt;
+				if (C.AlternateKeyBlock && C.AlternatePositionSysOpTxt!=null) {
+					KeyBlockTxt=C.AlternatePositionSysOpTxt+NewServer.Nick+"/keyblock.txt";
+					new File(KeyBlockTxt).mkdirs();
+					} else KeyBlockTxt=NewServer.Maildir+"/keyblock.txt";
+				
+				Stdio.file_put_bytes(KeyBlockTxt,p2.getBytes());
 				NewServer.CVMF380TMP = p3;
 													
 				p0=J.RandomString(32);
@@ -2353,6 +2441,30 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			st=st.trim();
 			return st.split("\\n+");
 			}
+	
+		public static void AddHTTPAccess(HashMap <String,Integer> A,String path,int val,String basePath) throws Exception {
+				String tp = basePath+ ( basePath.endsWith("/") ? path : ("/"+path));
+				File Ph = new File(tp);
+				if (!Ph.exists()) throw new Exception("File not found `"+tp+"`");
+				
+				if (!Ph.isDirectory()) {
+						A.put(path, val);
+						return;
+						}
+				
+				if (!path.endsWith("/")) path+="/";
+				A.put(path, val);
+				File[] ls = Ph.listFiles();
+				int cx = ls.length;
+				for (int ax=0;ax<cx;ax++) {
+					if (!ls[ax].isDirectory()) continue;
+					String n = ls[ax].getName();
+					if (n.compareTo(".")==0 || n.compareTo("..")==0) continue;
+					n = path+n;
+					AddHTTPAccess(A,n,val,basePath);
+					}
+				
+				}
 		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

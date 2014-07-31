@@ -525,6 +525,33 @@ public class ControlSession extends Thread{
 		
 		/////////////////////////// Root Option
 		
+		if (cmd.compareTo("threads")==0 && Tok.length==2 && Tok[1].compareToIgnoreCase("all")==0) {
+			String rs = Main.TheradsCounter(true,false);
+			rs=rs.trim();
+			ReplyA(true,"Threads",rs.split("\\n+"));
+			continue;
+			}
+		
+		if (cmd.compareTo("threads")==0 && Tok.length<2) {
+			String rs = Main.TheradsCounter(true,true);
+			rs=rs.trim();
+			ReplyA(true,"Threads",rs.split("\\n+"));
+			continue;
+			}
+		
+		if (cmd.compareTo("threads")==0 && Tok.length==2 && Tok[1].compareToIgnoreCase("count")==0) {
+			int cl = Main.StatsKThreadsXHour.length;
+			String[] rs = new String[cl];
+			for (int al=0;al<cl;al++) rs[al]=Short.toString(Main.StatsKThreadsXHour[al]);
+			ReplyA(true,"Threads",rs);
+			continue;
+			}
+		
+		if (cmd.compareTo("queue")==0) {
+			SA_Queue(Tk);
+			continue;
+			}
+		
 		if (cmd.compareTo("log")==0) {	Log("ControlSession: `"+Tk[1]+"`"); continue; }
 		
 		if (cmd.compareTo("showlog")==0) {
@@ -695,6 +722,94 @@ public class ControlSession extends Thread{
 		st=null;
 		ReplyA(true,l.length+" sessions",l);
 	}
+	
+	private void SA_Queue(String[] Tok) throws Exception {
+		SrvIdentity S = SRVS[CurSrv];
+		
+		if (Tok.length<2) {
+				Reply(false,"Syntax error");
+				return;
+				}
+		
+		if (!S.hasQueue) {
+				Reply(false,"Server witout queue");
+				return;
+				}
+		
+		String c = Tok[1].toLowerCase().trim();
+		
+		if (c.compareTo("list")==0) {
+			int cx = S.Queue.QueueNext.length;
+			String re="";
+			for (int ax=0;ax<cx;ax++) {
+				if (S.Queue.QueueNext[ax]==0) continue;
+				re+=S.Queue.QueueNext[ax]+"\t"+J.TimeStandard(S.Queue.QueueNext[ax]*1000L)+"\n";
+				}
+			re=re.trim();
+			ReplyA(true,"Queue",re.split("\\n+"));
+			return;
+			}
+		
+		if (c.compareTo("killall")==0) {
+			int cx = S.QueueSender.length;
+			for (int ax=0;ax<cx;ax++) {
+				S.QueueSender[ax].End();
+				S.QueueSender[ax]=null;
+				}
+			System.gc();
+			c="clear";
+			}
+		
+		if (c.compareTo("clear")==0) {
+			int cx = S.Queue.QueueNext.length;
+			S.Queue.QueueNext = new int[cx];
+			S.Queue.QueueFiles = new String[cx];
+			S.Queue.Save();
+			for (int ax=0;ax<cx;ax++) S.Queue.QueueFiles[ax]="";
+			String[] rm = new File(S.Maildir+"/tmp").list();
+			cx = rm.length;
+			for (int ax=0;ax<cx;ax++) {
+				if (!rm[ax].startsWith("Q") || !rm[ax].startsWith("M")) continue;
+				try { J.Wipe(rm[ax], Config.MailWipeFast); } catch(Exception E) { Config.EXC(E, S.Nick+".ControlDelQueue"); }
+				}
+			Reply(true);
+			return;
+			}
+		
+		if (c.compareTo("running")==0) {
+			int cx = S.QueueSender.length;
+			String rs="";
+			long tcr = System.currentTimeMillis();
+			for (int ax=0;ax<cx;ax++) {
+				if (S.QueueSender[ax]==null) continue;
+				rs+=ax+"\t"+Long.toString(S.QueueSender[ax].getId(),36)+"\t"+ (S.QueueSender[ax].running ? "R" : "-" );
+				rs+=S.QueueSender[ax].DSN!=null ? "E":"-";
+				rs+=S.QueueSender[ax].isAlive() ? "A" : "-";
+				rs+=tcr > S.QueueSender[ax].Scad ? "S" : "-";
+				rs+=S.QueueSender[ax].isInterrupted() ? "I":"-";
+				rs+="\t"+S.QueueSender[ax].Q.stat+"\t"+Long.toString(S.QueueSender[ax].Q.MailFrom.hashCode(),36)+"\n";
+				}
+			rs=rs.trim();
+			ReplyA(true,"Theads",rs.split("\\n"));
+			}
+		
+		if (c.compareTo("kill")==0 && Tok.length>2) {
+			int cx = S.QueueSender.length;
+			int k = J.parseInt(Tok[2]);
+			
+			if (k<0 || k>cx) {
+				Reply(false,"Syntax error");
+				return;
+				}
+			
+			S.QueueSender[k].End();
+			S.QueueSender[k]=null;
+			System.gc();
+			Reply(true);
+			}
+		
+		Reply(false,"Unknown queue command");
+		}
 	
 	private void SA_EXITLIST(String[] Tok) throws Exception {
 		SrvIdentity S = SRVS[CurSrv];	

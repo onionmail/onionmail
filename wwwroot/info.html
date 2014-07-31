@@ -13,8 +13,8 @@ var Reqs = [
 		"api"	:	"can"	,
 		"title"	:	"Availability for submissions"	,
 		"fields":{
-		        "canusrh"	:	"New users can sign in now"	,
-		        "canusrd"	:	"New users can sign in today"	}
+		        "canusrh"	:	"New users can sign up now"	,
+		        "canusrd"	:	"New users can sign up today"	}
 			},
 		
 		{
@@ -96,9 +96,7 @@ function FinalizeInfo() {
 
 
 </script>
-	
 <style>
- 
 .tblgraf {
 	width: 700px;
 	padding: 10px;
@@ -175,21 +173,14 @@ function FinalizeInfo() {
 <div id="mmenucont">
 
 <table id="toptable">
-
-	<tr>
-	<td id="toplogo"><a href="/"><img src="/img/ONMP.gif" alt="OnionMail"></a></td>
-	<td id="topsez" class="topsez">
-	<div><a href="/what.html">Help</a></div>
-	<div><a href="/rulez.etex">Rulez</a></div>
-	<div><a href="/register.etex">Sign UP</a></div>
-	<div><a href="/manifesto.html">Manifesto</a></div>
-	<div><a href="/contacts.etex">Contacts</a></div>
-	<div><a href="/statistics.etex">Statistics</a></div>
-	<div><a href="/about.etex">About</a></div>		
-	<div class="cli"></div>
-	</td>
-	</tr>
-	</table>
+<tr>
+<td id="toplogo"><a href="/"><img src="<!--@lefttop@-->" alt="OnionMail"></a></td>
+<td id="topsez" class="topsez">
+<$inc[/menu.denied.conf]$inc>		
+<div class="cli"></div>
+</td>
+</tr>
+</table>
 </div>
 </div>
 
@@ -213,16 +204,16 @@ function FinalizeInfo() {
 	These informations will loaded via JavaScript.
 	</div>
 	<br>	
-	<a href="statistics.etex">Click here to view the web server statistics.</a>
 	
 <br><br></div>
 </div>          
-	<div id="bottomoline"></div>
-	<div id="bottompage">
-		<div style="font-family: ocr; color: #048; text-align: center;">
-		<!--#NICK#--> OnionMail Server at <!--#ONION#-->
-		</div>	
-	</div>
+<div id="bottomoline"></div>
+<div id="bottompage">
+	<div style="font-family: ocr; color: #048; text-align: center;">
+	<!--#NICK#--> OnionMail Server at <!--#ONION#-->
+	<br><img src="<!--@@counter-svg@-->" alt="counter">
+	</div>	
+</div>
 
 	
 </body>

@@ -119,7 +119,7 @@ public class SrvHTTPRequest extends Thread{
 		if (QHead.containsKey("user-agent")) lp+="U=`"+QHead.get("user-agent")+"`\t";
 		if (s!=null) 	lp+=s;
 		lp=lp.trim();
-		Parent.WebLog(lp);
+		Parent.WebLog(true,lp);
 		}
 	
 	SrvHTTPRequest(SrvIdentity s,Socket co,HTTPServer sp) throws Exception {
@@ -138,9 +138,7 @@ public class SrvHTTPRequest extends Thread{
 		}
 		
 	private void HTTPProcFile() throws Exception {
-		
-		if (Ir.available()!=0) throw new Exception("@500 Error: The client is sending data during the response.");
-		
+				
 		String [] tk = Path.split("\\/");
 		int cx = tk.length-1;
 		BaseFile = tk[cx];
@@ -151,11 +149,18 @@ public class SrvHTTPRequest extends Thread{
 		cx=tk.length-1;
 		if (cx>0) Extension=tk[cx].toLowerCase(); else Extension="";
 		tk=null;
-			
-		Integer prm = Mid.HTTPAccess.get(Directory);
-		if (prm==null) prm = Mid.HTTPAccess.get(Path);
+		
+		if (Path.contains(".denied.")) {
+			StatusText="Forbidden: Access Denied";
+			Status=403;
+			Reply=StatusText.getBytes();
+			}
+		
+		Integer prm = Mid.HTTPAccess.get(Path);
+		if (prm==null) prm = Mid.HTTPAccess.get(Directory);
 		if (prm!=null) {
-			int x = Session.containsKey("access") ? J.parseInt(Session.get("access")) : 16;
+			String s = Session.get("access");
+			int x = s!=null ? Integer.parseInt(s) : 16;
 			int y = x & prm;
 			if ( (prm & 8) == 0 && y==0) {
 				StatusText="Forbidden: Access Denied";
@@ -163,6 +168,11 @@ public class SrvHTTPRequest extends Thread{
 				Reply=StatusText.getBytes();
 				return;
 				}
+			}
+		
+		if (Path.compareTo(Parent.CounterSvg)==0) {
+			SVGCounter();
+			return;
 			}
 		
 		if (Path.endsWith(".api")) {
@@ -234,7 +244,7 @@ public class SrvHTTPRequest extends Thread{
 			return;
 			}
 		
-		if (ReqFile.endsWith(".etex")) {
+		if (ReqFile.endsWith(Parent.Etex)) {
 			EtexFile();
 			return;
 			}
@@ -293,7 +303,7 @@ public class SrvHTTPRequest extends Thread{
 					tok=li.split("\\?",2);
 					li=tok[0];
 					if (tok.length>1) Query=tok[1];
-					if (li.endsWith("/")) li+="index.etex";
+					if (li.endsWith("/")) li+=Parent.IndexFile;
 					tok=li.split("\\/");
 					if (tok.length==0) throw new Exception("Invalid HTTP Path E1 `"+li+"`");
 					int cx = tok.length;
@@ -334,6 +344,7 @@ public class SrvHTTPRequest extends Thread{
 						
 						
 						li = QHead.get("content-type");
+						if (li==null) li="text/plain";
 						li = li.toLowerCase();
 									
 						if (li.contains("application/x-www-form-urlencoded")) {
@@ -375,9 +386,9 @@ public class SrvHTTPRequest extends Thread{
 					
 					RHead.put("server", ServerName);
 					RHead.put("date", Mid.TimeString());
-					
+					if (Parent.Headers!=null) for(String k:Parent.Headers.keySet()) RHead.put(k, Parent.Headers.get(k));
 					HTTPProcFile();
-					WebLog(null);
+					//WebLog(null);
 							
 					if (Reply!=null) RHead.put("content-length", Integer.toString(Reply.length));
 					if (!rsNoLen && RF!=null) RHead.put("content-length", Integer.toString(RF.available()));
@@ -393,9 +404,11 @@ public class SrvHTTPRequest extends Thread{
 					
 					if (Math.floor(Status/100)==2) {
 							String r = RHead.get("content-type");
-							if (r!=null && r.toLowerCase().contains("text/")) Parent.UpdateStats(false); 
-							} else Parent.UpdateStats(true); 
-									
+							if (r!=null && r.toLowerCase().contains("text/")) Parent.UpdateStats(false,false); 
+							} else Parent.UpdateStats(true,false); 
+					
+					if (Reply == null && RF == null) Reply = new byte[0]; //No Content!
+					
 					li="HTTP/1.1 "+Status+" "+StatusText+"\r\n";
 					O.write(li.getBytes());
 					li = J.CreateHeaders(RHead);
@@ -428,7 +441,7 @@ public class SrvHTTPRequest extends Thread{
 					if (isCurKeep) KAReset(); else break;
 		}
 			} catch(Exception E) {
-				Parent.UpdateStats(true);
+				Parent.UpdateStats(true,false);
 				String r = E.getMessage();
 				WebLog("Error "+ r!=null ? r:"");
 				stat=SrvHTTPRequest.ST_Reply;
@@ -629,6 +642,91 @@ public class SrvHTTPRequest extends Thread{
 		RHead.put("content-type", "text/html; charset=UTF-8");
 		Reply =  Stdio.file_get_bytes(ReqFile);
 		String li = new String(Reply,"UTF-8");
+		Reply=null;
+		
+		for (int ax=0;ax<10;ax++) {
+			int pox = li.indexOf("<$inc[");
+			if (pox==-1) break;
+			int poy = li.indexOf("]$inc>");
+			if (poy==-1) break;
+			String ifl = li.substring(pox+6,poy);
+			
+			if (ifl.startsWith("/")) ifl=BasePath+ifl; else {
+				ifl=BasePath+"/"+Directory+"/"+ifl;
+				ifl=ifl.replace("//", "/");
+				}
+			
+			try {
+				String dta  =new String(Stdio.file_get_bytes(ifl),"UTF-8");
+				if (ifl.endsWith(".txt")) {
+						dta = toHtml(dta);
+						dta = dta.replace("\n", "<br>");
+						}
+				li = li.substring(0,pox)+dta+li.substring(poy+6);
+				dta=null;
+				} catch(Exception E) {
+					WebLog("SubFile Error: `"+ifl+"` "+E.getMessage());
+					Status=500;
+					StatusText="Server error";
+					Reply=StatusText.getBytes();
+					return;
+				}
+			ifl=null;
+			}
+		
+		if (Path.compareTo(Parent.LogonEtex)==0) {
+			if (Session==null) createSession();
+			String s = Session.get("logonretry");
+			int rt = s!=null ? Integer.parseInt(s) : 0;
+			String lo = Post.get("om-lo");
+			String pa =Post.get("om-pa");
+			String cap0 = Session.get("cap");
+			String cap1 = Post.get("om-cap");
+			
+			Session.remove("access");
+			Session.remove("cap");
+			Session.remove("om-lo");
+			Session.remove("om-pa");
+			
+			boolean acc=false;
+			boolean val=true;
+			String err="";
+			if (
+					lo!=null 		&&
+					pa!=null		&&
+					cap0!=null	&&
+					cap1!=null	) {
+					if (cap0.compareToIgnoreCase(cap1)!=0) {
+						err="Invalid CAPTCHA code";
+						acc=false;
+						val=false;
+						}
+				
+				if (rt>3) val=false;
+					
+				if (val) {
+					if (
+						J.CheckCryptPass( Mid.HTTPRootLogin!=null ? Mid.HTTPRootLogin : Mid.Nick , lo)  	&&
+						J.CheckCryptPass( Mid.HTTPRootPass!=null ? Mid.HTTPRootPass : Mid.PassWd , pa) ) acc=true; else {
+							acc=false;
+							rt++;
+							err="Access denied";
+							}
+						} else if (rt>3) {
+							acc=false;
+							err="Access denied";
+							}
+					
+					if (val && acc) {
+						Session.put("access",Integer.toString(HTTPServer.ACCESS_ROOT));
+						redirect(Parent.AdminIndex);
+						return;
+						}
+				   } else err="";
+				Session.put("erro", err);
+				Session.put("logonretry", Integer.toString(rt));
+				
+				}
 		
 		if (li.contains("<!-- SESSION -->")) { 
 				createSession(); 
@@ -658,6 +756,7 @@ public class SrvHTTPRequest extends Thread{
 				
 		li=li.replace("<!--#NICK#-->", Mid.Nick);
 		li=li.replace("<!--#ONION#-->", Mid.Onion);
+		li=li.replace("<!--#EXIT#-->", Mid.EnterRoute ? "1":"0");
 		if (li.contains("<!--#SHA1#-->")) li=li.replace("<!--#SHA1#-->", LibSTLS.GetCertHash(Mid.MyCert));
 		
 		if (Session!=null && Post.size()!=0) {
@@ -677,8 +776,11 @@ public class SrvHTTPRequest extends Thread{
 				li=li.replace("<!--#CAPTCHA#-->", st);
 				}
 		
-		if (ReqFile.endsWith("/newuser.etex")) {
-			if(!SA_NEWUSER()) return;
+		if (Path.compareTo(Parent.NewUserEtex)==0) {
+			boolean rs = SA_NEWUSER();
+			WebLog("NewUser "+ (rs ? "OK" : "ERR"));
+			if (Session!=null && Session.containsKey("erro")) Session.put("newusererr", Session.get("erro"));
+			if (!rs) return;
 			}
 		
 		if (Session!=null) saveSession();
@@ -700,9 +802,15 @@ public class SrvHTTPRequest extends Thread{
 			}
 						
 		if (li.contains("<!--$")) {
-			li=null;
 			if (Session!=null) Session.put("erro", "No fields");
-			redirect("/error.html?e=nf");
+			int i = li.indexOf("<!--$");
+			if (i>-1) {
+				int f =li.indexOf("$-->", i);
+				String field = li.substring(i+5,f);
+				WebLog("Missing field `"+field+"`\t" +((Session==null) ? "S=NULL" : ("S=`"+Session.toString()+"`")));
+				}
+			li=null;
+			redirect(Parent.ErrorPage+"?e=nf");
 			return;
 			}
 		
@@ -716,7 +824,7 @@ public class SrvHTTPRequest extends Thread{
 	}
 	
 	private boolean SA_NEWUSER() throws Exception {
-		if (Session==null) redirect("/register.etex");
+		if (Session==null) redirect(Parent.RegisterEtex);
 		String local = Session.get("om-localpart");
 		String voucher = Session.get("om-voucher");
 		String cap0 = Session.get("cap");
@@ -729,13 +837,13 @@ public class SrvHTTPRequest extends Thread{
 					cap1==null			)
 			{
 			Session.put("erro", "Invalid fields.");
-			redirect("/register.etex");
+			redirect(Parent.RegisterEtex);
 			return false;
 			}
 		
 		if (cap0.compareToIgnoreCase(cap1)!=0) {
 			Session.put("erro", "Invalid CAPTCHA code.");
-			redirect("/register.etex");
+			redirect(Parent.RegisterEtex);
 			return false;
 			}
 		
@@ -754,13 +862,13 @@ public class SrvHTTPRequest extends Thread{
 					local.contains("sysop")							)
 		{
 			Session.put("erro", "Invalid user name.");
-			redirect("/register.etex");
+			redirect(Parent.RegisterEtex);
 			return false;
 			}
 			
 		if (Mid.UsrExists(local)) {
 			Session.put("erro", "User arleady exists");
-			redirect("/register.etex");
+			redirect(Parent.RegisterEtex);
 			return false;
 			}
 		
@@ -773,7 +881,7 @@ public class SrvHTTPRequest extends Thread{
 			} catch(Exception E) {
 				WebLog("Voucer "+E.getMessage());
 				Session.put("erro", "Voucher error");
-				redirect("/register.etex");
+				redirect(Parent.RegisterEtex);
 				return false;
 				}
 		
@@ -782,7 +890,7 @@ public class SrvHTTPRequest extends Thread{
 			} catch(Exception E) {	
 				Log("Can "+E.getMessage());
 				Session.put("erro", "Too many user registered today or in this hour.");
-				redirect("/register.etex");
+				redirect(Parent.RegisterEtex);
 				return false;
 				}
 		try {
@@ -800,7 +908,7 @@ public class SrvHTTPRequest extends Thread{
 			if (st==null) st="@Error";
 			if (st.startsWith("@")) Session.put("erro", st.substring(1)); else Session.put("erro", "N/A");
 			Mid.Config.EXC(E,Mid.Nick+".HTTPNewUser");
-			redirect("/error.html");
+			redirect(Parent.ErrorPage);
 			return false;
 			}
 		
@@ -910,6 +1018,74 @@ public class SrvHTTPRequest extends Thread{
 
 		if (fa.length()>0 && fa.length()<65536) includ=true;
 		
+		if (Path.endsWith("/voucher.api")) {
+			if (
+					Session!=null		&&
+					Session.containsKey("access") &&
+					(J.parseInt(Session.get("access")) & HTTPServer.ACCESS_ROOT)!=0 ) {
+					int day;
+					if (Get.containsKey("day")) day = J.parseInt(Get.get("day")); else day=2;
+					String s = Mid.VoucherCreate(day);
+					s=s.replace("/", "\\/");
+					rs+="\"voucher\":\""+s+"\",\n";
+					}
+			}
+		
+		if (Path.endsWith("/voucher-test.api")) {
+			if (
+					Session!=null		&&
+					Session.containsKey("access") &&
+					Get.containsKey("voucher")	&&
+					Get.containsKey("save") &&
+					(J.parseInt(Session.get("access")) & HTTPServer.ACCESS_ROOT)!=0 ) {
+					String vo = Get.get("voucher");
+					boolean sv = Config.parseY(Get.get("save"));
+					int r = Mid.VoucherTest(vo, sv);
+					rs+="\"stat\":"+Integer.toString(r)+",\n";
+					if (sv && r == Mid.VOUCHER_OK) { 
+						rs+="\"stats\":\"BAD_DELETED\",\n";
+						} else {
+						if (r==Mid.VOUCHER_OK) rs+="\"stats\":\"OK\",\n";
+						if (r==Mid.VOUCHER_OLD) rs+="\"stats\":\"BAD_OLD\",\n";
+						if (r==Mid.VOUCHER_UNKNOWN) rs+="\"stats\":\"BAD_UNKNOWN\",\n";
+						if (r==Mid.VOUCHER_USED) rs+="\"stats\":\"BAD_USED\",\n";
+						}
+					}
+				}
+		
+		if (Path.endsWith("/friends.api")) {
+			String[] ls = Mid.RequildFriendsList();
+				rs+="\"friends\":[";
+				int cl = ls.length-1;
+				for (int al=0;al<=cl;al++) {
+					rs+="\""+ls[al]+"\"";
+					if (al!=cl) rs+=",";
+					}
+				rs+="],\n";
+				}
+		
+		if (Path.endsWith("/elist.api")) {
+			ExitRouteList el = Mid.GetExitList();
+			ExitRouterInfo[] ls = el.getAll();
+			int cl = ls.length-1;
+			rs+="\"elist\":[";
+			for (int al=0;al<=cl;al++) {
+				rs+="{"; 
+				rs+="\"dom\":\""+ls[al].domain+"\",";
+				rs+="\"flg\":\"";
+				if (ls[al].canMX) rs+="M";
+				if (ls[al].canVMAT) rs+="V";
+				if (ls[al].isBad) rs+="B";
+				if (ls[al].isDown) rs+="D";
+				if (ls[al].isExit) rs+="X";
+				if (ls[al].isLegacy) rs+="L";
+				if (ls[al].isTrust) rs+="M";
+				rs+="\"}";
+				if (al!=cl) rs+=",";
+				}
+			rs+="],\n";
+			}
+		
 		if (Path.endsWith("/stats.api")) {
 				rs+="\"smtps\":" +Integer.toString(Mid.statsMaxRunningSMTPSession)+",\n";
 				rs+="\"mexit\":" +Integer.toString(Mid.statMaxExit)+",\n";
@@ -930,6 +1106,22 @@ public class SrvHTTPRequest extends Thread{
 				rs+="\"httpe\":" +Integer.toString(Parent.Errs)+",\n";
 				rs+="\"stat\":" +Integer.toString(Mid.Status)+",\n";
 				}
+			
+		if (Path.endsWith("/threads.api")) {
+				rs+="\"thr\":" +Integer.toString(Main.CurThreads)+",\n";
+				rs+="\"maxthr\":" +Integer.toString(Main.MaxThreads)+",\n";
+				rs+="\"fuffa\":" +Integer.toString(Main.CurFuffaThreads)+",\n";
+				rs+="\"maxfuffa\":" +Integer.toString(Main.MaxFuffaThreads)+",\n";
+				rs+="\"maxfuffa\":" +Integer.toString(Main.MaxFuffaThreads)+",\n";
+				rs+="\"runsmtp\":" +Integer.toString(Mid.statsRunningSMTPSession )+",\n";
+				rs+="\"maxsmtp\":" +Integer.toString(Mid.statsMaxRunningSMTPSession )+",\n";
+				rs+="\"runpop3\":" +Integer.toString(Mid.statsRunningPOP3Session )+",\n";
+				rs+="\"maxpop3\":" +Integer.toString(Mid.statsMaxRunningPOP3Session )+",\n";
+				rs+="\"count\":[";
+				int cl = Main.StatsKThreadsXHour.length;
+				for (int al=0;al<cl;al++) rs+=Short.toString(Main.StatsKThreadsXHour[al])+",";
+				rs+=Short.toString(Main.MaxThreads)+"],\n";
+				}
 		
 		if (Path.endsWith("/statshit.api")) {
 				rs+="\"msin\":" +Integer.toString(Mid.StatMsgIn)+",\n";
@@ -945,7 +1137,7 @@ public class SrvHTTPRequest extends Thread{
 				rs+="\"httph\":" +Integer.toString(Parent.Hits)+",\n";
 				rs+="\"httpe\":" +Integer.toString(Parent.Errs)+",\n";
 				rs+="\"curday\":" +Short.toString(Parent.StatCDay)+",\n";
-				
+				rs+="\"count\":" +Integer.toString(Parent.Count)+",\n";
 				rs+="\"hitsh\":[";
 					int cx = Parent.HitsH.length-1;
 					for (int ax=0;ax<=cx;ax++) {
@@ -974,6 +1166,14 @@ public class SrvHTTPRequest extends Thread{
 					cx = Parent.ErrsD.length-1;
 					for (int ax=0;ax<=cx;ax++) {
 						rs+=Short.toString(Parent.ErrsD[ax]);
+						if (ax!=cx) rs+=",";
+						}
+				rs+="],\n";
+				
+				rs+="\"countd\":[";
+					cx = Parent.CountD.length-1;
+					for (int ax=0;ax<=cx;ax++) {
+						rs+=Integer.toString(Parent.CountD[ax]);
 						if (ax!=cx) rs+=",";
 						}
 				rs+="],\n";
@@ -1059,6 +1259,90 @@ public class SrvHTTPRequest extends Thread{
 		Status = 304;
 		StatusText = "Not Modified";
 		Reply = StatusText.getBytes();
+		}
+
+	private void SVGCounter() throws Exception {
+		long tcr = System.currentTimeMillis();
+		
+		long dt =(long) Math.floor(tcr/86400000L);
+		dt*=86400000L;
+		dt -= Parent.RNDTim ^ (Parent.RNDEtag % 8640000000L);
+		long et =  dt ^ Parent.RNDEtag;
+		et^=et<<1;
+		
+		String dts =  J.TimeStandard(dt);
+		String ets = "\""+ Long.toHexString(et&0x7FFFFFFFFFFFFFFFL)+"-"+ Long.toHexString(dt&0x7FFFFFFFFFFFFFFFL)+"\"";
+		RHead.put("etag", ets);
+		
+		String st = QHead.get("if-modified-since");
+		if (st!=null && dts.compareToIgnoreCase(st)==0) {
+			ProcCached();
+			return;
+			}
+			
+		st = QHead.get("if-none-match");
+		if (st!=null && ets.compareToIgnoreCase(st)==0) {
+			ProcCached();
+			return;
+			}
+		
+		RHead.put("last-modified", dts);
+		
+		byte[] font = new byte[] {
+		//		 --GFEDCBA						
+				0b00111111	, //0
+				0b00000110	, //1
+				0b01011011	, //2
+				0b01001111	, //3
+				0b01100110	, //4
+				0b01101101	, //5
+				0b01111101	, //6
+				0b00000111	, //7
+				0b01111111	, //8
+				0b01101111	  //9
+				} 						;
+		
+		InputStream I =  DynaRes.class.getResourceAsStream("/resources/svg");
+		int cx = I.available();
+		byte[] b = new byte[cx];
+		I.read(b);
+		I.close();
+		String svg = new String(b,"UTF-8");
+		b=null;
+		String[] tok = svg.split("\\n+",3);
+		svg=tok[2];
+		tok[2]=null;
+		int wpx = Integer.parseInt(tok[0].trim());
+		int ppx =  Integer.parseInt(tok[1].trim());
+		//int cday =(int) (Math.floor(tcr/86400000L) % 30);
+		Parent.UpdateStats(false, true);
+		String data="";
+		if (!Parent.hideCounter) {
+			st =Integer.toString(Parent.Count+ Parent.CountStart);
+			cx = st.length();
+			int pox=0;		
+			for (int ch=0;ch<cx;ch++) {
+				int c = st.charAt(ch)-48;
+				if (c<0 || c>9) continue;
+				byte by = font[c];
+				for (int al=0;al<7;al++) {
+					if ((by & 1<<al)==0) continue;
+					char i = 'a';
+					i+=al;
+					data+="<use xlink:href=\"#"+i+"\" x=\""+pox+"\" y=\"0\" />\n";
+					}
+				pox+=ppx;
+				}
+			}
+		
+		svg=svg.replace("%HEI%", Integer.toString(Parent.CountChHeight!=0 ? Parent.CountChHeight : (ppx*2)));
+		svg=svg.replace("%WPX%",Integer.toString(Parent.CountChWidth!=0 ? (Parent.CountChWidth*cx) : (wpx*cx )));
+		svg=svg.replace("%WH%", Integer.toString(ppx * cx));
+		svg=svg.replace("%COL%", Parent.CountColor);
+		svg=svg.replace("%DATA%", data);
+		data=null;
+		Reply = svg.getBytes("UTF-8");
+		RHead.put("content-type", "image/svg+xml");
 		}
 	
 	public void Log(String st) { Mid.Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event,Mid.Nick+"/H", st); 	}

@@ -32,7 +32,7 @@ public class XOnionParser {
 			Port=C.DefaultPort;
 		}
 		
-		public static String getKey(String onion) { ///XXX O,k
+		public static String getKey(String onion) { ///XXX Ok
 			String[] Tok = onion.split("\\.+");
 			if (!onion.endsWith(".onion")) return null;
 			int cx = Tok.length;

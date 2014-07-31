@@ -18,8 +18,8 @@
  */
 
 
-//TODO Migliorare le eccezioni
-//TODO Rimuovere TorDnsLocalProxy e sostituire con NTU2
+//XXX Migliorare le eccezioni
+
 
 package org.tramaci.onionmail;
 
@@ -33,13 +33,17 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.BindException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,9 +53,9 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0006_0000_029BL;
-	public static String Version="1.6.0.667";
-	public static String VersionExtra="~dev";
+	public static long VersionID = 0x0001_0006_0003_035BL;
+	public static String Version="1.6.3.859";
+	public static String VersionExtra="";
 
 	public static SMTPServer[] SMTPS = null;
 	public static POP3Server[] POP3S = null;
@@ -571,7 +575,7 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-								
+			
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -636,7 +640,7 @@ public static void main(String args[]) {
 						fm=true; 
 						OnlyLoad=true; 
 						}
-				
+							
 				if (cmd.compareTo("--gen-passwd")==0) { 
 						GenPassword(); 
 						return; 
@@ -1069,6 +1073,8 @@ public static void main(String args[]) {
 						if (Main.PercThread>Main.statsPercThread) Main.statsPercThread=Main.PercThread;
 						//if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", ctask+" T.c., "+grbt+" T.r., "+Main.PercThread+"%");
 				
+						TheradsCounter(false,false);
+						if (CurFuffaThreads>0) Config.GlobalLog(Config.GLOG_All, "Kernel", CurFuffaThreads+" dummy thread detected");
 						cx = Config.SMPTServer.length;
 						
 						if (Config.UseStatus && Main.statusHash==null)  Main.statusHash = new long[cx];
@@ -1381,6 +1387,58 @@ public static void main(String args[]) {
 		if (ConfVars.containsKey("global-setndk")) Main.NoDelKeys = Config.parseY(ConfVars.get("global-setndk"));
 		if (ConfVars.containsKey("global-echo")) Main.echo (ConfVars.get("global-echo")+"\n");
 		if (ConfVars.containsKey("global-stderr")) System.err.print(ConfVars.get("global-stderr")+"\n");
+	}
+		
+	//TODO Mettere nelle statistiche
+	public static volatile short CurThreads = 0;
+	public static volatile short MaxThreads = 0;
+	public static volatile short CurFuffaThreads = 0;
+	public static volatile short MaxFuffaThreads = 0;
+	public static volatile int StatsKCurHour=0;
+	public static volatile short[] StatsKThreadsXHour = new short[72];
+	
+	public static String TheradsCounter(boolean ret,boolean byMain) throws Exception {
+		int tcr = (int)(System.currentTimeMillis()/3600000L);
+		if (tcr!=StatsKCurHour) {
+			StatsKCurHour=tcr;
+			int cx = StatsKThreadsXHour.length-1;
+			System.arraycopy(StatsKThreadsXHour, 1, StatsKThreadsXHour, 0, cx);
+			StatsKThreadsXHour[cx] =MaxThreads;
+			MaxThreads=0;
+			MaxFuffaThreads=0;
+			}
+		
+		String rs = ret ? "" : null;
+		Set<Thread> tutti = Thread.getAllStackTraces().keySet();
+		int cx = tutti.size();
+		Thread[] Tutto = tutti.toArray(new Thread[cx]);
+		tutti=null;
+		CurThreads=(short) cx;
+		if (CurThreads>MaxThreads) MaxThreads=CurThreads;
+		short fuffaThread=0;
+		
+		for (int ax=0;ax<cx;ax++) {
+			boolean isFuffa=false;
+			if (
+						Tutto[ax].isInterrupted() 	|| 
+						!Tutto[ax].isAlive()				) {
+							fuffaThread++;
+							isFuffa=true;
+							}
+			
+			if (ret) {
+				String cl  = Tutto[ax].getClass().getSimpleName();
+				if (byMain) {
+					if (!" ControlSession MailQueueSender MultiDeliverThread ListThread SrvHTTPRequest SrvPop3Session SrvSMTPSession ".contains(" "+cl+" ")) continue; 
+					}
+				rs+=Long.toString(Tutto[ax].getId(),36)+"\t"+(isFuffa ? "-":"R") + "\t";
+				rs+=cl+"\n";
+				}
+			}		
+		
+		CurFuffaThreads=fuffaThread;
+		if (CurFuffaThreads>MaxFuffaThreads) MaxFuffaThreads=CurFuffaThreads;
+		return rs;
 	}
 	
 	private static void EXCM(Exception E) {

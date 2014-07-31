@@ -63,6 +63,10 @@ public class SrvIdentity {
 	public boolean POP3CanRegister=true;
 	public boolean POP3CanVMAT=true;
 	public boolean NoVersion = true;
+	public static boolean CheckCertValidity = false; 
+	public int RetryTime=400; 
+	public boolean ShowFriends = true;
+	public boolean Friendly = true;
 	
 	public boolean HasHTTP=false;
 	public int LocalHTTPPort = 80;		
@@ -73,6 +77,9 @@ public class SrvIdentity {
 	public HashMap <String,Boolean> HTTPCached = new HashMap <String,Boolean>();
 	public HashMap <String,Integer> HTTPAccess = new HashMap <String,Integer>();
 	public HashMap <String,String> HTTPETEXVar = new HashMap <String,String>();
+	
+	public String HTTPRootLogin=null;
+	public String HTTPRootPass= null;
 	
 	public boolean CanRelay=false;
 	
@@ -189,6 +196,8 @@ public class SrvIdentity {
 	public int NewLstLastHour = 0;
 	public volatile int NewLstLastHourCnt = 0;
 	public long TimeSpoofSubRandom = 0;
+	
+	public int LastDayPurgeTmp = 0;
 	
 	public String ExitGood = null;
 	public String ExitBad=null;
@@ -449,7 +458,24 @@ public class SrvIdentity {
 							BlackList.Garbage();
 							BlackList.AutoSave();
 							} catch(Exception E) { Config.EXC(E, "IPGrarbage"); }
-					}
+					
+					int curDay = (int)Math.floor(System.currentTimeMillis()/86400000L);
+					if ( curDay!=LastDayPurgeTmp ) try {
+						LastDayPurgeTmp = curDay;
+						String[] tmp = new File(Maildir+"/tmp/").list();
+						int cx = tmp!=null ? tmp.length : 0;
+						for (int ax=0;ax<cx;ax++) {
+							if (!tmp[ax].endsWith(".tmp")) continue;
+								String fi =Maildir+"/tmp/"+tmp[ax];
+								int fDay = (int) Math.floor(new File(fi).lastModified() /86400000L);
+								if (curDay-fDay > 2) try { J.Wipe(fi, Config.MailWipeFast); } catch(Exception E2) { Config.EXC(E2, Nick+".DelLTmpFile `"+fi+"`"); }
+							}
+						} catch(Exception E) {
+							 Config.EXC(E, Nick+".PurgeTmp");
+						}
+				
+				
+					} //run
 				} ;
 				
 			StatRun.scheduleAtFixedRate(StatOp, 1 ,60, TimeUnit.MINUTES);
@@ -458,6 +484,11 @@ public class SrvIdentity {
 					} catch(Exception E) { 
 						Log(Config.GLOG_Server,"BinaryStat: Error on `"+binaryStatsFile+"` "+E.getMessage()); 
 					} 
+	
+	if (EnterRoute) try { EnableQueue(); } catch(Exception E) { 
+			Config.EXC(E, "EnableQueue");
+			if (Config.Debug) E.printStackTrace();
+			}
 	}
 	
 	public static byte[][] CreateSK(String onion) throws Exception {
@@ -612,7 +643,8 @@ public class SrvIdentity {
 		
 		File F = new File(Maildir);
 		if (!F.exists()) throw new Exception("Maildir doesn't exist: `"+Maildir+"`");
-		for (String p : new String[] {  "usr" , "inbox" , "keys" , "log", "feed","head" }) {
+		
+		for (String p : new String[] {  "usr" , "inbox" , "keys" , "log", "feed","head","net","tmp" }) {
 			F = new File(Maildir+"/"+p);
 			if (!F.exists()) throw new Exception("Can't open path `"+Maildir+"/"+p+"`");
 			}
@@ -681,12 +713,14 @@ public class SrvIdentity {
 		if (AutoPGP) {
 				if (!new File(Maildir+"/head/hldr").exists()) SrvAutoPGPKeys();
 				if (AutoPGPUpdate && new File(Maildir+"/head/hldr").exists()) try {
+					if (Main.ConfVars==null) Main.echo("Sending Server's PGP keys to keyserver via TOR Please wait...\n");
 					PGPSendKey("server", Maildir+"/IDList");
 					} catch(Exception E) {
 						Log("PGPSendKey Error: "+E.getMessage());
 						if (Config.Debug) E.printStackTrace();
 					}
 				}
+		
 		}
 	
 	private String UFname(String local) throws Exception {
@@ -1332,7 +1366,7 @@ public class SrvIdentity {
 							String fdo = J.getDomain(MailFrom);
 							t0 = flp+"."+fdo+"@"+ExitRouteDomain;
 							
-							for (String k:Hldr.keySet()) {
+							for (String k:Hldr.keySet()) { //TODO Controllare il from qui !FROM!
 							String a = Hldr.get(k);
 							if (a.contains(MailFrom)) {
 								a=a.replace(MailFrom, t0);
@@ -1340,7 +1374,7 @@ public class SrvIdentity {
 								}
 							}
 							
-							Hldr.put("from", t0);
+							Hldr.put("from", t0); //TODO Controllare il from qui !FROM!
 							Hldr.put("x-mat-from", MailFrom);
 							putNotice=ExitNoticeE;
 							MailFrom = t0;
@@ -1404,9 +1438,11 @@ public class SrvIdentity {
 					SMTPReply Re;
 					long MessageBytes=0;
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"MAIL FROM: "+MailFrom2);
+					if (hasQueue && (Re.Code>399 && Re.Code<500)) throw new RetryUevent(RetryUevent.POX_FROM,Re.Code,Re.toString().trim(),this.Server);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/from)"); 
 					
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"RCPT TO: "+MailTo2);
+					if (hasQueue && (Re.Code>399 && Re.Code<500)) throw new RetryUevent(RetryUevent.POX_TO,Re.Code,Re.toString().trim(),this.Server);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/to)"); 
 					
 					if (SupVMAT) {
@@ -1646,7 +1682,16 @@ public class SrvIdentity {
 						
 			s+="\r\n";
 			for (String k:ManifestInfo.keySet()) s+=k.toLowerCase()+": "+ManifestInfo.get(k)+"\r\n";
-			
+			if (ShowFriends) {
+				try {
+					String[] FriendServer = RequildFriendsList();
+					int lcx = FriendServer.length;
+					for (int ax=0;ax<lcx;ax++) s+="@Friend-"+Integer.toString(ax,36)+": "+FriendServer[ax].toLowerCase().trim()+"\r\n";
+					} catch(Exception IE) {
+						Log("ManifestFriend: "+IE.getMessage());
+						if (Config.Debug) IE.printStackTrace();
+						}
+				}
 			String t = s.trim();
 			t=J.Base64Encode(Stdio.RSASign(t.getBytes(), SSK));
 			s+="\r\nSign: "+t;
@@ -2075,6 +2120,9 @@ public class SrvIdentity {
 		Log("Begin DoFriends\n");
 		HashMap <String,String> net = new HashMap <String,String>();
 		String[] FriendServer = RequildFriendsList();
+		String known = "\n"+J.Implode("\n", FriendServer)+"\n";
+		String friendlyList="";
+		known=known.toLowerCase();
 		int cx=FriendServer.length;
 		for (int ax=LastFriend;ax<cx;ax++) {
 				LastFriend++;
@@ -2101,7 +2149,28 @@ public class SrvIdentity {
 						}
 					if (net.containsKey(FriendServer[ax])) net.remove(FriendServer[ax]);
 					}
+				
+				if (Friendly && M.Friends!=null) {
+					int cl = M.Friends.length;
+					for (int al=0;al<cl;al++) {
+						if (!known.contains("\n"+M.Friends[al]+"\n")) {
+								known+=M.Friends[al]+"\n";
+								friendlyList+=M.Friends[al]+"\n";
+								}
+							}
+					}
+				
 				}//for
+		
+		if (Friendly && friendlyList.length()!=0) {
+			friendlyList=friendlyList.trim();
+			String[] arr = friendlyList.split("\\n+");
+			int cl = arr.length;
+			Log("DoFriends: Start friendly list, new "+cl+" servers");
+			for (int al=0;al<cl;al++) {
+					if (arr[al].length()!=0 && !net.containsKey(arr[al])) DoFriend(arr[al]);
+					}
+			}
 				
 		if (net.size()>0) {
 		Log("DoFriends: Start Dynamic Friends scan\n");
@@ -2493,7 +2562,7 @@ public class SrvIdentity {
 			
 			if (!new File(fn).exists()) {
 				int cx= C.length; 
-				for (int ax=0;ax<cx;ax++) C[ax].checkValidity();
+				if (CheckCertValidity) for (int ax=0;ax<cx;ax++) C[ax].checkValidity();
 				Log("New SSL CRT for `"+host+"`");
 				SSLSaveNew(C,host);
 				///SSLToVerify.put(host, Stdio.Dump(hash).toLowerCase());
@@ -2858,7 +2927,7 @@ public class SrvIdentity {
 						int cx= slist.length;
 						for (int ax=0;ax<cx;ax++) {
 								String fn="\n"+slist[ax].toLowerCase().trim()+"\n";
-										if (!Config.NoBootFromSameMachine ||  (!OnTheSameMachine.contains(fn) && s0.contains(fn)))  s0+=slist[ax].toLowerCase().trim()+"\n"; //XXX RIABILITA!
+										if (!Config.NoBootFromSameMachine ||  (!OnTheSameMachine.contains(fn) && s0.contains(fn)))  s0+=slist[ax].toLowerCase().trim()+"\n"; 
 								}
 											
 						s0=s0.trim();
@@ -2921,7 +2990,13 @@ public class SrvIdentity {
 								// ... or save to the sysop.txt
 								Config.EXC(E, "SaveKTCL");
 								Log(Config.GLOG_Server,"Saving KCTL data to sysop.txt");
-								PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(Maildir+"/sysop.txt", true)));
+								String SysOpTXTPath;
+								if (Config.AlternatePositionSysOpTxt!=null) {
+									SysOpTXTPath=Config.AlternatePositionSysOpTxt+Nick+"/sysop.txt";
+									new File(SysOpTXTPath).mkdirs();
+									} else SysOpTXTPath=Maildir+"/sysop.txt";
+								
+								PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(SysOpTXTPath, true)));
 								out.println("KCTL: Password: "+Pwls);
 								out.println();
 								out.println(KCTL);
@@ -3688,11 +3763,16 @@ byte[][] Cobj = new byte[][] {
 		public void SrvAutoPGPKeys() throws Exception {
 			
 			Log("Generating new PGP KeyPair");
+			if (Main.ConfVars==null) Main.echo("Creating Server's PGP keys Please wait...\n");
 			
 			ByteArrayOutputStream Public = new ByteArrayOutputStream();
 			ByteArrayOutputStream Private = new ByteArrayOutputStream();
-			long r = Stdio.NewRndLong() % 365;
-			r=r*86400;
+			//long r = Stdio.NewRndLong() % 365;
+			//r=r*86400;
+			
+			long TimeFrom=0;
+			if (SSlInfo.containsKey("from")) TimeFrom = J.parseInt(SSlInfo.get("from"));
+			if (TimeFrom<1) TimeFrom = System.currentTimeMillis() - (86400000L * Math.abs(Stdio.NewRndLong() % 365)+86400000L);
 			
 			String id;
 			if (AutoPGPID!=null) {
@@ -3706,7 +3786,7 @@ byte[][] Cobj = new byte[][] {
 				} else id="server@"+Onion;
 			
 			String Pws = PGPKeyGen.KeyGen(
-						new Date(Time()),
+						new Date(TimeFrom),
 						id,
 						Public, 
 						Private)
@@ -4133,7 +4213,7 @@ byte[][] Cobj = new byte[][] {
 				if (Config.Debug) Log("TORVMAT Session " +( VM==null ? "NO":"YES")); 
 				
 				if (VM!=null) {
-					Hldr.put("from", VM.mail);
+					Hldr.put("from", VM.mail); // !FROM!
 					Hldr.put("x-vmat-server", VM.server);
 					if (VM.sign!=null && VM.sign.length>0){
 						String s0[] = new String[] { J.Base64Encode(VM.sign) };
@@ -4507,6 +4587,74 @@ public String ExpandStr(String in) {
 		}
 	return rs;
 }
-		
+
+public MailQueueSender[] QueueSender= null;
+public MailQueue Queue = null;
+private ScheduledExecutorService QueueRun=null;
+public boolean hasQueue = false;
+
+public void EnableQueue() throws Exception {
+	if (QueueRun!=null) return;
+	Queue = new MailQueue(this);
+	try { Queue.Load(); } catch(Exception E) { Config.EXC(E, Nick+".EnableQueueLoad"); }
+	
+	QueueSender = new MailQueueSender[Config.QueueThreads];
+	final SrvIdentity Questo =this;
+	
+	Runnable ServerOp = new Runnable() {
+				long scad=System.currentTimeMillis()+1000L;
+				public void run() {
+					try {
+						int cx = QueueSender.length;
+							for (int tx =0;tx<cx;tx++) {
+							int nxt =-1;
+							
+							synchronized(Queue) { nxt = Queue.getNext(); }
+							
+							if (nxt==-1) return;
+							Log("QueueRun "+nxt+" "+tx);
+							
+							long tcr=System.currentTimeMillis();
+							int fre=-1;
+							for (int ax=0;ax<cx;ax++) {
+								if (QueueSender[ax]!=null && tcr>QueueSender[ax].Scad) {
+									if (QueueSender[ax].running) try { QueueSender[ax].interrupt(); } catch(Exception I) {}
+									QueueSender[ax]=null;
+									fre=ax;
+									}
+								}
+							System.gc();
+							
+							if (fre==-1) for (int ax=0;ax<cx;ax++) {
+									if (QueueSender[ax]!=null && !QueueSender[ax].running) { fre=ax; break; }
+									if (QueueSender[ax]==null) { fre=ax; break; }
+									}
+							
+							if (fre==-1) {
+								Log("No Queue threads free");
+								return;
+								}
+							
+							MsgQueueEntry Q = null;
+							synchronized(Queue) { Q = Queue.UnQueue(nxt); }
+							
+							QueueSender[fre] = new MailQueueSender(Q,Questo);
+							tcr=System.currentTimeMillis();
+							if (tcr>scad) break;
+							}
+						Log("End Queue Run");
+						} catch(Exception E) {
+							Config.EXC(E, Nick+".QueueRun");
+							if (Config.Debug) E.printStackTrace();
+						}
+					
+					}
+				} ;
+				
+	QueueRun=Executors.newSingleThreadScheduledExecutor();
+	QueueRun.scheduleAtFixedRate(ServerOp,60,300, TimeUnit.SECONDS); 
+	hasQueue=true;
+	}
+
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

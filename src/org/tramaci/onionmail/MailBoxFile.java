@@ -18,7 +18,7 @@
  */
 
 package org.tramaci.onionmail;
-//TODO KEY 256
+//XXX KEY 256
 
 import java.io.EOFException;
 import java.io.File;

@@ -1,29 +1,23 @@
 
 @font-face {
     font-family: DOS;
-    src: url('PCTerminal.eot');
-    src: url('PCTerminal.eot') format('embedded-opentype'),
-         url('PCTerminal.woff') format('woff'),
-         url('PCTerminal.ttf') format('truetype'),
-         url('PCTerminal.svg#PCTerminal') format('svg');
+    src: url('PCTerminal80S.woff') format('woff'),
+         url('PCTerminal80S.ttf') format('truetype'),
+         url('PCTerminal80S.svg#PCTerminal80S') format('svg');
 }
 	      
 @font-face {
     font-family: 'corsivo';
-    src: url('PCTerminal.eot');
-    src: url('PCTerminal.eot') format('embedded-opentype'),
-         url('PCTerminal.woff') format('woff'),
-         url('PCTerminal.ttf') format('truetype'),
-         url('PCTerminal.svg#PCTerminal') format('svg');
+    src: url('Terminal3D3.woff') format('woff'),
+         url('Terminal3D3.ttf') format('truetype'),
+         url('Terminal3D3.svg#Terminal3D3') format('svg');
 }
 
 @font-face {
     font-family: 'ocr';
-    src: url('PCTerminal.eot');
-    src: url('PCTerminalocr.eot') format('embedded-opentype'),
-         url('PCTerminal.woff') format('woff'),
-         url('PCTerminal.ttf') format('truetype'),
-         url('PCTerminal.svg#PCTerminal') format('svg');
+    src: url('PCTerminal80S.woff') format('woff'),
+         url('PCTerminal80S.ttf') format('truetype'),
+         url('PCTerminal80S.svg#PCTerminal80S') format('svg');
 }
 
 html, form, p, div, h2, h3, h4, h5, h6{
@@ -125,10 +119,10 @@ h5:after {
 #topsez { height: 146px; vertical-align: bottom; padding-bottom: 16px; }
 #topsez2 { height: 116px; vertical-align: bottom; padding-bottom: 4px; }
 .topsez div { height: 2.2em; margin-right: 10px; margin-left: 10px; float: left; }
-.topsez div a { font-size: 15pt; line-height: 2.2em; color: #048; text-decoration: none; font-family: ocr; }
+.topsez div a { font-size: 15pt; line-height: 2.2em; color: #048; text-decoration: none; font-family: corsivo; }
 .topsez div a:before { content: "< "; color: #480; }
 .topsez div a:after { content: " >"; color: #480; }
-.topsez div a:hover { color: #48f; }
+.topsez div a:hover { color: #48f; background-color: rgba(255,255,255,0.5); }
 
 .secondtop { vertical-align: middle; }
 .secondtop div { height: 1.1em; margin-right: 8px; margin-left: 8px; float: left; }
@@ -223,7 +217,7 @@ a[name]:hover { color: #048; }
 
 .pagetit {
 	text-align: center;
-	font-family: ocr, Courier New, Monospace;
+	font-family: corsivo, Courier New, Monospace;
 	color: #48F;
 	font-size: 2em;
 	margin-bottom: 8px;

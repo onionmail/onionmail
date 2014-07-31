@@ -74,7 +74,7 @@ public class ExitRouterInfo {
 			i.domain=tok[0].toLowerCase().trim();
 			i.onion=tok[1].toLowerCase().trim();
 			
-			if (!i.onion.matches("[a-z0-9]{16}\\.onion") || !i.domain.matches("[a-z0-9\\-\\_\\.]{2,40}\\.[a-z0-9]{2,5}") || i.domain.endsWith(".onion")) throw new Exception("dom/oni"); //TODO Rimuovi return null;
+			if (!i.onion.matches("[a-z0-9]{16}\\.onion") || !i.domain.matches("[a-z0-9\\-\\_\\.]{2,40}\\.[a-z0-9]{2,5}") || i.domain.endsWith(".onion")) throw new Exception("dom/oni"); //XXX Rimuovi return null;
 			
 			i.port=Config.parseInt(tok[2], "", 1, 65535);
 			i.lastCHK=0;
@@ -89,7 +89,7 @@ public class ExitRouterInfo {
 			i.Bads= 0;
 			return i;
 			} catch(Exception E) {
-				Main.echo("ERROROO |"+s+"|\n");///TODO Rimuovi
+				///Main.echo("ERROROO |"+s+"|\n");///XXX Rimuovi
 				E.printStackTrace();
 				return null; }
 		}
