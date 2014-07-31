@@ -1,0 +1,34 @@
+
+OnionMail Setup server informations:
+NickName:           __NICK__
+HiddenService:      __ONION__
+SMTP Server:        __ONION__ port 25
+    AUTH Plain
+    STARTTLS
+    See __MAILDIR__/sysop.txt for details
+    
+POP3 Server:        __ONION__ port 110
+    AUTH Plain
+    STARTTLS
+    See __MAILDIR__/sysop.txt for details
+    
+Server boot password:           __PAR_PASSWD_BOOT__
+Server control port password:   __PAR_PASSWD_SERV__
+OnionMail's root password:      __PAR_PASSWD_ROOT__
+
+Control port at:                127.0.0.1 port __CTRL__
+    Use: telnet 127.0.0.1 __CTRL__
+
+You can edit the files into wwwroot directory.
+
+If the WebServer is enabled:
+
+ To see your server web page visit:
+   http://__ONION__
+
+ To see the server's administration:
+   http://__ONION__/logon.html
+   Login: 		__NICK__
+   Password:		__PAR_PASSWD_SERV__
+
+ (Use Tor browser).
