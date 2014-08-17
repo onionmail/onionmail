@@ -53,10 +53,10 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0006_0003_035BL;
-	public static String Version="1.6.3.859";
+	public static long VersionID = 0x0001_0006_0005_037DL;
+	public static String Version="1.6.5.893";
 	public static String VersionExtra="";
-
+	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
 	public static POP3Server[] POP3S = null;
 	public static org.tramaci.onionmail.MailingList.ListThread[] ListThreads = null;
@@ -104,7 +104,7 @@ public class Main {
 	public static boolean CmdDaemon=false;
 	public static boolean SetPGPSrvKeys = false;
 	
-	private static PrintWriter out=null;
+	private static FileWriter out=null;
 	private static String OutFile="onionstart.log";
 	
 	public static String CompiledBy = null;
@@ -201,10 +201,10 @@ public class Main {
 	
 	private static void RedirectOut() throws Exception {
 		try {
-			out = new PrintWriter(new BufferedWriter(new FileWriter(Main.OutFile, true)));
+			out = new FileWriter(Main.OutFile, false);
 		} catch(Exception E) {
 			out=null;
-			echo("Can't daemonize\n");
+			out("Can't daemonize\n");
 		}
 	}
 	
@@ -350,7 +350,7 @@ public class Main {
 			}
 		
 		if (Oper==Main.Oper_Gen_ServerS) { 
-				if (Main.ConfVars!=null) echo("OM:[COMPLETE] ");
+				if (Main.ConfVars!=null) out("OM:[COMPLETE] ");
 				echo("\nOperation complete!\n");
 				System.exit(0);
 				}	
@@ -361,7 +361,7 @@ public class Main {
 			}
 		
 		if (!J.TCPRest(Config.TorIP, Config.TorPort)) {
-			if (Main.ConfVars!=null) echo("OM:[ERROR] ");
+			if (Main.ConfVars!=null) out("OM:[ERROR] ");
 			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"`\n");
 			System.exit(2);
 			}
@@ -518,15 +518,15 @@ public class Main {
 			System.gc();
 			Main.ConfVars=null;
 			System.gc();
-			Main.echo("OM:[DELETE]\n");
+			Main.out("OM:[DELETE]\n");
 			}
-		Main.echo("OM:[COMPLETE]\n");
+		Main.out("OM:[COMPLETE]\n");
 		if (ac) System.exit(0);
-		Main.echo("OM:[RUNNING]\n");
+		Main.out("OM:[RUNNING]\n");
 		}
 	
 	Thread.sleep(2000);		
-	SelfTest();
+	if (!Main.noTest) SelfTest();
 	if (Config.UseKernel) startKernel(); 
 	}
 	
@@ -587,13 +587,46 @@ public static void main(String args[]) {
 												
 			int cx = args.length;
 			boolean fp=true;
-			if (cx>0 && args[0].compareTo("-q")==0) fp=false;
+			
+			for (int ax=0;ax<cx;ax++) {
+				String cmd = args[ax].toLowerCase().trim();		
+					
+					if (cmd.compareTo("-d")==0) {
+						CmdDaemon=true;
+						RedirectOut();
+						}
+					
+					if (cmd.compareTo("-dr")==0) {
+					if ((ax+1)>=cx) {
+							echo("Error in command line: -dr\n\tFile required!\n");
+							Helpex();
+							return;
+							}
+		
+					Main.OutFile = args[ax+1].trim();
+					ax++;
+					RedirectOut();
+					}
+				
+					if (cmd.compareTo("-q")==0) fp=false;
+					
+				}
+						
 			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\tSome rights reserved\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;
 				String cmd = args[ax].toLowerCase().trim();		
 				
+				if (cmd.compareTo("-d")==0) fm=true;
+				
+				if (cmd.compareTo("-dr")==0) {
+					fm=true;
+					ax++;
+					}
+				
+				if (cmd.compareTo("-q")==0) fm=true; 
+								
 				if (cmd.compareTo("-f")==0) { 
 						fm=true;
 						if ((ax+1)>=cx) {
@@ -608,6 +641,11 @@ public static void main(String args[]) {
 							}
 						ax++;
 						}
+				
+				if (cmd.compareTo("-ntx")==0) {
+					noTest=true;
+					fm=true;
+				}
 				
 				if (cmd.compareTo("-rc")==0  && (ax+1)<args.length) {
 					ax++;
@@ -684,7 +722,7 @@ public static void main(String args[]) {
 				
 				if (cmd.compareTo("--test-java-b")==0) {
 					boolean x = LibSTLS.TestJavaDiMerdaBug(false);
-					echo("OM:[TEST]" + (x ? "BAD":"GOOD")+"\n");
+					out("OM:[TEST]" + (x ? "BAD":"GOOD")+"\n");
 					try {
 						String s= x ? "yes":"no";
 						Stdio.file_put_bytes(fc+".sslTest", s.getBytes());
@@ -727,26 +765,7 @@ public static void main(String args[]) {
 					
 					System.exit(0);
 					}
-				
-				if (cmd.compareTo("-d")==0) {
-					fm=true;
-					CmdDaemon=true;
-					RedirectOut();
-					}
-				
-				if (cmd.compareTo("-dr")==0) {
-					if ((ax+1)>=cx) {
-							echo("Error in command line: -dr\n\tFile required!\n");
-							Helpex();
-							return;
-							}
-					
-					fm=true;
-					Main.OutFile = args[ax+1].trim();
-					ax++;
-					RedirectOut();
-					}
-				
+							
 				if (cmd.compareTo("-sp")==0) { 
 						SelPass=true; 
 						fm=true; 
@@ -756,8 +775,6 @@ public static void main(String args[]) {
 					fm=true;
 					SetPGPSrvKeys=true;
 				}
-				
-				if (cmd.compareTo("-q")==0) fm=true; 
 								
 				if (cmd.compareTo("-ndk")==0) { 
 						NoDelKeys=true; 
@@ -773,9 +790,9 @@ public static void main(String args[]) {
 						fm=true;
 						}
 				
-				if (cmd.compareTo("-pi")==0 && (ax+1)<args.length) {
+				if (cmd.compareTo("-pi")==0) {
 						ax++;
-						System.err.print("OM:[PASS] Send password to STDIN\n");
+						out("OM:[PASS] Send password to STDIN\n");
 						BufferedReader In = J.getLineReader(System.in);
 						String pw = In.readLine();
 						pw=pw.trim();
@@ -890,7 +907,7 @@ public static void main(String args[]) {
 				if (N.Config.Debug) EXC(E,"Main");
 				} else EXC(E,"Main");
 			echo("Fatal Error: "+E.getMessage()+"\n");
-			if (Main.ConfVars!=null) Main.echo("OM:[ERROR] "+E.getMessage()+"\n");
+			if (Main.ConfVars!=null) Main.out("OM:[ERROR] "+E.getMessage()+"\n");
 			}
       }
 
@@ -947,8 +964,17 @@ public static void main(String args[]) {
 		
 		}	 
 
-	public static void echo(String st) { 
-		if (out!=null) try { out.print(st); } catch (Exception E) {System.out.print(st); } else System.out.print(st);
+	public static void echo(String st) {
+		if (out!=null) try {
+				synchronized (out) {
+					out.write(st);
+					out.flush();
+					}
+				} catch (Exception E) {System.out.print(st); } else System.out.print(st);
+		}
+	
+	public static void out(String st) { 
+		System.out.print(st);
 		}
 	
 	public  static void EXC(Exception E,String dove) {
@@ -1376,10 +1402,10 @@ public static void main(String args[]) {
 		}
 			
 	private static void BatchMode() throws Exception {
-		Main.echo("OM:[DATA] Stdin headers\n");
+		Main.out("OM:[DATA] Stdin headers\n");
 		BufferedReader In = J.getLineReader(System.in);
 		ConfVars = J.ParseHeaders(In);
-		Main.echo("OM:[DATA_OK] Processing\n");
+		Main.out("OM:[DATA_OK] Processing\n");
 		if (ConfVars.containsKey("global-pass")) Main.SetPass = ConfVars.get("global-pass");
 		if (ConfVars.containsKey("global-selpass")) Main.SelPass = Config.parseY(ConfVars.get("global-pass"));
 		if (ConfVars.containsKey("global-setpgp-root")) Main.PGPRootMessages = Config.parseY(ConfVars.get("global-setpgp-root"));

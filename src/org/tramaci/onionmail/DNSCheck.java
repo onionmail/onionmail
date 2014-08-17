@@ -87,6 +87,10 @@ public class DNSCheck {
 	public DNSCheck(Config C) throws Exception {
 		Config=C;
 		
+		if (Config.DNSServer==null) throw new Exception("DNSServer missing");
+		if (Config.DNSCheckTimeout==0) throw new Exception("Invalid DNSCheckTimeout");
+		if (Config.DNSCheckRetry==0) throw new Exception("Invalid DNSCheckRetry"); 
+		
 		Hashtable env = new Hashtable();
 		env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.dns.DnsContextFactory");       
 		env.put("com.sun.jndi.dns.timeout.initial",Integer.toString(Config.DNSCheckTimeout));

@@ -4,7 +4,7 @@ Use:
 		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp] [-pi]
 		[-rpf <remotePasswdFile>] [-bm]
 		[--gen-rpass] [-sp] [-rc <file> ]
-		[--rpass-server]
+		[--rpass-server] [-ntx] [-dr <outfile> ]
 		
 	onionmail [-q] --gen-passwd 
 	onionmail [-q] --gen-servers [-sp] -f <config file> [--pgp] [--set-pgp]
@@ -20,6 +20,7 @@ Use:
 	
 	Options:      
 
+	-dr	<file>	Redirect Main output checklist to file.
         -f	<par>	Set config file and directory 
 			(Must be in `dir/config.conf` format).
 	-v		Enable verbose.
@@ -86,6 +87,9 @@ Use:
 			some header lines by STDIN. These haders are termiated
 			by an empty line. The scructure of the headers is like
 			mail headers (it use the same routine).
+
+	-ntx		Do not test the hidden service connections and 
+			terminate.
 
 	List of OnionMail's batch headers:
 	Name			Type	Meaning

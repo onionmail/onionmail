@@ -1,0 +1,205 @@
+08/16/2014 OnionMail Ver 1.6.5.893:
+	Fix config variables.
+	Fix BOOT PUSH/DERK propagation F(X) issue.
+	Fix TOR/OnionMail network attack hardening.
+		
+08/03/2014 OnionMail Ver 1.6.4.877:
+	Add dns options and dns.conf
+	Fix command line issues.
+	Add start log separated.
+	Stable Version.
+
+07/31/2014 OnionMail Ver 1.6.3.859:
+	
+	Update Resource file.
+	Fixed Mailing list issue.
+	Fixed some security issues (mailin list & sysops permissions).
+	Add resource files directory with multilingual support. 
+
+07/30/2014 OnionMail Ver 1.6.2.845:
+         New software update. We are moving towards a stable version of OnionMail, many issues have been resolved, many functions have also been added on the request of the sysop of different servers.
+         Thanks to nouovo setup wizard, you can set all the parameters of the server. You can, if desired, easily create a server type EXIT / ENTER.
+         Production times were speeded up in view of the large amount of server OnionMail detected attravesto some research.
+
+         Updates in this version:
+             HTTP server for the registration of utetni via TOR hidden service.
+             Update the system of federation servers.
+             Update the HTTP server that supports dynamic pages.
+             Update the installer with a new wizard.
+             Update manifest settings.
+             Update on multidelivery node exit (header solved the problem of wrong).
+             Update generation automated PGP key server (solved the problem of data).
+             Update the SSL server does not OnionMail.
+             Update Queue for messages (only exit) to avoid blockages due to greylisting new server.
+             Update web pages for ihdden tor service.
+             Update basic configuration with the ability to select whether the server is public, private, open or closed to new registrations and how it should relate to the federated network of servers.
+
+         Upcoming scheduled updates:
+             Update Resource file for messages.
+             Resource files directory with multilingual support.
+             Updating the server onionmail.info.
+             Update the documentation.
+
+         Roll Call:
+             The server onionmail.info as output node at the moment is the only one known. The traffic begins to be pretty intense, especially from reduced server and nitega (which are still standing). That someone should open up some outgoing server.
+
+07/26/2014 Directory Server:
+
+         Through our research we were able to publish the list of servers OnionMail open to create new addresses OnionMail.
+         From the special section you can secgliere the server to which to subscribe. Even onion.py the application is updated.
+         The publication of this list is controlled by the parameters in server.sconf.
+
+07/24/2014 OnionMail Ver 1.6.0.667B:
+
+         The new version of OnionMail is online. Now also supports the ability to put messages in the queue and retry delivery of messages (EXIT server), so you avoid the annoying problems graylisitng.
+         Since this version is also available with the HTTP server web pages for the registration of users. Among the new features has been added the ability to auto-configure Thunderbird (if connected via TOR). When servers are generated automatically produce your own PGP keys and send to the keyserver. It is no longer necessary to the operation manual configuration. Thanks to appropriate commands and files KEYBLOCK.TXT SYSOP.TXT can be saved in RAM to avoid leaving traces.
+
+07/01/2014 OnionMail Ver 1.5.1.486B:
+
+         The new version of OnionMail is online. There have been significant updates to the core of the program, plus you can go and change the SSL parameters.
+         The new version is available peri download in the appropriate section.
+
+20/06/2014 New server OnionMail:
+
+         From now on we moved to another server where the mail is handled by OnionMail as a node entry and exit through NTU.
+         The experimentation for the use of OnionMail in hybrid mode has had success with Exim4 (two mail servers can collaborate simultaneously on the same machine). Now OnionMail is the undisputed mail server on this domain. This opens the first output node of the network OnionMail. We are all ready for the presentation of the project to HACKMEETING persso XM24 (Bologna).
+
+04/06/2014 OnionMail Ver 1.4.5.420B is online:
+
+         We arrived at Ver 1.4.5.420B version of the program. The new features have been implemented, other new features are still in beta stage, others are already established. One thing is certain: No more obbigo of 16 alphanumeric characters in addresses OnionMail, nor about new Tor network on the Internet. Thanks to the protocols and VMAT RVMAT the mail server is able to operate in a transparent manner with a lot of checks to 2048 bits.
+
+         We are working on implementation of wizards to help users make use of OnionMail.
+         A wizard for installing the server is already operational for a few months. He pressed the installation of OnionMail on Debian server. (See download area).
+         Another wizard that is being tested server for the registration of new users to the server OnionMail (also not open to OnionMail.info). This wizard is designed to run on TAILS, a live distribution for privacy and anonymity.
+
+         Now the main parts are there, it's just a matter of refinement.
+         With the latest changes, we will strive to make the software more secure and easier for the average user.
+         Now hand on keyboards, we have to update the guide ....
+
+05/30/2014 OnionMail New Features:
+
+         The VMAT protocol that allows you to use the address without the 16 characters. Onion has also been extended to the email between users on the Tor network. Through some parameters of the account, you can choose the sender. The recipient's server will perform some checks upon receipt of the message.
+         In this way we have eliminated the requirement to use 16 characters. Onion also in email between users on the Tor network.
+
+         Another interesting feature was implemented at the level POP3, adding specific commands that are not going to affect the operation of the protocol itself.
+         These commands can create new users and set some options for sending. The implementation of these commands has been made to allow for a range of benefits in the inscription of new users. For example, through a telnet communication (in tor), the user can register without requiring an operator to implement a page iscirizone.
+         With these features it was possible to create a python script that allows you to configure Claws-Mail and register new address OnionMail, with lots of PGP keys, in just one click and responding to requests via the terminal. This script is called onion.py.
+         With onion.py you can register and set up a mailbox on OnionMail TAILS, in seconds and without any trouble.
+         The next version of the script OnionMail be published. In this way, users can download the script Tails, click on an icon and configure the new mailbox. The whole encrypted, anonymous and PGP key to 16384 bits.
+         Thanks to these changes, the software has become easy to use even for the average user.
+
+05/08/2014 OnionMail 1.4.4.281B:
+
+         The new version of OnionMail is online with the support VMAT we are no longer forced to use the adresses.onion.
+         All new features are operational ed'è OnionMail possible to download from this site.
+         We recommend that you update the server OnionMail consent to the use of VMAT addresses.
+
+25/04/2014 OnionMail 1.4 New functions:
+
+         First of all we will not be obliged to use the addresses of 16 characters onion. This important change has been implemented thanks to the VMAT protocol that supports the protocol MAT for the replacement of the addresses on the Internet is that in the tor network. You may register at the output nodes using the new e-mail addresses as well, always on your server, you can use more easily.
+         You can send messages with multiple recipients. The only restriction is that all addresses are normal and there are no addresses in mailing lists, server or other applications.
+         You can make all the entries using codes accrediatamento to allow the sysop to check out the entries (via voucher codes).
+         We summarize here the list of new features:
+
+              Use normal addresses via the protocol VMAT (multiple addresses. Onion).
+              Sending messages with multiple recipients.
+              Registration with voucher codes for user verification.
+              Developing the system for verification of the sender.
+              ExitRoute default.
+              New commands to the sysop.
+              New system of server statistics.
+
+
+	VMAT, no more 16 characters.onion?:
+
+         It is in the process of implementation of the Protocol VMAT. It is a protocol that allows, through registration with the outgoing server to communicate with the Internet without the use of long addresses generated by the protocol MAT classic. Thanks to RVMAT section of the protocol, you can use the addresses "normal" even inside the Tor network.
+         You can enter any nickname as a normal email address (called a URL VMAT).
+         When they get messages from the Internet to your address VMAT, the server will only make the translation from the address OnionMail classic. When communicating via the Tor network server in the same process is guaranteed by the system RVMAT without going to the output nodes.
+         From the next version of OnionMail will be able to use these new protocols.
+         The registration is done through the server through the messages VMAT. (See RULEZ for more information).
+
+         One of the main inconvenience of OnionMail is about to be exceeded.
+         No more addresses 16 point font onion.
+
+         Example: address@1234567890abcdef.onion => nickname@example.org
+         So you can use directly addresses such as exit (VMAT addresses).
+
+	Entry Easy:
+
+         With this function, the creation of mailboxes is even easier.
+         Just send a message with subject NEWUSER followed by the desired user name and with its own PGP key in the message body. You will receive a reply message containing the information encrypted with GPG for access.
+         (This function can be abbilitata NewUsrXDay parameter in the server configuration file servers.conf).
+
+	Mailing list without terminal:
+
+         Create a mailing list is even easier, you do not need to use the terminal Puu.
+         Send to your server to trust an e-mail address with the subject LIST CREATE to create a new mailing list.
+         (This function can be abbilitata NewUsrXDay parameter in the server configuration file servers.conf).
+        	
+11/27/2013 OnionMail 1.0.5
+	Enhanced Encryption:
+
+         You can select the random algorithm and increase the amount of cryptographic steps for saving messages.
+
+	The keys are no longer on the server:
+
+         In addition to saving the file in encrypted format sysop.txt GPG keys will no longer be on the server.
+         Indeed startup are agreed with other server F (X) that the server does not know. These are called semi keys and are used to reconstruct the encryption key of the server based on an initial X present in the same server from which you can not correlate the key.
+         When starting the server negotiates the F (X) with the other servers, resulting inside the encryption key. The seeds of F (X) have the credits that allow you to control when to restart the server.
+         There is also a certificate of self-destruction that once sent destroys all the F (X) on the server impedento the reconstruction of the keys and restart the server.
+
+	Upgrading SSL:
+
+         SSL certificates are verified with 3 steps, a system of cross-checking allows you to know if they are the right ones by checking SSL cretificati also manifest through the server.
+
+	Messages TKIM:
+
+         Not being able to implement in a certain way to verify the sender's inherent anonymity of the Tor network, has implemented a system called TKIM (Tor Key Identified Mail). This system verifies the signature with the sender using an RSA key of the sending server. Through this system to the demands assimeme TORM K can also check nodes in / out privileges OnionMail.
+
+	Manifest 2.0:
+
+         The manifest information from the server to the network OnionMail for the mail server. Thanks to the new version in addition to signing the manifest with RSA keys of 2048 bits can enunciate the hash of the SSL certificate used on the server and some custom information such as the web page.
+
+	Project Status (Operational)
+
+11/25/2013 OnionMail 1.0.0B:
+	 End of Experimental/legacy version.
+         OnionMail has been updated and the services have been activated.
+	
+		Exit / Enter Route:
+                	Working system.
+
+     		Network:
+                	The network server has been initialized.
+
+10/21/2013 OnionMail 0.1.0:
+	Experimental version of OnionMail
+		Exit / Enter Server type
+		TorDNS Hybrid system with EXIM4
+		EXIM4 Transport: OnionMail + EXIM4
+		NTU Connection rebounder.
+		Remove protocol obfuscation.
+		
+09/30/2013 OnionMail 0.0.8:
+	Removed InterNos core.
+	Add TorDNS and NTU function.
+	Update for all legacy server.
+	
+06/12/2013 OnionMail 0.0.7:
+	Add InerNos YellowPages
+	Add InetNos RSA EDE System.
+	Add POP3 compatible SSL server.
+	Add SSL in SMTP
+	
+04/24/2013 OnionMail 0.0.2
+	Add SMTP protocol compatibility.
+	Add RSADB
+	
+02/12/2013 OnionMail 0.0.1 / InterNos 4.5
+	Add SMTP protocol.
+	Add InterNos SMTP incapsulation via TORM extentsion.
+
+	At this time the OnionMail is born from the ashes of InterNos project.
+	Before this time the project is named InerNos.
+	
+	InterNos is a secret project that comunicate anonymous and encrypted via p2p and TOR.

@@ -438,17 +438,17 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
-						if (cmd.compareTo("newusrenabled ")==0) { 
+						if (cmd.compareTo("newusrenabled")==0) { 
 										C.SMPTServer[ne].NewUsrEnabled  = Config.parseY(tok[1]);
 										continue;
 										}
 						
-						if (cmd.compareTo("showfriends ")==0) { 
+						if (cmd.compareTo("showfriends")==0) { 
 										C.SMPTServer[ne].ShowFriends  = Config.parseY(tok[1]);
 										continue;
 										}
 										
-						if (cmd.compareTo("friendly ")==0) { 
+						if (cmd.compareTo("friendly")==0) { 
 										C.SMPTServer[ne].Friendly  = Config.parseY(tok[1]);
 										continue;
 										}
@@ -548,7 +548,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
-						if (cmd.compareTo("newlstenabled ")==0) { 
+						if (cmd.compareTo("newlstenabled")==0) { 
 										C.SMPTServer[ne].NewLstEnabled  = Config.parseY(tok[1]);
 										continue;
 										}
@@ -614,7 +614,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 												
-						if (cmd.compareTo("exitaltport ")==0) { 
+						if (cmd.compareTo("exitaltport")==0) { 
 										C.SMPTServer[ne].ExitAltPort  = Config.parseInt(tok[1], "port", 1, 65535);
 										continue;
 										}
@@ -1026,9 +1026,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							
 				return line;
 		}
-		
-		
-		
+				
 		public static Config LoadFromFile(String filepath) throws Exception {
 
 			BufferedReader br;
@@ -2402,15 +2400,17 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							Main.echo(l);
 							}
 		}
-					
+		
+		private PrintWriter logOut=null;
+		
 		private synchronized void LogInPlain(String l) throws Exception {
 			l=l.trim();
-			PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(LogFile, true)));
+			if (logOut==null) logOut = new PrintWriter(new BufferedWriter(new FileWriter(LogFile, true)));
 			try {
-				out.println(l);
-				try { out.close(); } catch (Exception ignore) { }
+				logOut.println(l);
 				} catch(Exception E) {
-				try { out.close(); } catch (Exception ignore) { }
+				try { logOut.close(); } catch (Exception ignore) { }
+				logOut=null;
 				throw E;
 				}
 			

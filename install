@@ -27,6 +27,8 @@ PAR_NICK="OnionMail"
 PAR_X="X"
 
 RAMDRIVE="/dev/shm/"
+__RAMPASS__="/dev/shm/base64"
+__CPULIMIT__="cpulimit -e java -b -l 10 -z > cpulimit.log"
 
 __ISHTTP__="yes"
 __HTTPMANF__="Public"
@@ -43,6 +45,8 @@ __EXIT_IP__="127.0.0.1"
 __MX_DOMAIN__="example.org"
 __EXITALT__="10125"
 __HTTP__="18000"
+__DNS__="213.73.91.35"
+
 ISEXIT="0"
 NUMPAR=0;
 ONIONTAR="onionmail.tar.gz"
@@ -232,7 +236,10 @@ function configFile() { #file #o
   tmp=${tmp//__EXIT_IP__/$__EXIT_IP__}
   tmp=${tmp//__EXITALT__/$__EXITALT__}
   tmp=${tmp//__MX_DOMAIN__/$__MX_DOMAIN__}
- 
+  tmp=${tmp//__DNS__/$__DNS__}
+  tmp=${tmp//__RAMPASS__/$__RAMPASS__}
+  tmp=${tmp//__CPULIMIT__/$__CPULIMIT__}
+  
   echo "$tmp" > $outp
   if [ ! -f $outp ]; then
     echo "Can't write $outp"
@@ -276,7 +283,7 @@ function undoAll() {
 clear
 cat << EOF
 
-OnionMail Debian installer ver 1.3
+OnionMail Debian installer ver 1.4
   (C) 2014 by OnionMail.info Project
   Some rights reserved
     
@@ -606,7 +613,47 @@ if [ $OPENSER = "0" ]; then
 				fi
 		fi
 	fi
+
+if [ $ISEXIT = "1" ]; then
+	echo -e "\nGet a DNS server..."
+	yn=`cat /etc/resolv.conf | egrep -i -Eo 'nameserver[[:space:]]+[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+	if [ $yn = "" ]; then
+		while true; do
+			echo "Can't find a DNS server IP, set a DNS server for OnionMail Exit"
+			read -p "DNS Server ip: " yn
+			yn=`echo ${yn} | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+			if [ $yn = "" ]; then
+				echo "Invalid IPv4 Address"
+				else
+				__DNS__=$yn
+				echo -e "  DNSServer ${__DNS__}\n"
+				break;
+				fi
+		done
+		else
+		__DNS__=$yn
+		echo -e "  DNSServer ${__DNS__}\n"
+		fi
+	fi
 	
+clear
+cat << eof
+
+ Do you want to limit the CPU usage?
+  In this secrion you can choose the CPU limitations for OnionMail
+  
+	Options:
+		10-99  = CPU percentage limitation.
+		100    = No limitations
+		
+eof
+reqNum "CpuLimit (0-100)" 10 100
+if [ $NUMPAR = "100" ]; then
+	__CPULIMIT__=""
+	else
+	__CPULIMIT__="cpulimit -e java -b -l ${NUMPAR} -z > ${ONM_BAS}/log/cpulimit.log"
+	fi
+
 clear
 echo -e "\nInstalling OnionMail:\n"
 
@@ -735,10 +782,20 @@ echo "Your hidden service is $PAR_ONION"
 echo "Configuring OnionMail"
 PAR_PASSWD_SERV=`gpg -a --gen-random 1 15`
 PAR_PASSWD_ROOT=`gpg -a --gen-random 1 15`
-PAR_PASSWD_BOOT=`gpg -a --gen-random 1 60`
+PAR_PASSWD_BOOT=`gpg -a --gen-random 1 84`
 
 PAR_PASSWD_BOOT=${PAR_PASSWD_BOOT//"+"/_}
 PAR_PASSWD_BOOT=${PAR_PASSWD_BOOT//"/"/_}
+
+echo $PAR_PASSWD_BOOT > $__RAMPASS__
+echo "yes" >> $__RAMPASS__
+chmod a=-,u=rw $__RAMPASS__
+chown onm:onm $__RAMPASS__
+
+if [ ! -f $__RAMPASS__ ]; then
+	echo "Can't create ${__RAMPASS__}"
+	exit
+	fi
 
 if [ $MENTALSAW = "0" ]; then
 	PAR_NICK=`echo ${PAR_ONION} | tr '[:upper:]' '[:lower:]' | egrep -m 1 -Eo '[a-z0-9]{16}' | egrep -Eo '[^aeiouy]{1}[aeiouy]{1,2}' | egrep -m 4 -Eo '[a-z]{2,3}' | tr -d "\\n" | egrep -m 1 -Eo '[a-z]{4,16}'`
@@ -797,6 +854,7 @@ if [ $ISEXIT = "1" ]; then
 	fi
 	
 configFile http.conf "!"
+configFile dns.conf "!"
 
 configFile $ONM_SETUPKIT/root.txt $PAR_ROOT/root.txt
 configFile $ONM_SETUPKIT/onionmail.sh $ONM_BAS/onionmail.sh
@@ -846,8 +904,10 @@ echo "Remember to keep these files in a secure place:"
 echo -e "\t$PAR_MAILDIR/sysop.txt"
 echo -e "\t$PAR_MAILDIR/keyblock.txt"
 echo -e "\t$PAR_ROOT/root.txt"
+echo -e "\t$__RAMPASS__"
 echo " Then remove -ndk parameter to $ONM_BAS/onionmail.sh"
 echo " and delete the original files with wipe."
+echo " Dont' forget the server's boot password in $__RAMPASS__"
 
 read -p "Press return to continue." yn
 clear

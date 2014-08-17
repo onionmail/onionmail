@@ -2927,7 +2927,11 @@ public class SrvIdentity {
 						int cx= slist.length;
 						for (int ax=0;ax<cx;ax++) {
 								String fn="\n"+slist[ax].toLowerCase().trim()+"\n";
-										if (!Config.NoBootFromSameMachine ||  (!OnTheSameMachine.contains(fn) && s0.contains(fn)))  s0+=slist[ax].toLowerCase().trim()+"\n"; 
+										if (s0.contains(fn)) continue;
+										if (Config.NoBootFromSameMachine) {
+											if (OnTheSameMachine.contains(fn)) continue;
+											}
+										s0+=slist[ax].toLowerCase().trim()+"\n"; 
 								}
 											
 						s0=s0.trim();
@@ -3709,7 +3713,7 @@ byte[][] Cobj = new byte[][] {
 							Pat = Main.ConfVars.get(Nick+"-pgp-key");
 							if (Pat.length()==0) {
 								String x ="OM:[ERR] Invalid PGP key path on header `"+Nick+"-pgp-key"+"`";
-								Main.echo(x+"\n");
+								Main.out(x+"\n");
 								throw new Exception(x);
 								}
 						} else {
@@ -3736,10 +3740,10 @@ byte[][] Cobj = new byte[][] {
 						byte[] b = Pass.getBytes("UTF-8");
 						b=Stdio.AESEncMulP(Sale, b);
 						Stdio.file_put_bytes(Maildir+"/head/hldr", b);
-						Main.echo((bm ?"OM:[PGP_OK]"+Nick+" ":"" )+"PGP Keys for `"+Nick+"` is set!\n");
+						Main.out((bm ?"OM:[PGP_OK]"+Nick+" ":"" )+"PGP Keys for `"+Nick+"` is set!\n");
 						} catch(Exception EX) {
 							String ms = EX.getMessage();
-							Main.echo((bm ?"OM:[PGP_ERR]"+Nick+" ":"" )+"Error: "+ms+"\n");
+							Main.out((bm ?"OM:[PGP_ERR]"+Nick+" ":"" )+"Error: "+ms+"\n");
 							Log(Config.GLOG_Server, "Can't set PGP Keys: "+ms);
 							if (Config.Debug) EX.printStackTrace();
 						}
@@ -3902,9 +3906,7 @@ byte[][] Cobj = new byte[][] {
 			if (setDef) VMAT.setRVMATinTor(localpart, J.getDomain(M.mail));
 			return M;
 		}		
-		
-		
-		
+						
 		public void VMATEnable(String vmat,String localpart,final String passwd,final boolean stat) throws Exception {
 			if (VMAT==null) throw new Exception("VMATEnable: VMAT Disabled");
 			
