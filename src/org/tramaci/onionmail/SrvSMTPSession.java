@@ -1412,6 +1412,10 @@ public class SrvSMTPSession extends Thread {
 		
 		String msg="";
 		
+		if (KUKIAuth) Hldr.put("tkim-server-auth", HelloData); else if (Hldr.containsKey("tkim-server-auth")) Hldr.remove("tkim-server-auth");
+		if (Login!=null) Hldr.put("user-login", Login); else if (Hldr.containsKey("user-login")) Hldr.remove("user-login");
+		Hldr.put("server-mode", Short.toString(ParentServer.serverMode));
+				
 		while(true) {
 			String li = I.readLine();
 			if (li==null) break;
@@ -1579,7 +1583,7 @@ public class SrvSMTPSession extends Thread {
 		Mid.StatMsgIn++;
 		
 		String usr = J.getLocalPart(MailTo);
-		MailBox M = Mid.UsrOpenW(Config,usr);
+		MailBox M = Mid.UsrOpenW(Config,usr,false);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
 			Send("452  Mailbox full!");
@@ -1715,6 +1719,7 @@ public class SrvSMTPSession extends Thread {
 	
 	public static SMTPReply RemoteCmd(OutputStream ro,BufferedReader ri,String send) throws Exception {
 		ro.write((send+"\r\n").getBytes());
+		ro.flush();
 		return new SMTPReply(ri);
 	}
 	
@@ -2369,7 +2374,7 @@ public class SrvSMTPSession extends Thread {
 		if (spam==null) throw new Exception("@500 Invalid mail address");
 		String lp = J.getLocalPart(spam);
 		if (lp.compareTo("server")==0) throw new Exception("@500 Can't ban a server. use *@"+J.getDomain(spam));
-		MailBox MB = Mid.UsrOpenW(Config,J.getLocalPart(fromuser));
+		MailBox MB = Mid.UsrOpenW(Config,J.getLocalPart(fromuser),false);
 		MB.Spam.ProcList(MB.LocalPart, new String[] { chi }, null);
 		if (Config.Debug) Log("spam add ["+chi+"]");
 		Log(Config.GLOG_Event,"SetSpam "+chi);

@@ -46,7 +46,7 @@ public class MailBox {
 	public SrvIdentity SID = null; 
 	public HashMap <String,String> UserProp = new HashMap <String,String>();
 	
-	MailBox(SrvIdentity SE,String lp,String uindexf, PublicKey p) throws Exception {
+	MailBox(SrvIdentity SE,String lp,String uindexf, PublicKey p, boolean create) throws Exception { 
 		SID=SE;
 		Config=SE.Config;
 		MailDir = SE.Maildir+"/inbox";
@@ -54,7 +54,12 @@ public class MailBox {
 		UserIndex =uindexf;
 		KP=p;
 		Sale=SE.Sale;
-		Index = DBCrypt.Create(UserIndex,Sale, p,SE.MaxMsgXuser,256);
+		
+		if (create) 
+				Index = DBCrypt.Create(UserIndex,Sale, p,SE.MaxMsgXuser,256); 
+				else	
+				Index = DBCrypt.OpenW(UserIndex,Sale, p); 
+		
 		Spam = SE.Spam;
 		if (Spam!=null && !Spam.exists(lp)) try { Spam.UsrCreateList(lp); } catch(Exception E) {Main.EXC(E,"Spam.Create"); }
 		
@@ -318,7 +323,7 @@ public class MailBox {
 		MailDir=null;
 		Sale=null;
 		LocalPart=null;
-		Index.Close();
+		if (Index!=null) try { Index.Close(); } catch(Exception II) {}
 		Index=null;
 		UserIndex=null;
 		List=null;

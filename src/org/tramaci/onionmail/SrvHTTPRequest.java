@@ -511,7 +511,7 @@ public class SrvHTTPRequest extends Thread{
 			byte[] k = Stdio.md5a(new byte[][] { Sid.getBytes() , Mid.Subs[10] });
 			byte[] i = Stdio.md5a(new byte[][] { Sid.getBytes(), k});
 			b=Stdio.AESDec(Stdio.GetAESKey(k),i, b);
-			Session= J.HashMapUnPack(b);
+			if (b.length==0) Session =null; else Session= J.HashMapUnPack(b);
 			} catch(Exception E) {
 				WebLog("HTTP Session Error: "+E.getMessage());
 				if (Mid.Config.Debug) E.printStackTrace();
@@ -638,6 +638,76 @@ public class SrvHTTPRequest extends Thread{
 	}
 	
 	private void EtexFile() throws Exception {
+		HashMap <String,Boolean> chk = null;
+		HashMap <String,String> chkv=null;
+		
+		if (Parent.Checks!=null) try {
+
+			chk = WebCheck.eval(Path, Parent.Checks, QHead, Session,Parent.Identity.HTTPETEXVar , Get, Post);
+			for (String k:chk.keySet()) {
+				Boolean fact = chk.get(k);
+				
+				if (fact==null || fact==false) continue;
+				WebCheck act = Parent.Checks.get(k);
+				if (act==null) continue;
+				if (act.action==WebCheck.WCA_NOP) continue;
+				if (act.action==WebCheck.WCA_LOG) WebLog(act.actionPar);
+				
+				if (act.action==WebCheck.WCA_REDIRECT) {
+					redirect(act.actionPar);
+					return;
+					}
+				
+				if (act.action==WebCheck.WCA_404) {
+					Status=404;
+					StatusText="File not found";
+					Reply=StatusText.getBytes();
+					return;
+					}
+				
+				if (act.action==WebCheck.WCA_DENY) {
+					Status=403;
+					StatusText="Forbidden";
+					Reply=StatusText.getBytes();
+					return;
+					}
+				
+				
+				if (act.action==WebCheck.WCA_SET) {
+					String tok1[] = act.actionPar.split("\\=",2);
+					tok1[0]=tok1[0].toLowerCase();
+					tok1[0]=tok1[0].trim();
+					tok1[1]=tok1[1].trim();
+					String pox[] = tok1[0].split("\\.",2);
+					pox[0]=pox[0].trim();
+					pox[1]=pox[1].trim();
+					
+					if (pox[0].compareTo("s")==0) {
+						if (Session==null) Session = new HashMap <String,String>();
+						Session.put(pox[1], tok1[1]);
+						}
+					
+					if (pox[0].compareTo("h")==0) RHead.put(pox[1], tok1[1]);
+					if (pox[0].compareTo("p")==0) Post.put(pox[1], tok1[1]);	
+					if (pox[0].compareTo("g")==0) Get.put(pox[1], tok1[1]);
+					
+					if (pox[0].compareTo("s")==0) {
+						if (chkv==null) chkv = new HashMap <String,String>();
+						chkv.put(pox[1], tok1[1]);
+						}
+					
+					}
+				
+				}
+			} catch(Exception E) {
+				String ms = E.getMessage();
+				if (ms!=null && ms.startsWith("@")) {
+					WebLog("WebCheck Error: "+ms.substring(1));
+					} else {
+						Parent.Identity.Log("WebCheck Exception: "+E.toString());
+						if (Parent.Identity.Config.Debug) E.printStackTrace();
+					}
+			}
 		
 		RHead.put("content-type", "text/html; charset=UTF-8");
 		Reply =  Stdio.file_get_bytes(ReqFile);
@@ -758,6 +828,28 @@ public class SrvHTTPRequest extends Thread{
 		li=li.replace("<!--#ONION#-->", Mid.Onion);
 		li=li.replace("<!--#EXIT#-->", Mid.EnterRoute ? "1":"0");
 		if (li.contains("<!--#SHA1#-->")) li=li.replace("<!--#SHA1#-->", LibSTLS.GetCertHash(Mid.MyCert));
+		
+		if (chk!=null) {
+			for(String k:chk.keySet()) {
+				String s = chk.get(k) ? "1":"0";
+				li=li.replace("%["+k+"]%", s);
+				if (k.contains("-")) {
+					String xx[] = k.split("\\-",2);
+					li=li.replace("%["+xx[0]+"]%", s);			
+					}
+				}
+			}
+		
+		if (chkv!=null) {
+			for(String k:chkv.keySet()) {
+				String s = toHtml(chkv.get(k));
+				li=li.replace("%{"+k+"}%", s);
+				if (k.contains("-")) {
+					String xx[] = k.split("\\-",2);
+					li=li.replace("%["+xx[0]+"]%", s);			
+					}
+				}
+			}
 		
 		if (Session!=null && Post.size()!=0) {
 				for (String k:Post.keySet()) {

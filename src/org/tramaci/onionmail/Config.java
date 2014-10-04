@@ -2235,6 +2235,22 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						continue;
 						}
 					
+					if (cmd.compareTo("path")==0 && tl==2) {
+						a.Path=tok[1];
+						File f = new File(a.Path);
+						if (!f.exists()) throw new Exception("The path doesn't exists `"+a.Path+"`");
+						if (!f.isDirectory()) throw new Exception("The path is not a directory `"+a.Path+"`");
+						continue;
+						}
+					
+					if (cmd.compareTo("env")==0 && tl==2) {
+						String[] tk = tok[1].split("\\=",2);
+						if (tk.length!=2) throw new Exception("ENV Syntax error");
+						if (a.ENV==null) a.ENV = new HashMap <String,String>();
+						a.ENV.put(tk[0].trim(),tk[1].trim());
+						continue;
+						}
+					
 					if (cmd.compareTo("maxmsglength")==0 && tl==2) {
 						a.maxMsgLength= Config.parseInt(tok[1], "Chachters", 1, 256000); 
 						continue;
@@ -2249,7 +2265,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						a.encode=Config.parseY(tok[1]);
 						continue;
 						}
-							
+						
+					if (cmd.compareTo("debug")==0 && tl==2) {
+						a.Debug=Config.parseY(tok[1]);
+						continue;
+						}
+					
 					if (cmd.compareTo("accessmode")==0 && tl==2) {
 						tok[1]=tok[1].toLowerCase().trim();
 						if (tok[1].contains("tor"))	a.accessMode|=Application.ACCESS_TOR;

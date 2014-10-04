@@ -20,6 +20,7 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -36,6 +37,10 @@ public class Application {
 	public int maxMsgLength=32000;
 	public String charSet="UTF-8";
 	public boolean encode=true;
+	public boolean Debug = false;
+	
+	public HashMap <String,String> ENV = null;
+	public String Path=null;
 	
 	public static final int ACCESS_USER=1;
 	public static final int ACCESS_SYSOP=2;
@@ -55,8 +60,24 @@ public class Application {
 		boolean isErr=false;
 		if (msg.length()>maxMsgLength) throw new PException("@550 Message too long");
 		try {
-				p = Runtime.getRuntime().exec(commandLine);
-	            
+			//exec(String command, String[] envp, File dir)
+				HashMap<String,String> En = new HashMap<String,String>();
+				if (ENV!=null) for (String k:ENV.keySet()) En.put(k, ENV.get(k));
+				En.put("server-nick", S.Nick);
+				En.put("server-onion", S.Onion);
+				En.put("mail-from", mailFrom);
+				En.put("server-time", Long.toString(S.Time()));
+				En.put("server-timestr", S.TimeString());
+				String env = "";
+				for (String k:En.keySet()) env+=k+"="+En.get(k)+"\n";
+				String[] envA = env.split("\\n+");
+				env=null;
+				En=null;
+				System.gc();
+				
+				//exec(String command, String[] envp, File dir)
+				p = Runtime.getRuntime().exec(commandLine,envA, Path == null ? null : new File(Path));
+	           
 				stdIn = new BufferedReader(new InputStreamReader(p.getInputStream()));
 				InputStream err = p.getErrorStream();
 	            stdErr = new BufferedReader(new InputStreamReader(err));
@@ -66,14 +87,19 @@ public class Application {
 	            
 	            if (runMode==RUN_SMTP) {
 	            	Re = new SMTPReply(stdIn);
+	            if (Config.Debug && Debug) S.Log("APP: "+Re.toString());
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (app/init)");
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"EHLO "+S.Nick);
+	            if (Config.Debug && Debug) S.Log("APP EHLO: "+Re.toString());
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/ehlo)");
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"MAIL FROM: "+mailFrom);
+	            if (Config.Debug && Debug) S.Log("APP FROM: "+Re.toString());
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/from)");
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"RCPT TO: "+localPart+"@"+S.Onion);
+	           if (Config.Debug && Debug) S.Log("APP TO: "+Re.toString());	
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/to)");
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"DATA");
+	            if (Config.Debug && Debug) S.Log("APP DATA: "+Re.toString());
 	            	if (Re.Code<300 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (app/data)");
 					}
 	            
@@ -82,21 +108,30 @@ public class Application {
 	       if (runMode!=RUN_BATCH) {
 	    	   	Hldr.put("x-server", S.Nick);
 	    	   	Hldr.put("envelope-from", mailFrom);
-	    	   	if (!Hldr.containsKey("subject")) Hldr.put("subject", "NULL");
+	    	   	if (!Hldr.containsKey("subject")) Hldr.put("subject", " ");
 	    	   	String s = J.CreateHeaders(Hldr);
 	    	   	s=s.trim();
 	    	   	s+="\r\n\r\n";
-	    	   	stdOut.write(s.getBytes()); 	
+	    	   	stdOut.write(s.getBytes());
+	    	   	stdOut.flush();
 	    	   	}
 	       
 	       if (err.available()>0) { isErr=true; throw new Exception(); }
 	       stdOut.write(msg.getBytes());
 	       stdOut.write("\r\n.\r\n".getBytes());
+	       stdOut.flush();
 	       if (err.available()>0) { isErr=true; throw new Exception(); }
 	       
 	       String rmsg="";
 	       String li;
 	      
+	       if (runMode==RUN_SMTP) {
+	    	 Re = new SMTPReply(stdIn);
+	     if (Config.Debug && Debug) S.Log("APP DATA_RE: "+Re.toString());
+	    	 
+	    	 if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/data)");
+	       	}
+	       
 	       if (runMode==RUN_APP) {
 	    	  li = stdIn.readLine();
 	    	  if (li!=null && li.contains("@")) {
@@ -121,7 +156,7 @@ public class Application {
 	         	}
 	        
 	        if (err.available()>0) { isErr=true; throw new Exception(); } 
-	        if (p!=null) try { p.destroy(); } catch(Exception I) {}		
+	        if (p!=null) try { p.destroy(); p=null; } catch(Exception I) {}		
 			if (stdIn!=null) try { stdIn.close(); } catch(Exception I) {}
 			if (stdErr!=null) try { stdErr.close(); } catch(Exception I) {}
 			if (stdOut!=null) try { stdOut.close(); } catch(Exception I) {}
@@ -138,6 +173,7 @@ public class Application {
 				S.Log("APP `"+localPart+"` Ok");
 				Hldr.put("x-generated", "server app");
 				S.SendMessage(mailFrom, Hldr, rmsg);
+				if (Config.Debug && Debug) S.Log("APP: Ok "+Hldr.get("subject"));
 				statsHit++;
 				}
 			

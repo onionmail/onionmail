@@ -39,6 +39,8 @@ public class HTTPServer extends Thread {
 	public FileOutputStream LogFile = null;
 	private boolean LogMultiServer=false;
 	
+	public HashMap <String,WebCheck> Checks=null;
+	
 	public volatile int Hits=0;
 	public volatile int Errs=0;
 	public volatile int Count=0;
@@ -269,6 +271,13 @@ public class HTTPServer extends Thread {
 			}
 		
 		Identity.HTTPETEXVar.put("@randstart",Long.toString(Stdio.NewRndLong()));	
+		
+		ev = Identity.HTTPBasePath+"/webcheck.denied.conf";
+		if (new File(ev).exists()) try { Checks = WebCheck.FileParser(ev); } catch(Exception E) {
+				Identity.Log("WebCheck: Loading error: "+E.getMessage());
+				if (Identity.Config.Debug) E.printStackTrace();
+	
+				}
 		
 		srv = new ServerSocket(Identity.LocalHTTPPort,0,Identity.LocalIP); 
 		

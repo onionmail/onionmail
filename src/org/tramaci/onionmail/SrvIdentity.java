@@ -406,6 +406,12 @@ public class SrvIdentity {
 	}
 	
 	private void StartProcs() throws Exception {
+		/*
+		//TODO LEVARE!!!
+		if (Main.Oper==0) return;  //TODO LEVARE!!!
+		//TODO LEVARE!!!
+		*/
+		
 		if (Main.Oper!=0) return;
 		if (executor!=null) {
 			Log("Hops: Can't run StartProcs with executor!=null!");
@@ -785,7 +791,7 @@ public class SrvIdentity {
 		if (F.exists()) J.Wipe(fn, Config.MailWipeFast);
 		}
 	
-	public MailBox UsrOpenW(Config C,String local) throws Exception {
+	public MailBox UsrOpenW(Config C,String local,boolean create) throws Exception {
 		String un=UFname(local);
 		byte[][] U = new byte[1][];
 		U[0] = Stdio.file_get_bytes(un+".idx");
@@ -795,7 +801,7 @@ public class SrvIdentity {
 		U[0] = Stdio.AES2Dec(Pak,Iavk, U[0]);
 		U = Stdio.MxDaccuShifter(U[0],Const.MX_User);
 		HashMap <String,String> UP = J.HashMapUnPack(U[6]);
-		MailBox M = new MailBox(this,local,un+".dbf",Stdio.Arr2Public(U[3]));
+		MailBox M = new MailBox(this,local,un+".dbf",Stdio.Arr2Public(U[3]),create); 
 		M.UserProp =UP;
 		return M;
 	}
@@ -1016,8 +1022,9 @@ public class SrvIdentity {
 				null };
 		
 		try {
-			MailBox M = UsrOpenW(Config,local);
+			MailBox M = UsrOpenW(Config,local,false);
 			if (M.Spam !=null && !M.Spam.exists(local)) lst[4] = M.Spam.GetFile(local);
+			M.Close();
 			} catch(Exception E) { Config.EXC(E, "DestroyUser.GetUBL"); } 
 		
 		for (String f:lst) try {
@@ -1069,9 +1076,10 @@ public class SrvIdentity {
 		Stdio.file_put_bytes(un+".idx",US);
 
 		try {
-			MailBox M = UsrOpenW(Config,local);
-			
+			MailBox M = UsrOpenW(Config,local,true);
 			if (M.Spam !=null && !M.Spam.exists(local)) M.Spam.UsrCreateList(local);
+			M.Close();
+			
 			} catch(Exception E) { Config.EXC(E, "CreateUser.CreateUBL"); } 
 		
 		try {
@@ -1160,7 +1168,7 @@ public class SrvIdentity {
 			Hldr.put("subject", "RE: PGP");
 			Hldr.put("content-type", "text/plain; charset=UTF-8");
 			Body= new String(rs);
-			Body=Body.replace("\r\n", "\n"); //XXX levare!
+			Body=Body.replace("\r\n", "\n"); //XXX o!
 			Body=PGPSpoofNSA(Body, false); 
 			Body=Body.replace("\r\n", "\n");
 			return Body;
@@ -1182,7 +1190,7 @@ public class SrvIdentity {
 	
 	public void SendLocalMessageStream(String MailTo,HashMap <String,String> Hldr,BufferedReader Ms,MailBoxFile Mb) throws Exception {
 		String usr = J.getLocalPart(MailTo);
-		MailBox M = UsrOpenW(Config,usr);
+		MailBox M = UsrOpenW(Config,usr,false);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
 			M.Close();
@@ -1207,6 +1215,8 @@ public class SrvIdentity {
 			MS.WriteLn(li);
 			}
 		MS.End();
+		M.Close();
+		
 	}
 	
 	
@@ -1215,7 +1225,7 @@ public class SrvIdentity {
 		if (Config.Debug) Log("LocalMessage "+Nick);
 		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
 		
-		MailBox M = UsrOpenW(Config,LocalPart);
+		MailBox M = UsrOpenW(Config,LocalPart,false);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
 			M.Close();
@@ -1240,6 +1250,7 @@ public class SrvIdentity {
 			MS.WriteLn(li);
 			}
 		MS.End();
+		M.Close();
 	}
 	
 	public MailingList CreateMailingList(String loc,String tit,String Owner,String Passwd,boolean isopen,boolean isgpg) throws Exception {
@@ -1268,7 +1279,7 @@ public class SrvIdentity {
 	public void SendLocalMessage(String LocalPart,HashMap <String,String> Hldr,MailBoxFile I) throws Exception {
 		StatMsgIn++;
 		
-		MailBox M = UsrOpenW(Config,LocalPart);
+		MailBox M = UsrOpenW(Config,LocalPart,false);
 		int mi = M.Index.GetFree();
 		if (mi==-1) {
 			M.Close();
@@ -1292,6 +1303,7 @@ public class SrvIdentity {
 			MS.WriteLn(li);
 			}
 		MS.End();
+		M.Close();
 	}
 			
 	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,MailBoxFile MBF,String VMATTO) throws Exception { 									RawRemoteSend2(MailFrom,MailTo, Hldr, MBF,null,  null , null ,VMATTO);	}
@@ -3602,7 +3614,7 @@ byte[][] Cobj = new byte[][] {
 			P.put("lang", DefaultLang);
 			P.put("flag", Const.USR_FLG_TERM);
 			UsrCreate(user,pop3p, smtpp, 1,P);
-					
+			
 			DynaRes re = DynaRes.GetHinstance(Config, "newuser", DefaultLang);
 			re.Par.put("onionmail", user+"@"+Onion);
 			re.Par.put("onion", Onion);
@@ -3615,6 +3627,28 @@ byte[][] Cobj = new byte[][] {
 			re.Par.put("MaxMsgXuser",  Integer.toString(MaxMsgXuser));
 			re.Par.put("MsgOld",  Integer.toString(Config.MailRetentionDays));
 			re.Par.put("Scrambler", Config.PGPEncryptedDataAlgoStr);
+			re.Par.put("vmatmail","N/A");
+			re.Par.put("vmatpass","(no password)");
+		
+			ExitRouteList EL = GetExitList();
+			ExitRouterInfo SE = EL.selectBestExit();
+			
+			re.Par.put("inetaddr", user+"."+Onion +"@" + ((SE==null) ? "<exit address>" : SE.domain));
+			
+			if (SE!=null && SE.canVMAT) try {
+				VirtualRVMATEntry RVM = VMATRegister(user+"@"+SE.domain,user);
+				if (RVM!=null) {
+					re.Par.put("vmatmail",RVM.mail);
+					re.Par.put("vmatpass",RVM.passwd);
+					re.Par.put("inetaddr", RVM.mail);
+					} 
+				} catch(Exception E) {
+						if (Config.Debug) E.printStackTrace();
+						String msge=E.getMessage();
+						if (msge==null) msge=null;
+						if (msge!=null & msge.startsWith("@")) Log("RQUS: Error "+msge.substring(1)); else Config.EXC(E, "RQUS.VMAT");
+						}
+			
 			re = re.Get();
 						
 			Log(Config.GLOG_Event, "NewUser Created via PGP `"+user+"`");

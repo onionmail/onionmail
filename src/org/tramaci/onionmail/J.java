@@ -662,7 +662,7 @@ public class J {
 			l += Tok[ax].trim();
 			if (ax!=cx) l+=".";
 			}
-		if (l.length()<4) throw new Exception(E);
+		if (l.length()<3) throw new Exception(E); //4
 		l+="@"+o+".onion";
 		return l.toLowerCase().trim();
 	}
@@ -1511,6 +1511,34 @@ public class J {
 			}
 		return st;
 	}
+	
+	public static String IfTor2Inet(String mailo,String exit) {
+		String mail = J.getMail(mailo, false);
+		if (mail==null) return null;
+		if (!mail.endsWith(".onion")) return mailo;
+		String dom = J.getDomain(mail);
+		String loc = J.getLocalPart(mail);
+		return loc+"."+dom+"@"+exit;
+		}
+	
+	public static String IfInet2Tor(String mailo,String exit) {
+		String mail = J.getMail(mailo, false);
+		if (mail==null) return null;
+		String dom = J.getDomain(mail);
+		String loc = J.getLocalPart(mail);
+		if (dom.compareTo(exit)!=0) return mailo;
+		if (!loc.endsWith(".onion")) return mailo;
+		String[] tok = loc.split("\\.");
+		int cx = tok.length;
+		if (cx<3) return mailo;
+		dom = tok[cx-2];
+		loc="";
+		cx-=2;
+		for (int ax=0;ax<cx;ax++) loc+=tok[ax]+"\n";
+		loc=loc.trim();
+		loc=loc.replace('\n', '.');
+		return loc+"@"+dom+".onion";
+		}
 	
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
