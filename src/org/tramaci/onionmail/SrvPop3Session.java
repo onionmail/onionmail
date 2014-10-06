@@ -741,7 +741,12 @@ public class SrvPop3Session extends Thread {
 						Reply(false,"Invalid user Name");
 						return;
 				}
-				
+		
+		if (Config.isManuReserverdUser(user)) {
+					Reply(false,"Blocked or reserved username");
+					return;
+					}
+		
 		Reply(true,"PGP Give me a PGP public key (end with \".\")");
 		String msg="";
 		for (ax=0;ax<4000;ax++) {

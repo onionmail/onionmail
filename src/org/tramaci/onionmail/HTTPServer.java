@@ -27,7 +27,7 @@ import java.util.Date;
 import java.util.HashMap;
 
 public class HTTPServer extends Thread {
-	private Config Config;
+	public Config Config;
 	public SrvIdentity Identity = null;
 	
 	private ServerSocket srv = null;
@@ -54,6 +54,8 @@ public class HTTPServer extends Thread {
 	public volatile String ErrorPage="/error.html";
 	public volatile String RegisterEtex="/register.etex";
 	public volatile String IndexFile="index.etex";
+	public volatile int CAPTCHAMode = 0;
+	public volatile int CAPTCHASize=6;
 	
 	public volatile short CountChWidth = 0;
 	public volatile short CountChHeight = 0;
@@ -97,6 +99,8 @@ public class HTTPServer extends Thread {
 		KeepAlive = C.HTTPKeepAlive;
 		Pipelining = C.HTTPPipelining;
 		MaxReqBuf=C.HTTPMaxBuffer;
+		CAPTCHAMode = C.TextCaptchaMode;
+		CAPTCHASize = C.TextCaptchaSize;
 		
 		String lf=null;
 		if (serv.HTTPLogFile!=null) {
@@ -110,6 +114,7 @@ public class HTTPServer extends Thread {
 		if (lf!=null) LogFile = new FileOutputStream(lf,true);
 		
 		String ev = Identity.HTTPBasePath+"/config.denied.conf";
+		
 		if (new File(ev).exists()) try {
 	
 			String[] li = new String(Stdio.file_get_bytes(ev),"UTF-8").split("\\n+");
@@ -123,8 +128,19 @@ public class HTTPServer extends Thread {
 					}
 				if (li[ax].length()==0) continue;
 				tok = li[ax].split("\\s+",2);
-				if (tok.length!=2) continue;
+				if (tok.length!=2) {
+						Log(Config.GLOG_Bad + Config.GLOG_Server, "config.denied.conf: "+(ax+1)+"Ignored: "+li);
+						WebLog("Error in line "+(ax+1)+" Ignored: "+li[ax]);
+						continue;
+						}
+				
 				if (tok[0].startsWith("@")) {
+					tok[0]=tok[0].toLowerCase();
+					
+					if (tok[0].compareTo("@log")==0) {
+						WebLog("Log: "+tok[1].trim());
+						continue;
+						}
 					
 					if (tok[0].compareTo("@countstart")==0) {
 						CountStart = J.parseInt(tok[1]);
@@ -139,6 +155,25 @@ public class HTTPServer extends Thread {
 					
 					if (tok[0].compareTo("@hidecounter")==0) {
 						hideCounter = Config.parseY(tok[1]);
+						continue;
+						}
+					
+					if (tok[0].compareTo("@captchamode")==0) {
+						int a=0;
+						tok[1]=tok[1].toUpperCase();
+						String[] txk=tok[1].split("\\s+");
+						if (tok[1].contains("X")) a |= TextCaptcha.MODE_SWX;
+						if (tok[1].contains("Y")) a |= TextCaptcha.MODE_SWY;
+						if (tok[1].contains("N")) a |= TextCaptcha.MODE_NOISE;
+						if (tok[1].contains("I")) a |= TextCaptcha.MODE_INV;
+						if (tok[1].contains("S")) a |= TextCaptcha.MODE_SYM;
+						if (tok[1].contains("R")) a |= TextCaptcha.MODE_RANDOM;
+						if (tok[1].contains("8")) a |= TextCaptcha.MODE_UTF8;
+						CAPTCHAMode=a;
+							
+						if (txk.length>1) {
+							CAPTCHASize = Config.parseInt(txk[1].trim(), "characters", 4, 10);							
+							}
 						continue;
 						}
 					

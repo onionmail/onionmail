@@ -3582,6 +3582,7 @@ byte[][] Cobj = new byte[][] {
 		//////////////////// NEWUSER VIA GPG /////////////////
 		
 		public DynaRes CreaNewUserViaPGP(String PGPKey,String user) throws Exception {
+			if (Config.isManuReserverdUser(user)) throw new PException("@550 Blocked or reserved username");
 			
 			String smtpp;
 			String pop3p;

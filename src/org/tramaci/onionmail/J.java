@@ -662,7 +662,7 @@ public class J {
 			l += Tok[ax].trim();
 			if (ax!=cx) l+=".";
 			}
-		if (l.length()<3) throw new Exception(E); //4
+		if (l.length()<1) throw new Exception(E); //4
 		l+="@"+o+".onion";
 		return l.toLowerCase().trim();
 	}

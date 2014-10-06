@@ -38,7 +38,7 @@ import java.util.Map;
 import org.bouncycastle.openpgp.PGPEncryptedData;
 
 	public class Config {
-		public int TextCaptchaMode = TextCaptcha.MODE_NOISE | TextCaptcha.MODE_SWY | TextCaptcha.MODE_SYM | TextCaptcha.MODE_INV;
+		public int TextCaptchaMode = TextCaptcha.MODE_SWY | TextCaptcha.MODE_SYM ;
 		public String TextCaptchaFile = null;
 		public int TextCaptchaSize=5;
 		public String AlternatePositionSysOpTxt=null;
@@ -61,6 +61,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public HashMap <String,String> HTTPETEXVar = new HashMap <String,String>();
 		public HashMap <String,Integer> HTTPAccess = new HashMap <String,Integer>();
 		public String HTTPBasePath=null;
+		public String[] ResevedUserKey = null;
 		
 		public boolean UseStatus=true;
 		public boolean UseKernel=true;
@@ -1159,6 +1160,20 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									line=ParseExitList(C,br,line,Poly);
 									}
 								
+								if (cmd.compareTo("reservedusr")==0) {
+									fc=true;
+									if (C.ResevedUserKey==null) C.ResevedUserKey=new String[0];
+									String t0 = J.Implode("\n", C.ResevedUserKey);
+									int cl = tok.length;
+									for (int al=1;al<cl;al++) {
+											tok[al]=tok[al].toLowerCase().trim();
+											if (!tok[al].matches("[a-z0-9\\.\\-\\_]{1,40}")) throw new Exception("Invalid username `"+tok[al]+"`");
+											t0+="\n"+tok[al];
+											}
+									t0=t0.trim();
+									C.ResevedUserKey=t0.split("\\n+");
+									}
+								
 								if (cmd.compareTo("localnet")==0) {
 									fc=true;
 									C.LocalNetArea = NetArea.ParseNet(tok[1]);
@@ -1434,7 +1449,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									if (tok[1].contains("S")) a |= TextCaptcha.MODE_SYM;
 									if (tok[1].contains("R")) a |= TextCaptcha.MODE_RANDOM;
 									if (tok[1].contains("8")) a |= TextCaptcha.MODE_UTF8;
-									if (a==0) a=TextCaptcha.MODE_SWX|TextCaptcha.MODE_SWY|TextCaptcha.MODE_NOISE|TextCaptcha.MODE_SYM;
+									if (a==0) a=TextCaptcha.MODE_SWX|TextCaptcha.MODE_SWY |TextCaptcha.MODE_SYM;
 									
 									C.TextCaptchaMode=a;
 									C.TextCaptchaFile = J.MapPath(CPath, tok[2]);
@@ -1447,7 +1462,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("verfysenderviasimulation")==0) { fc=true; C.VerfySenderViaSimulation=Config.parseY(tok[1]); }
 								if (cmd.compareTo("nobootfromsamemachine")==0) { fc=true; C.NoBootFromSameMachine=Config.parseY(tok[1]); }
 								if (cmd.compareTo("exitcheckviator")==0) { fc=true; C.ExitCheckViaTor=Config.parseY(tok[1]); }
-								
+								if (cmd.compareTo("disabletortest")==0) { fc=true; Main.noTest=Config.parseY(tok[1]); }
+																
 								if (cmd.compareTo("dnssotimeout")==0) { fc=true; C.DNSSoTimeout=Config.parseInt(tok[1],"milliseconds timeout",2000); }
 								if (cmd.compareTo("maxsmtpsession")==0) { fc=true; C.MaxSMTPSession=Config.parseInt(tok[1],"smtp connections value",512); }
 								if (cmd.compareTo("maxsmtpsessioninitttl")==0) { fc=true; C.MaxSMTPSessionInitTTL=Config.parseInt(tok[1],"seconds timeout")*1000; }
@@ -2486,6 +2502,16 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 					}
 				
 				}
+		
+		public boolean isManuReserverdUser(String lp) {
+			if (ResevedUserKey==null) return false;
+			lp=lp.toLowerCase();
+			int cx = ResevedUserKey.length;
+			for (int ax=0;ax<cx;ax++) {
+				if (lp.contains(ResevedUserKey[ax])) return true;				
+				}
+			return false;
+		}
 		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

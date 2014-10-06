@@ -511,7 +511,12 @@ public class SrvHTTPRequest extends Thread{
 			byte[] k = Stdio.md5a(new byte[][] { Sid.getBytes() , Mid.Subs[10] });
 			byte[] i = Stdio.md5a(new byte[][] { Sid.getBytes(), k});
 			b=Stdio.AESDec(Stdio.GetAESKey(k),i, b);
-			if (b.length==0) Session =null; else Session= J.HashMapUnPack(b);
+			try {
+				if (b.length==0) Session =null; else Session= J.HashMapUnPack(b);
+				} catch(Exception E1) {
+					Session=null;
+					WebLog("Lost Session (Server restart change the session key).");
+					}
 			} catch(Exception E) {
 				WebLog("HTTP Session Error: "+E.getMessage());
 				if (Mid.Config.Debug) E.printStackTrace();
@@ -860,12 +865,18 @@ public class SrvHTTPRequest extends Thread{
 				}		
 		
 		if (li.contains("<!--#CAPTCHA#-->") && Session!=null) {
-				CaptchaCode C= TextCaptcha.generateCaptcha(Mid.Config.TextCaptchaSize, Mid.Config.TextCaptchaMode);
-				Session.put("cap", C.code);
-				Session.put("om-cap", "");
-				String st = toHtml(C.image);
-				st="<pre>"+st+"</pre>";
-				li=li.replace("<!--#CAPTCHA#-->", st);
+				if (TextCaptcha.isEnabled()) {
+					CaptchaCode C= TextCaptcha.generateCaptcha(Parent.CAPTCHASize, Parent.CAPTCHAMode);
+					Session.put("cap", C.code);
+					Session.put("om-cap", "");
+					String st = toHtml(C.image);
+					st="<pre>"+st+"</pre>";
+					li=li.replace("<!--#CAPTCHA#-->", st);
+					} else {
+					Session.put("cap", "");
+					Session.put("om-cap", "");
+					li=li.replace("<!--#CAPTCHA#-->", "(No CAPTCHA)");
+					}
 				}
 		
 		if (Path.compareTo(Parent.NewUserEtex)==0) {
@@ -879,18 +890,20 @@ public class SrvHTTPRequest extends Thread{
 		
 		if (li.contains("<!--$")) {
 			if (Session==null) {
-				StatusText="Forbidden E1";
-				Status=403;
-				Reply=StatusText.getBytes();
+				WebLog("Session lost");
+				redirect(Parent.ErrorPage+"?e=se");
 				return;
 				}
 			
 				for (String k:Session.keySet()) {
 					String a="<!--$"+k+"$-->";
+					String c="<!--("+k+")-->";
 					String b=Session.get(k);
 					b=toHtml(b);
 					li=li.replace(a, b);
+					li=li.replace(c, b);
 					}
+				li=li.replaceAll("\\<\\!\\-\\-\\([a-zA-Z0-9]+\\)\\-\\-\\>", "");
 			}
 						
 		if (li.contains("<!--$")) {
@@ -986,6 +999,9 @@ public class SrvHTTPRequest extends Thread{
 				return false;
 				}
 		try {
+			
+			if (Parent.Config.isManuReserverdUser(local)) throw new Exception("@Blocked or reserved username.");
+			
 			String smtpp = J.GenPassword(Mid.Config.PasswordSize, Mid.Config.PasswordMaxStrangerChars);
 			String pop3p = J.GenPassword(Mid.Config.PasswordSize, Mid.Config.PasswordMaxStrangerChars);
 			

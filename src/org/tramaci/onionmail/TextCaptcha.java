@@ -254,8 +254,8 @@ public class TextCaptcha {
 	}
 	
 	private static String codeGen(int sz,int mode) {
-		String alfa ="1345780QERTYUPADFGHJLKXCVBrtyihjkxcv";
-		char[] none="69Opql|ZNbd&£".toCharArray();
+		String alfa ="1345780QERTYUADFGHJLKXCVBrtyihjkxcv";
+		char[] none="69Opql|ZNbdpPoun&£".toCharArray();
 		int nl=none.length;
 		if ((mode&MODE_SYM)!=0) alfa+="********";
 		
@@ -287,13 +287,13 @@ public class TextCaptcha {
 						
 			if ((mode&MODE_UTF8)!=0) {
 				sZero="        ";
-			 	sUno="██▓";
-			 	sNZero=",.'`´●”;„░▒°:◦…    ";
-			 	sNUno="▓▓";	
+			 	sUno="\u2588\u2588\u2593";
+			 	sNZero=",.'`\u2592\u25ab   ";
+			 	sNUno="\u2593\u2593\u2593\u2593";	
 			} else {
 				sZero="               ";
 			 	sUno="###@%MW";
-			 	sNZero=",.`";
+			 	sNZero=",.` ";
 			 	sNUno="WM$%@@@";
 			}
 			
