@@ -92,10 +92,10 @@ public class Application {
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"EHLO "+S.Nick);
 	            if (Config.Debug && Debug) S.Log("APP EHLO: "+Re.toString());
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/ehlo)");
-	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"MAIL FROM: "+mailFrom);
+	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"MAIL FROM: <"+mailFrom+">");
 	            if (Config.Debug && Debug) S.Log("APP FROM: "+Re.toString());
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/from)");
-	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"RCPT TO: "+localPart+"@"+S.Onion);
+	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"RCPT TO: <"+localPart+"@"+S.Onion+">");
 	           if (Config.Debug && Debug) S.Log("APP TO: "+Re.toString());	
 	            	if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (app/to)");
 	            	Re = SrvSMTPSession.RemoteCmd(stdOut,stdIn,"DATA");

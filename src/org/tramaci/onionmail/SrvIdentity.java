@@ -238,6 +238,7 @@ public class SrvIdentity {
 	public volatile int statsMaxRunningPOP3Session = 0;
 	
 	public HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
+	public HashMap<String,String> IAMOnion=null;
 	
 	public int Status = 0;
 	public boolean AutoPGP=true;
@@ -1449,11 +1450,11 @@ public class SrvIdentity {
 					HashMap <String,String> Hldr2 = Hldr3;
 					SMTPReply Re;
 					long MessageBytes=0;
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"MAIL FROM: "+MailFrom2);
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"MAIL FROM: <"+MailFrom2+">");
 					if (hasQueue && (Re.Code>399 && Re.Code<500)) throw new RetryUevent(RetryUevent.POX_FROM,Re.Code,Re.toString().trim(),this.Server);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/from)"); 
 					
-					Re = SrvSMTPSession.RemoteCmd(RO,RI,"RCPT TO: "+MailTo2);
+					Re = SrvSMTPSession.RemoteCmd(RO,RI,"RCPT TO: <"+MailTo2+">");
 					if (hasQueue && (Re.Code>399 && Re.Code<500)) throw new RetryUevent(RetryUevent.POX_TO,Re.Code,Re.toString().trim(),this.Server);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/to)"); 
 					
@@ -1476,7 +1477,7 @@ public class SrvIdentity {
 								}
 							} else {
 								if (VmatTo2!=null)  {
-									Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT TO: "+VmatTo2);
+									Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM VMAT TO: <"+VmatTo2+">");
 									if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/vmat)");
 								}
 							}

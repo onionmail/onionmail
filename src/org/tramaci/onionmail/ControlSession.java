@@ -1353,8 +1353,8 @@ public class ControlSession extends Thread{
 			String user;
 			int le = Tok.length;
 			if (le>1) user = Tok[1].trim().toLowerCase(); else user=J.RandomString(8);
-			if (le>2) smtpp = Tok[1].trim(); else smtpp=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
-			if (le>3) pop3p = Tok[2].trim(); else pop3p=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			if (le>2) smtpp = Tok[2].trim(); else smtpp=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
+			if (le>3) pop3p = Tok[3].trim(); else pop3p=J.GenPassword(Config.PasswordSize, Config.PasswordMaxStrangerChars);
 			
 			if (
 						!user.matches("[a-z0-9\\-\\_\\.]{3,16}") 	|| 

@@ -63,6 +63,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public String HTTPBasePath=null;
 		public String[] ResevedUserKey = null;
 		
+		public HashMap <String,String> IAMOnion = null;
+		
 		public boolean UseStatus=true;
 		public boolean UseKernel=true;
 		public boolean	ExitCheckViaTor = false;						
@@ -358,6 +360,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			for (String k:C.HTTPAccess.keySet()) C.SMPTServer[ne].HTTPAccess.put(k, C.HTTPAccess.get(k));
 			for (String k:C.VMATErrorPolicy.keySet()) C.SMPTServer[ne].VMATErrorPolicy.put(k, C.VMATErrorPolicy.get(k));
 			
+			if (C.IAMOnion!=null) {
+					C.SMPTServer[ne].IAMOnion=new HashMap<String,String>();
+					for(String k:C.IAMOnion.keySet()) C.SMPTServer[ne].IAMOnion.put(k, C.IAMOnion.get(k));
+					}
+						
 			HashMap <String,Integer> P = Config.copypol(SP);
 			boolean isBasePathSet=false;
 			
@@ -426,7 +433,23 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								else if (x.contains("public")) C.SMPTServer[ne].ManifestInfo.put("httpmode","public"); else throw new Exception("Invalid ManifestWeb mode");
 							continue;
 							}
-											
+						
+						if (cmd.compareTo("iam.onion")==0) {  
+										if (C.SMPTServer[ne].IAMOnion==null) C.SMPTServer[ne].IAMOnion=C.IAMOnion;
+										if (C.SMPTServer[ne].IAMOnion==null) C.SMPTServer[ne].IAMOnion=new HashMap <String,String>();
+										
+										tok = tok[1].split("\\s+");
+										if (tok.length!=2) throw new Exception("Syntax error");
+										
+										tok[0]=tok[0].toLowerCase().trim();
+										tok[1]=tok[1].toLowerCase().trim();
+										if (!tok[0].matches("[a-z0-9\\_\\-\\-]{1,40}")) throw new Exception("Invalid first LocalPart in iam.onion setting");
+										if (!tok[1].matches("[a-z0-9\\_\\-\\-]{1,40}")) throw new Exception("Invalid second LocalPart in iam.onion setting");
+										C.SMPTServer[ne].IAMOnion.put(tok[0], tok[1]);
+										
+										continue;
+										}
+									
 						if (cmd.compareTo("exitroutedomain")==0) {  
 										if (!tok[1].matches("[a-zA-Z0-9\\.\\-]{2,40}\\.[a-zA-Z0-9]{2,6}")) throw new Exception("Invalid domain `"+tok[1]+"`");
 										C.SMPTServer[ne].ExitRouteDomain = tok[1].toLowerCase().trim();
@@ -1248,6 +1271,16 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							if (cmd.compareTo("netdefaultdeny")==0) { fc=true; C.NetDisallowAll=Config.parseY(tok[1]); }
 							if (cmd.compareTo("dnslogquery")==0) { fc=true; C.DNSLogQuery=Config.parseY(tok[1]); }
 							if (cmd.compareTo("mailwipefast")==0) { fc=true; C.MailWipeFast=Config.parseY(tok[1]); }
+							
+							if (cmd.compareTo("iam.onion")==0 && tok.length==3) { 
+									fc=true;
+									if (C.IAMOnion==null) C.IAMOnion=new HashMap <String,String>();
+									tok[1]=tok[1].toLowerCase().trim();
+									tok[2]=tok[2].toLowerCase().trim();
+									if (!tok[1].matches("[a-z0-9\\_\\-\\-]{1,40}")) throw new Exception("Invalid first LocalPart in iam.onion setting");
+									if (!tok[2].matches("[a-z0-9\\_\\-\\-]{1,40}")) throw new Exception("Invalid second LocalPart in iam.onion setting");
+									C.IAMOnion.put(tok[1], tok[2]);
+									}	
 														
 							if (cmd.compareTo("httpaccess")==0) {
 										if (C.HTTPBasePath==null) throw new Exception("Can't define HTTPAccess without HTTPBasePath");

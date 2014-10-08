@@ -813,9 +813,9 @@ public class SrvSMTPSession extends Thread {
 					ExtraSpam(50);
 					falseLogin=true;
 					Send("334 VXNlcm5hbWU6");
-					Login = I.readLine();
+					I.readLine();
 					Send("334 UGFzc3dvcmQ6");
-					Password = I.readLine();
+					I.readLine();
 					Login=null;
 					Send("235 ok, go ahead, it is important to be convinced!"); 
 					continue;
@@ -841,8 +841,8 @@ public class SrvSMTPSession extends Thread {
 				Login = new String(J.Base64Decode(Login.trim()));
 				Login = Login.trim();
 				if (!Mid.UsrExists(Login)) {
-
 					Send("535 Authentication credentials invalid");
+					Login=null;
 					continue;
 					}
 				Send("334 UGFzc3dvcmQ6");
@@ -851,6 +851,7 @@ public class SrvSMTPSession extends Thread {
 				Password = Password.trim();
 				if (!Mid.UsrLogonSend(Login, Password)) {
 					Password=null;
+					Login=null;
 					Send("535 authorization failed");
 					continue;
 					}
@@ -918,6 +919,7 @@ public class SrvSMTPSession extends Thread {
 				Password = Tk[2];
 				if (!Mid.UsrLogonSend(Login, Password)) {
 					Password=null;
+					Login=null;
 					Send("535 authorization failed");
 					continue;
 					}
@@ -1037,7 +1039,30 @@ public class SrvSMTPSession extends Thread {
 						}
 				
 				if (Tok[0].compareTo("RCPT TO")==0) {
-						t0= J.getMail(Tok[1].toLowerCase(),Mid.OnlyOnion | Mid.OnlyOnionTo);
+						
+					t0 = J.getMail(Tok[1].toLowerCase(),Mid.OnlyOnion | Mid.OnlyOnionTo);
+					
+						if (Login!=null) {
+								if (t0==null && !Tok[1].contains("@")) {
+									t0 = Tok[1].toLowerCase();
+									t0 = t0.replace("<", "");
+									t0 = t0.replace(">", "");
+									} 
+						
+								if (t0.compareTo("server")==0 || t0.compareTo("server@iam.onion")==0) t0="server@"+Mid.Onion;
+								if (t0.compareTo("sysop")==0 || t0.compareTo("sysop@iam.onion")==0) t0="sysop@"+Mid.Onion;
+								if (t0.endsWith("@iam.onion") && Mid.IAMOnion!=null) {
+									for(String k:Mid.IAMOnion.keySet()) {
+										if (t0.startsWith(k+'@')) {
+											t0 = Mid.IAMOnion.get(k)+"@"+Mid.Onion;
+											break;
+											}
+										}
+									}
+								t0= J.getMail(t0,Mid.OnlyOnion | Mid.OnlyOnionTo);	
+								
+							} else if (t0!=null & t0.endsWith("@iam.onion")) throw new PException("@501 You can't use iam.onion address in this way.");
+						
 						if (t0==null) {
 								Send("503 Invalid address");
 								continue;
@@ -1185,11 +1210,11 @@ public class SrvSMTPSession extends Thread {
 	
 	if (Mid.Spam.isSpam(J.getLocalPart(MailTo.toLowerCase()), MailFrom.toLowerCase())) {
 			Mid.StatSpam++;
-			throw new PException("@503 FUCK OFF SPAMMER, YOU ARE BANNED!");
+			throw new PException("@503 SPAMMER, YOU ARE BANNED!");
 			}
 	if (Mid.Spam.isSpam(SrvIdentity.SpamList, MailFrom.toLowerCase())) {
 			Mid.StatSpam++;
-			throw new PException("@503 FUCK OFF SPAMMER, YOU ARE BANNED BY THE ENTIRE SERVER!"); 
+			throw new PException("@503 SPAMMER, YOU ARE BANNED BY THE ENTIRE SERVER!"); 
 			}
 		
 	if (Mid.EnterRoute && Config.EnableDNSBL && !KUKIAuth && Login==null && !IPisLocal) try {
@@ -1200,7 +1225,7 @@ public class SrvSMTPSession extends Thread {
 			if ((ipst&Config.IPS_NoDNSBL)!=0) chk=false;
 			if ((ipst&Config.IPS_SPAM)!=0) {
 					Mid.StatSpam++;
-					throw new Exception("@421 FUCK YOU SPAMMER");
+					throw new Exception("@421 ARE  YOU A SPAMMER?");
 					}
 			if (Config.LocalNetArea.isInNet(RemoteIP)) chk=false;
 			if (Config.DNSBLNoCheck!=null && Config.DNSBLNoCheck.isInNet(RemoteIP)) chk=false;
@@ -1477,6 +1502,7 @@ public class SrvSMTPSession extends Thread {
 		st="\n";
 		for (int ax=0;ax<MultiRCPTToLength;ax++) {
 				alp = J.getLocalPart(MultiRCPTTo[ax]);
+				String ado = J.getDomain(MultiRCPTTo[ax]);
 				if (
 							alp.compareTo("server")==0	||
 							alp.endsWith(".onion")			||
@@ -1882,7 +1908,7 @@ public class SrvSMTPSession extends Thread {
 		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] {
 				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","RULEZ", "SET IS SPAM","SPAM LIST",
 				"EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT",
-				"VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG"
+				"VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM"
 				});
 		if (Tok==null) throw new PException(503,"Unknown server action `"+Hldr.get("subject").trim()+"`");
 		
@@ -1925,7 +1951,7 @@ public class SrvSMTPSession extends Thread {
 				SA_List(Tok,MailFrom,Hldr,msg);
 				return;
 				}
-					
+		
 		if (Tok[0].compareTo("SHOW W")==0) {
 				Hldr = ClassicHeaders("server@"+Mid.Onion, MailFrom);
 				Hldr.put("subject", "OnionMail "+Main.getVersion()+" license info");
@@ -1966,13 +1992,27 @@ public class SrvSMTPSession extends Thread {
 			Send("250 Id=nothing");
 			return;
 			}
-		
-		
-		
-		
+				
 		//////////////////////////// Local User Actions ////////////////////////////////
 		ChechkLocalSOper(MailFrom);
-				
+		
+		if (Tok[0].compareTo("SHOW IAM")==0) {
+				Hldr = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+				msg="List of iam.onion addresses:\n";
+				msg+="  server@iam.onion\t=  server@"+Mid.Onion+" (or only the word server)\n";
+				msg+="  sysop@iam.onion\t=  sysop@"+Mid.Onion+" (or only the word sysop)\n";
+				if (Mid.IAMOnion!=null) {
+					for (String k:Mid.IAMOnion.keySet()) {
+						msg+="  "+k+"@iam.onion\t=  "+Mid.IAMOnion.get(k)+"@"+Mid.Onion+"\n"; 						
+						}
+					}
+				Hldr.put("subject", "iam.onion list");
+				if (PGPSession) msg=Mid.SrvPGPMessage(MailFrom,Hldr,msg);	
+				Mid.SendMessage(MailFrom, Hldr, msg);	 
+				Send("250 Id=nothing");
+				return;
+				}
+		
 		if (Tok[0].compareTo("EXIT")==0) SA_Exit(Tok,MailFrom,msg);
 		if (Tok[0].compareTo("SET IS SPAM")==0 && pa==2) SA_AddSpam(Tok[1].trim().toLowerCase(),MailFrom);
 		if (Tok[0].compareTo("SPAM LIST")==0) SA_SPAMLIST(MailFrom,Tok);
