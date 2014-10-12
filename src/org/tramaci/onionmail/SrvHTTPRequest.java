@@ -773,11 +773,15 @@ public class SrvHTTPRequest extends Thread{
 					cap1!=null	) {
 					if (cap0.compareToIgnoreCase(cap1)!=0) {
 						err="Invalid CAPTCHA code";
+						if (Session.containsKey("cap-try")) Session.put("cap-try", Integer.toString(J.parseInt(Session.get("cap-try"))+1)); else Session.put("cap-try", "1");
 						acc=false;
 						val=false;
 						}
 				
-				if (rt>3) val=false;
+				if (rt>5) {
+						val=false;
+						err="Too many attempts.";
+						}
 					
 				if (val) {
 					if (
@@ -865,7 +869,44 @@ public class SrvHTTPRequest extends Thread{
 				}		
 		
 		if (li.contains("<!--#CAPTCHA#-->") && Session!=null) {
-				if (TextCaptcha.isEnabled()) {
+				boolean dca=false;
+				boolean caf=false;
+				int foo=1;
+				
+				if (Parent.Identity.HTTPETEXVar.containsKey("captcha-disable")) {
+					try { 
+						dca = Config.parseY(Parent.Identity.HTTPETEXVar.get("captcha-disable")); 
+						} catch(Exception IE) { WebLog("Invalid captcha-disable value"); }
+					}
+				
+				if (Parent.Identity.HTTPETEXVar.containsKey("captcha-formula")) {
+					try { 
+						String st =Parent.Identity.HTTPETEXVar.get("captcha-formula");
+						st=st.toLowerCase().trim();
+						if (st.compareTo("random")==0 || st.compareTo("rnd")==0) caf = (Stdio.NewRndLong() &1)!=0; else caf = Config.parseY(st);
+						} catch(Exception IE) { WebLog("VETEXVAR captcha-formula "+IE.getMessage()); }
+					}
+				
+				if (Parent.Identity.HTTPETEXVar.containsKey("captcha-formula-size")) {
+					try { 
+						foo = Config.parseInt(Parent.Identity.HTTPETEXVar.get("captcha-formula-size"), "numbers", 1, 4);
+						} catch(Exception IE) { WebLog("VETEXVAR captcha-formula-size "+IE.getMessage()); }
+					}
+				
+				if (Parent.Identity.HTTPETEXVar.containsKey("formula-after")) {
+					try { 
+						int t1 = Config.parseInt(Parent.Identity.HTTPETEXVar.get("formula-after"), "try", 1, 15);
+						if (Session!=null && Session.containsKey("cap-try")) {
+							try {
+								int t2 = Config.parseInt(Session.get("cap-try"));
+								if (t2>=t1) caf=true;
+								} catch(Exception I) {}
+							}
+						} catch(Exception IE) { WebLog("VETEXVAR formula-after "+IE.getMessage()); }
+					}
+				if (foo<1) foo=1;
+				
+				if (!caf && !dca && TextCaptcha.isEnabled()) {
 					CaptchaCode C= TextCaptcha.generateCaptcha(Parent.CAPTCHASize, Parent.CAPTCHAMode);
 					Session.put("cap", C.code);
 					Session.put("om-cap", "");
@@ -873,9 +914,18 @@ public class SrvHTTPRequest extends Thread{
 					st="<pre>"+st+"</pre>";
 					li=li.replace("<!--#CAPTCHA#-->", st);
 					} else {
-					Session.put("cap", "");
-					Session.put("om-cap", "");
-					li=li.replace("<!--#CAPTCHA#-->", "(No CAPTCHA)");
+						if (caf) {
+								String cp[] = TextCaptcha.CaptchaForumula(foo);
+								Session.put("cap", cp[1]);
+								Session.put("om-cap", "");
+								String st = toHtml(cp[0]);
+								st="<pre>"+st+"</pre>";
+								li=li.replace("<!--#CAPTCHA#-->", st);
+								} else {
+								Session.put("cap", "");
+								Session.put("om-cap", "");
+								li=li.replace("<!--#CAPTCHA#-->", "(No CAPTCHA)");
+								}
 					}
 				}
 		
@@ -888,7 +938,7 @@ public class SrvHTTPRequest extends Thread{
 		
 		if (Session!=null) saveSession();
 		
-		if (li.contains("<!--$")) {
+		if (li.contains("<!--$") || li.contains("<!--(")) {
 			if (Session==null) {
 				WebLog("Session lost");
 				redirect(Parent.ErrorPage+"?e=se");
@@ -948,6 +998,7 @@ public class SrvHTTPRequest extends Thread{
 		
 		if (cap0.compareToIgnoreCase(cap1)!=0) {
 			Session.put("erro", "Invalid CAPTCHA code.");
+			if (Session.containsKey("cap-try")) Session.put("cap-try", Integer.toString(J.parseInt(Session.get("cap-try"))+1)); else Session.put("cap-try", "1");
 			redirect(Parent.RegisterEtex);
 			return false;
 			}

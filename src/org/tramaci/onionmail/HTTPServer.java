@@ -124,7 +124,9 @@ public class HTTPServer extends Thread {
 				if (li[ax].length()==0) continue;
 				String[] tok;
 				if (li[ax].contains("#")) {
-					li[ax] = li[ax].substring(0,li[ax].indexOf('#')-1);
+					int pox = li[ax].indexOf('#')-1;
+					if (pox<0) continue;
+					li[ax] = li[ax].substring(0,pox);
 					}
 				if (li[ax].length()==0) continue;
 				tok = li[ax].split("\\s+",2);
@@ -169,6 +171,7 @@ public class HTTPServer extends Thread {
 						if (tok[1].contains("S")) a |= TextCaptcha.MODE_SYM;
 						if (tok[1].contains("R")) a |= TextCaptcha.MODE_RANDOM;
 						if (tok[1].contains("8")) a |= TextCaptcha.MODE_UTF8;
+						if (tok[1].contains("U")) a |= TextCaptcha.MODE_NUMBERONLY;
 						CAPTCHAMode=a;
 							
 						if (txk.length>1) {
@@ -339,8 +342,11 @@ public class HTTPServer extends Thread {
 		}
 	
 	public void End() {
-			int cx = Connection.length;
-			for (int ax=0;ax<cx;ax++) if (Connection[ax]!=null) Connection[ax].End();
+			if (Connection!=null) try {
+				int cx = Connection.length;
+				for (int ax=0;ax<cx;ax++) if (Connection[ax]!=null) Connection[ax].End();
+				} catch(Exception I) {}
+			
 			try { srv.close(); } catch(Exception E) {}
 			try {SaveStat(); } catch(Exception E) { WebLog("Can't save stats "+E.getMessage()); }
 			if (LogFile!=null) try{ LogFile.close(); } catch(Exception I) {}
@@ -380,8 +386,9 @@ public class HTTPServer extends Thread {
 					if (d>SessionTimeOut) CleanupSession();
 					
 					} catch(Exception E) {
-					Log("HTTP: "+con.getRemoteSocketAddress().toString()+" -> `"+Identity.Onion+"` Error "+E.getMessage()+"\n"); 
-					WebLog("Error "+E.getMessage());
+					String msg=E.getMessage();
+					Log("HTTP: "+ (con!=null ? con.getRemoteSocketAddress().toString() : "???") +" -> `"+Identity.Onion+"` Error "+msg+"\n"); 
+					WebLog("Error "+msg);
 					try { con.close(); } catch(Exception N) {}
 					continue;
 					}
@@ -534,6 +541,8 @@ public class HTTPServer extends Thread {
 			h += pox ? "W ": "S ";
 			if (LogMultiServer) h+=Identity.Nick+" \t";
 			h+=St.trim()+"\n";
+			
+			if (LogFile==null) return;
 			
 			synchronized (LogFile) {
 				try {

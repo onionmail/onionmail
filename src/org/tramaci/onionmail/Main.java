@@ -53,8 +53,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0006_0007_03FAL;
-	public static String Version="1.6.8.1018";
+	public static long VersionID = 0x0001_0006_0007_0410L;
+	public static String Version="1.6.8.1040";
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
@@ -575,7 +575,7 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-			
+					
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");

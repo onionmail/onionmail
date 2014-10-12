@@ -525,6 +525,67 @@ public class ControlSession extends Thread{
 		
 		/////////////////////////// Root Option
 		
+		/*
+		 * HTTP[bx] = new HTTPServer(Config,Config.SMPTServer[ax]);
+		 * */
+			if (cmd.compareTo("http")==0 && Tok.length==3) {
+				String nick = Tok[1].toLowerCase().trim();
+				String scmd = Tok[2].toLowerCase().trim();
+				
+				int cl = Main.HTTP.length;
+				int ch=-1;
+				int sh=-1;
+				for (int al=0;al<cl;al++) {
+					if (Main.HTTP[al]==null) continue;
+					if (Main.HTTP[al].Identity.Nick.toLowerCase().compareTo(nick)==0) {
+						ch=al;
+						break;
+						}
+					}
+				
+				for (int al=0;al<cl;al++) {
+					if (Main.SMTPS[al]==null) continue;
+					if (Main.SMTPS[al].Identity.Nick.toLowerCase().compareTo(nick)==0) {
+							sh=al;
+							break;
+							}
+					}
+				
+				if (ch==-1 || sh==-1) {
+					Reply(false,"Server not found ["+ch+" "+sh+"]");
+					continue;
+					}
+				
+				if (scmd.compareTo("reload")==0) {
+					if (Main.HTTP[ch].running) {
+						Log("Terminate HTTP server "+nick);
+						Main.HTTP[ch].End();
+						} else {
+							Main.HTTP[ch]=null;
+							System.gc();
+						}
+					
+					Log("Start HTTP server "+nick);
+					Main.HTTP[ch] = new HTTPServer(Config,Config.SMPTServer[sh]);
+					Reply(Main.HTTP[ch].running,"Server "+nick);
+					continue;
+					}
+				
+				if (scmd.compareTo("stop")==0) {
+					Log("Terminate HTTP server "+nick);
+					Main.HTTP[ch].End();
+					Reply(true,"Ok");
+					continue;
+					}
+				
+				if (scmd.compareTo("status")==0) {
+					Reply(Main.HTTP[ch].running,"Server "+nick);
+					continue;
+					}
+				
+			}
+		
+		
 		if (cmd.compareTo("threads")==0 && Tok.length==2 && Tok[1].compareToIgnoreCase("all")==0) {
 			String rs = Main.TheradsCounter(true,false);
 			rs=rs.trim();

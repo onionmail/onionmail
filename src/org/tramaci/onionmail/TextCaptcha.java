@@ -21,6 +21,7 @@ public class TextCaptcha {
 	public static final int MODE_SQR=32;
 	public static final int MODE_UTF8=64;
 	public static final int MODE_RANDOM=128;
+	public static final int MODE_NUMBERONLY = 256;
 	
 	private static byte[] charH = null;
 	private static byte[] charFrom = null;
@@ -254,8 +255,15 @@ public class TextCaptcha {
 	}
 	
 	private static String codeGen(int sz,int mode) {
-		String alfa ="1345780QERTYUADFGHJLKXCVBrtyihjkxcv";
-		char[] none="69Opql|ZNbdpPoun&£".toCharArray();
+		String alfa;
+		char[] none;
+		if ((mode & MODE_NUMBERONLY)!=0) {
+			alfa ="12345780";
+			none ="69|&£qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM".toCharArray();			
+			} else {
+			alfa ="1345780QERTYUADFGHJLKXCVBrtyihjkxcv";
+			none ="69Opql|ZNbdpPoun&£".toCharArray();
+			}
 		int nl=none.length;
 		if ((mode&MODE_SYM)!=0) alfa+="********";
 		
@@ -361,4 +369,37 @@ public class TextCaptcha {
 				throw E;
 			}
 		}
+	
+	public static String[] CaptchaForumula(int size) throws Exception {
+					int maxi = (int) Math.pow(10,size);
+					int a = (int) (0xFFFFFFFFL&Stdio.NewRndLong());
+					int b = (int) (0xFFFFFFFFL&Stdio.NewRndLong());
+					a=a%maxi;
+					b=b%maxi;
+					int c = a+b;
+					String[] tok = new String[] { 
+									"Equation: " ,
+									Integer.toString(a),
+									b<0 ? "-" : "+" ,
+									Integer.toString(b).replace("-",""),
+									"=",
+									Integer.toString(c)}
+									;
+					
+					c = (int) (Stdio.NewRndLong()&3)%3;
+					c = 1+(c*2);
+					String sol = tok[c];
+					tok[c]= "X";
+					String cap="";
+					for (int al=0;al<6;al++) cap+=" "+tok[al]+" ";
+				
+					return new String[] {
+							"Please solve the following equation/sum to prove you're human.\n"+
+							cap.trim()+"\n"+
+							"What is the value of X?" ,
+							sol }
+					;
+
+			}
+	
 }

@@ -1482,6 +1482,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									if (tok[1].contains("S")) a |= TextCaptcha.MODE_SYM;
 									if (tok[1].contains("R")) a |= TextCaptcha.MODE_RANDOM;
 									if (tok[1].contains("8")) a |= TextCaptcha.MODE_UTF8;
+									if (tok[1].contains("U")) a |= TextCaptcha.MODE_NUMBERONLY;
 									if (a==0) a=TextCaptcha.MODE_SWX|TextCaptcha.MODE_SWY |TextCaptcha.MODE_SYM;
 									
 									C.TextCaptchaMode=a;
