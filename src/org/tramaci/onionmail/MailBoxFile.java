@@ -27,8 +27,6 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Arrays;
 
-import javax.crypto.SecretKey;
-
 public class MailBoxFile {
 	private static final String InternalEncoding="UTF-8";
 	private static final long MagicNumber =Long.parseLong("mailboxfile3",36);
@@ -259,8 +257,10 @@ public class MailBoxFile {
 	
 	public void Close() throws Exception {
 		if (isTEMP) {
-			O.writeShort(0);
-			if (O!=null) O.close();
+			if (O!=null) {
+					O.writeShort(0);
+					O.close();
+					}
 			clear();
 			return;
 			}

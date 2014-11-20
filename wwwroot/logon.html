@@ -35,7 +35,7 @@
 .posta td { font-size: 9pt; font-family: verdana; width: 50%; text-align: right;}
 .posta input { border: #048 1px solid; padding: 4px; border-radius: 4px; }
 .posta input[type=submit] { background-color: #48f; }
-#minfo { font-size: 8pt !important; color: #804 !important; } 
+.minfo { font-size: 8pt !important; color: #804 !important; margin-top: 2px; margin-bottom: 2px;} 
 .perro { color: #f00; text-align: center; } 
 		
 </style>	
@@ -64,9 +64,9 @@
 <div class="cappa">
 <p>Captcha code</p>
 <!--#CAPTCHA#-->
-<div id="minfo">
+<div class="minfo">
 You will be shown a picture in ascii art, you will need to recognize the characters and enter the code. Be careful there may be some strange symbols to ignore.<br>
-This page is used by sysop. Do not login here to read email messages.
+<b>This page is used by sysop. Do not login here to read email messages.</b>
 </div>
 <p>Logon to <!--#NICK#--> Mail server</p>
 <div>
@@ -78,7 +78,7 @@ This page is used by sysop. Do not login here to read email messages.
 	<tr><td colspan="2"><input type="submit" name="ok" value="Logon"></td></tr>		
 </table>
 </form>
-</div> 
+</div>
 </div>
 <div class="perro" id="perrostr"><!--(erro)--></div>
 <div id="disclaim"></div>

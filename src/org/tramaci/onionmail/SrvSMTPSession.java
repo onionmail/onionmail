@@ -23,9 +23,11 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -36,6 +38,8 @@ import java.net.SocketException;
 import java.security.PublicKey;
 import java.util.HashMap;
 
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
 
 import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
@@ -163,9 +167,18 @@ public class SrvSMTPSession extends Thread {
 			String msg = E.getMessage();
 			if (msg==null) msg="Exception.Null";
 			
-			if (E instanceof SocketException) {
-				msg="@550 Network Error: "+E.getMessage();
-				} 
+			if (E instanceof SocketException) msg="@550 Network Error: "+E.getMessage();
+			if (E instanceof IOException || E instanceof SecurityException) {
+				long rnd = Stdio.NewRndLong() & 0x7FFFFFFFL;
+				String cod=Long.toString(rnd,36);
+				Log(Config.GLOG_Event,"I/O Exception: ["+cod+"] = "+E.getMessage());
+				msg="@550 Access Error ID ["+cod+"]";
+				}
+			
+			if (E instanceof java.net.SocketException) msg="@550 Network Socket error "+Integer.toHexString((""+E.getMessage()).hashCode());
+			if (E instanceof java.net.NoRouteToHostException) msg="@550 No route to host";
+			if (E instanceof java.net.SocketTimeoutException) msg="@550 Network timeout";
+			if (E instanceof java.net.UnknownHostException) msg="@550 Unknown host";
 			
 			if (Config.Debug) E.printStackTrace();
 			
@@ -211,14 +224,20 @@ public class SrvSMTPSession extends Thread {
 	}
 	
 	private void checkRelay() throws Exception {
+	
 		if (MailFrom==null || MailTo==null || Mid==null || Mid.Onion==null ) return;
 		String df =J.getDomain(MailFrom);
 		String dt =J.getDomain(MailTo);
+		String lf = J.getLocalPart(MailFrom);
+		String lt = J.getLocalPart(MailTo);
 		boolean mf = J.isMailMat(MailFrom);
 		boolean mt = J.isMailMat(MailTo);
 
 		if (Mid.EnterRoute) {
-			if (mf && mt) throw new Exception("@501 Relaying in MAT mode is not permitted");
+			if (mf && mt) {
+					if (!lf.endsWith("."+Mid.Onion) && !lt.endsWith("."+Mid.Onion) )throw new Exception("@501 Relaying in MAT mode is not permitted");
+					}
+					
 			if (!mf && mt) return;
 			if (mf && !mt) return;
 			
@@ -870,7 +889,7 @@ public class SrvSMTPSession extends Thread {
 							}
 						}
 					} catch(Exception E) { 
-							Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`");
+							Config.EXC(E, Mid.Nick+".UsrCntR `"+J.UserLog(Mid,Login)+"`");
 							}
 				
 				if (AuthEd) Send("235 ok, go ahead"); else throw new PException("@451 Too many messages sent. Your limit is "+Mid.MaxMsgXUserXHour+" messages x hour!");
@@ -936,7 +955,7 @@ public class SrvSMTPSession extends Thread {
 								}
 							}
 						}
-					} catch(Exception E) { Config.EXC(E, Mid.Nick+".UsrCntR `"+Long.toString(Login.hashCode(),36)+"`"); }
+					} catch(Exception E) { Config.EXC(E, Mid.Nick+".UsrCntR `"+J.UserLog(Mid,Login)+"`"); }
 				if (AuthEd) Send("235 ok, go ahead"); else throw new PException("@451 Too many messages sent. Your limit is "+Mid.MaxMsgXUserXHour+" messages x hour!");
 				continue;
 			}
@@ -971,6 +990,7 @@ public class SrvSMTPSession extends Thread {
 								mlp=al;
 								MailFrom = Login+"@"+mdo;
 								}
+											
 						if (Login==null && mdo.compareTo(Mid.Onion)==0) throw new PException(503,"Logon required!");  //Verificato FIX
 						
 						if (Config.SMTPVerifySender && mdo.compareTo(Mid.Onion)!=0 &&  !VerifySMTPServer(mdo)) {
@@ -1061,7 +1081,7 @@ public class SrvSMTPSession extends Thread {
 									}
 								t0= J.getMail(t0,Mid.OnlyOnion | Mid.OnlyOnionTo);	
 								
-							} else if (t0!=null & t0.endsWith("@iam.onion")) throw new PException("@501 You can't use iam.onion address in this way.");
+							} else if (t0!=null && t0.endsWith("@iam.onion")) throw new PException("@501 You can't use iam.onion address in this way.");
 						
 						if (t0==null) {
 								Send("503 Invalid address");
@@ -1139,7 +1159,7 @@ public class SrvSMTPSession extends Thread {
 								} */
 							if (vmated) VmatedBy=old;
 							}
-						
+												
 						if (!Mid.CanRelay) checkRelay();
 						
 						if (Mid.EnterRoute) {
@@ -1154,6 +1174,9 @@ public class SrvSMTPSession extends Thread {
 									continue;	
 								}  							
 							}
+						
+						//if (!Mid.CanRelay) checkRelay(); //Crea problemi su EXIT VMAT1
+						
 						
 						if (mdo.endsWith(".onion")) {
 								if (mlp.compareTo("server")==0) TypeTo = XTypeServer; else 	TypeTo = XTypeOnion; 
@@ -1175,7 +1198,7 @@ public class SrvSMTPSession extends Thread {
 									String al = Mid.UsrAlias(mlp);
 									if (al==null ||!Mid.UsrExists(al)) {
 										Send("503 No such user 2");
-										if (Config.Debug) Log("No such user 2 `"+Long.toString(mlp.hashCode(),36)+"`");
+										if (Config.Debug) Log("No such user 2 `"+J.UserLog(Mid,mlp)+"`");
 										RouteTo=0;
 										continue;
 										}
@@ -1199,7 +1222,8 @@ public class SrvSMTPSession extends Thread {
 	if (falseLogin) throw new PException("@999 FUCK OFF");
 			
 	if (MailTo==null || MailFrom==null) throw new PException("@503 valid RCPT command must precede DATA");
-			
+		
+	
 	if (RouteFrom == XRouteLocal) {
 		if (Login==null || Password == null) throw new PException("@500 AUTH Required");
 		if (Login!=null && Login.compareTo(J.getLocalPart(MailFrom))!=0) throw new PException("@500 Invalid credentials");
@@ -1241,7 +1265,24 @@ public class SrvSMTPSession extends Thread {
 			} catch(Exception E) { Config.EXC(E, Mid.Nick+".DNSBL"); }
 	
 	if (TypeFrom==XTypeInet) Mid.StatMsgInet++; 
-			
+	
+	if (RouteTo == XRouteRemote) {
+			if (!MailTo.endsWith(".onion")) {
+				String lp = J.getLocalPart(MailTo);
+				String dm =J.getDomain(MailTo);
+				VirtualRVMATEntry VM = Mid.VMAT.loadRVMATinTor(lp, dm);
+				if (VM!=null) {
+					dm = J.getDomain(VM.onionMail);
+					if (dm.compareTo(Mid.Onion)==0) {
+						if (Config.Debug) Log("RouteLocalInVMAT `"+J.UserLog(Mid, MailTo)+"` > `"+J.UserLog(Mid, VM.onionMail)+"`");
+						MailTo=VM.onionMail;
+						RouteTo = XRouteLocal;
+						}
+					}
+				}
+			}
+	
+	
 	if (RouteTo == XRouteLocal)	BeginLocalDelivery();
 	if (RouteTo == XRouteServer) BeginServerDelivery();
 	if (RouteTo == XRouteRemote) BeginRemoteDelivery();
@@ -1265,7 +1306,7 @@ public class SrvSMTPSession extends Thread {
 		int cax = J.parseInt(md)+1;
 		cnt.put("msgxhour", Integer.toString(cax));
 		Mid.UsrSetConfig(Login,cnt);
-		} catch(Exception E) { Config.EXC(E,Mid.Nick+".UsrCntW `"+Long.toString(Login.hashCode(),36)+"`"); }
+		} catch(Exception E) { Config.EXC(E,Mid.Nick+".UsrCntW `"+J.UserLog(Mid,Login)+"`"); }
 			
 	Tok = GetSMTPCommands(1,new String[] { "QUIT" },null,null);	
 	if (Tok==null) throw new PException(500,"Only one session per connection!");
@@ -1342,7 +1383,7 @@ public class SrvSMTPSession extends Thread {
 								sub = "***"+err+"*** "+sub;
 								Hldr.put("x-tor-vmat-error", err);
 								Hldr.put("subject", sub);
-								Log("False VMAT in tor by `"+Long.toString(MailFrom.hashCode(),36)+"`");
+								Log("False VMAT in tor by `"+J.UserLog(Mid,MailFrom)+"`");
 								return;
 							}
 						} else if (Config.Debug) Log("TormPassage: No public key for `"+vmatsrv+"`");  
@@ -1453,7 +1494,7 @@ public class SrvSMTPSession extends Thread {
 			}
 		
 		if (isDSN(Hldr) || isList(Hldr)) {
-			Log("Ignore Message: `"+Long.toString(MailFrom.hashCode(),36)+"` to app `"+MailTo+"`");
+			Log("Ignore Message: `"+J.UserLog(Mid,MailFrom)+"` to app `"+MailTo+"`");
 			Send("250 Id=Ignore");
 			return;
 			}
@@ -1617,28 +1658,34 @@ public class SrvSMTPSession extends Thread {
 			return;
 			}
 		
-		Message MS = M.MsgCreate();
-		HashMap<String,String> Hldr = BeginDataHeaders();
-		if (TormVmatTo==null) TORVMATPassage(Hldr);
-		
-		if (ToAliasUser!=null) {
-			Hldr.put("envelope-to", ToAliasUser);
-			Hldr.put("x-alias", ToAliasUser);
-			}		
-		MS.SetHeaders(Hldr);
-		while(true) {
-			String li = I.readLine();
-		
-			MessageBytes+=li.length()+2;
-			if (MessageBytes>Mid.MaxMsgSize) {
-				MS.Close();
-				throw new PException("@452 Message too big");
+		Message MS=null;
+		try {
+			MS = M.MsgCreate();
+			HashMap<String,String> Hldr = BeginDataHeaders();
+			if (TormVmatTo==null) TORVMATPassage(Hldr);
+			
+			if (ToAliasUser!=null) {
+				Hldr.put("envelope-to", ToAliasUser);
+				Hldr.put("x-alias", ToAliasUser);
+				}		
+			MS.SetHeaders(Hldr);
+			while(true) {
+				String li = I.readLine();
+			
+				MessageBytes+=li.length()+2;
+				if (MessageBytes>Mid.MaxMsgSize) {
+					MS.Close();
+					throw new PException("@452 Message too big");
+					}
+				if (li.compareTo(".")==0) break;
+				MS.WriteLn(li);
 				}
-			if (li.compareTo(".")==0) break;
-			MS.WriteLn(li);
+			MS.End();
+			} catch(Exception E) {
+				if (MS!=null) MS.Close();
+				throw E;
 			}
-		MS.End();
-		
+		MailBox.AutoClose(M);
 		Send("250 OK id="+J.RandomString(6)+"-"+J.RandomString(6)+"-"+J.RandomString(2));
 		
 	}
@@ -1822,7 +1869,7 @@ public class SrvSMTPSession extends Thread {
 		
 	
 		if (isDSN(Hldr) || isList(Hldr)) {
-			Log("Ignore Message: `"+Long.toString(MailFrom.hashCode(),36)+"` to server");
+			Log("Ignore Message: `"+J.UserLog(Mid, MailFrom)+"` to server");
 			Send("250 Id=Ignore");
 			return;
 			}
@@ -1906,9 +1953,9 @@ public class SrvSMTPSession extends Thread {
 		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0,true)) throw new PException(500,"SA6001 Operation not permitted");
 		
 		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] {
-				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","RULEZ", "SET IS SPAM","SPAM LIST",
-				"EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT",
-				"VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM"
+				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","SET RULEZ","DELETE RULEZ","RULEZ", "SET IS SPAM","SPAM LIST",
+				"NEWS ADD","NEWS DEL","NEWS","EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT",
+				"VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM","SSL","LOGID"
 				});
 		if (Tok==null) throw new PException(503,"Unknown server action `"+Hldr.get("subject").trim()+"`");
 		
@@ -1942,8 +1989,10 @@ public class SrvSMTPSession extends Thread {
 				}
 		
 		if (Tok[0].compareTo("RULEZ")==0) {
-				if (pa!=1) throw new PException("@550 Parameter number error in subject");
-				SA_RULEZ(MailFrom,null);
+				if (pa>2) throw new PException("@550 Parameter number error in subject");
+				String s="";
+				if (Tok.length>1) s=Tok[1];
+				SA_RULEZ(MailFrom,null,s);
 				return;
 				}
 		
@@ -1953,8 +2002,9 @@ public class SrvSMTPSession extends Thread {
 				}
 		
 		if (Tok[0].compareTo("SHOW W")==0) {
+				String ver = Mid.NoVersion ? "" : Main.getVersion();
 				Hldr = ClassicHeaders("server@"+Mid.Onion, MailFrom);
-				Hldr.put("subject", "OnionMail "+Main.getVersion()+" license info");
+				Hldr.put("subject", "OnionMail "+ver+" license info");
 				msg="";
 				InputStream i = Main.class.getResourceAsStream("/resources/show-w");
 				BufferedReader h = J.getLineReader(i);
@@ -1968,7 +2018,7 @@ public class SrvSMTPSession extends Thread {
 					try {		h.close(); } catch(Exception I) {}
 					try {		i.close(); } catch(Exception I) {}
 				
-				msg=msg.replace("%%VER%%", Main.getVersion());
+				msg=msg.replace("%%VER%%", ver);
 				if (PGPSession) msg=Mid.SrvPGPMessage(MailFrom,Hldr,msg);	
 				Mid.SendMessage(MailFrom, Hldr, msg);	 
 				Send("250 Id=nothing");
@@ -1995,6 +2045,52 @@ public class SrvSMTPSession extends Thread {
 				
 		//////////////////////////// Local User Actions ////////////////////////////////
 		ChechkLocalSOper(MailFrom);
+		
+		if (Tok[0].compareTo("NEWS ADD")==0) {
+			if (Tok.length<2) throw new PException("@550 Syntax error, see RULEZ.");
+			String rul = Tok[1].toLowerCase().trim();
+			HashMap <String,String> conf = Mid.UsrGetConfig(Login);
+			conf.put("ruleznews", "1");
+			if (!Mid.RulezList.containsKey(rul)) throw new PException("@550 Unexistent rulez file `"+rul+"`");
+			conf.put("ruleznews-"+rul, "0new");
+			Mid.UsrSetConfig(Login, conf);
+			Send("250 Id=nothing");
+			return;
+			}
+		
+		if (Tok[0].compareTo("NEWS DEL")==0) {
+			if (Tok.length<2) throw new PException("@550 Syntax error, see RULEZ.");
+			String rul = Tok[1].toLowerCase().trim();
+			HashMap <String,String> conf = Mid.UsrGetConfig(Login);
+			if (!Mid.RulezList.containsKey(rul)) throw new PException("@550 Unexistent rulez file `"+rul+"`");
+			conf.remove("ruleznews-"+rul);
+			Mid.UsrSetConfig(Login, conf);
+			Send("250 Id=nothing");
+			return;
+			}
+		
+		if (Tok[0].compareTo("NEWS")==0) {
+			if (Tok.length<2) throw new PException("@550 Syntax error, see RULEZ.");
+			HashMap <String,String> conf = Mid.UsrGetConfig(Login);
+			Tok[1]=Tok[1].toLowerCase().trim();
+			if (Tok[1].compareTo("yes")==0) {
+				conf.put("ruleznews","1");
+				} else if (Tok[1].compareTo("no")==0) {
+				conf.put("ruleznews","1");	
+				} else if (Tok[1].compareTo("clear")==0) {
+				conf.remove("ruleznews");
+				String rm="";
+				for (String k:conf.keySet()) if (k.startsWith("ruleznews-")) rm=rm+k+"\n";
+				rm=rm.trim();
+				String[] rml=rm.split("\\n+");
+				int cx = rml.length;
+				for (int ax=0;ax<cx;ax++) conf.remove(rml[ax]);
+				}
+				
+			Mid.UsrSetConfig(Login, conf);
+			Send("250 Id=nothing");
+			return;
+			}
 		
 		if (Tok[0].compareTo("SHOW IAM")==0) {
 				Hldr = ClassicHeaders("server@"+Mid.Onion, MailFrom);
@@ -2028,6 +2124,65 @@ public class SrvSMTPSession extends Thread {
 		String loc = J.getLocalPart(MailFrom);
 		if (loc.compareTo("sysop")!=0) throw new PException("@550 Access denied to SysOp command");
 		///////////////////////// SYSOP USER /////////////////////////////
+		
+		if (Tok[0].compareTo("LOGID")==0 && Tok.length>1) {
+			String ml =J.getMail( Tok[1].toLowerCase().trim(),false);
+			if (ml==null) throw new Exception("@500 Invalid mail address `"+Tok[1]+"`");
+			if (J.getDomain(ml).compareTo("iam.onion")==0) ml = J.getLocalPart(ml)+"@"+Mid.Onion;
+			Tok[1]=ml;
+			String id = Long.toString(Stdio.NewRndLong() &0x7FFFFFFFFFFFFFFFL,36);
+			String lp = J.getLocalPart(ml);
+
+			HashMap <String,String> r = new HashMap <String,String>();
+			r.put("Full Address", J.UserLog(Mid, ml));
+			r.put("Local Part", J.UserLog(Mid, lp));
+			r.put("N/S Address", J.UserLog(null, ml));
+			r.put("N/S Local Part", J.UserLog(null, lp));
+			r.put("Full Address", J.UserLog(Mid, ml));
+			
+			if (Mid.EnterRoute) {
+				ml = J.IfTor2Inet(ml, Mid.ExitRouteDomain);
+				lp = J.getLocalPart(ml);
+				r.put("Exit Full Address", J.UserLog(Mid, ml));
+				r.put("Exit Local Part", J.UserLog(Mid, lp));
+				r.put("Exit N/S Address", J.UserLog(null, ml));
+				r.put("Exit N/S Local Part", J.UserLog(null, lp));
+				r.put("Exit Full Address", J.UserLog(Mid, ml));
+				}
+			
+			ml=J.Spaced("Log id:",20)+id+"\n";
+			ml+=J.Spaced("Mail:",20)+Tok[1]+"\n";
+			Log("Request log ID `"+id+"`");
+			for (String k:r.keySet()) {
+					Log("LogId "+id+" "+k+"\t"+r.get(k));
+					ml+=J.Spaced(k,32)+" "+r.get(k)+"\n";
+					}
+			
+			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+			H.put("subject", "Re: LogID Request");
+			ml=ml.replace("\n", "\r\n");
+			ml=ml.trim();
+			ml+="\r\n";
+			if (PGPSession) ml=Mid.SrvPGPMessage(MailFrom,H,ml);	
+			Mid.SendMessage(MailFrom, H, ml);
+			Send("250 Id=nothing");
+			return;	
+		}
+		
+		if (Tok[0].compareTo("DELETE RULEZ")==0) {
+			SA_DELRULEZ(MailFrom,Tok);
+			return;
+			}
+		
+		if (Tok[0].compareTo("SET RULEZ")==0) {
+			SA_SETRULEZ(MailFrom,Tok,msg,Hldr);
+			return;
+			}
+		
+		if (Tok[0].compareTo("SSL")==0) {
+				SA_SSL(MailFrom,Tok,msg);
+				return;
+			}
 		
 		if (Tok[0].compareTo("PUSH")==0) {
 				String rs = Mid.SvcDoRemotePushArray(msg);
@@ -2161,6 +2316,184 @@ public class SrvSMTPSession extends Thread {
 		//// Only when modify code throw new PException("@550 Extended command not available");
 	}
 
+ private void SA_DELRULEZ(String fromMail,String[] tok) throws Exception {
+	 if (tok.length<2) throw new Exception("@550 Syntax Error");
+	 String section = tok[1].toLowerCase();
+	  if (
+			 !section.matches("[a-z0-9\\-\\_]{1,40}") ||
+			 section.compareTo("sysop") == 0 ) throw new Exception("@550 Invalid RULEZ section `"+section+"`");
+	 
+	 String rFile = Mid.Maildir+"/rulez/rulez-"+section+".rul";
+	 if (new File(rFile).exists()) J.Wipe(rFile , Config.MailWipeFast);
+	 
+	 rFile = Mid.Maildir+"/rulez-"+section+".rul";
+	 if (new File(rFile).exists()) J.Wipe(rFile , Config.MailWipeFast);
+	 
+	 Mid.RulezList.remove(section);
+	 try { 
+			Mid.RefreshRulezList();
+			Mid.SaveRulezList();
+			} catch(Exception E) { Config.EXC(E, "RfShRules3."+Mid.Nick); }
+	 
+	 HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, fromMail);
+	 		H.put("subject", "Rulez "+section+" deleted!");
+	 		String rs="Message RULEZ "+section.toUpperCase()+" is now deleted.\n\t"+Mid.Nick +"\n";
+	 		if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
+	 		Mid.SendMessage(MailFrom, H, rs);
+	 		Send("250 Id=nothing");
+	  }	
+	
+ private void SA_SETRULEZ(String fromMail,String[] tok,String msg,HashMap <String,String> HLDR) throws Exception {
+	 if (tok.length<2) throw new Exception("@550 Syntax Error");
+	 String section = tok[1].toLowerCase();
+	 String subj = HLDR.get("subject");
+	 String[] T1 = subj.split("\\:",2);
+	 if (T1.length>1) subj=T1[1]; else subj=section;
+	 int hash=msg.hashCode();
+	 
+	 if (section.endsWith(":") && section.length()>1) section=section.substring(0,section.length()-1);
+	 
+	 if (
+			 !section.matches("[a-z0-9\\-\\_]{1,40}") ||
+			 section.compareTo("sysop") == 0 ) throw new Exception("@550 Invalid RULEZ section `"+section+"`");
+	 
+	 	String rFile = Mid.Maildir+"/rulez/rulez-"+section+".rul";
+	 	MailBoxFile ru=null;
+	 	
+	 	try {
+	 		
+	 		ru = new MailBoxFile();
+	 		ru.OpenAES(rFile, Mid.Sale, true);
+	 		HashMap <String,String> RH = SrvSMTPSession.ClassicHeaders("server@"+Mid.Onion, "you");
+	 		for (String k:new String[] { "content-transfer-encoding","content-type"}) {
+	 			if (HLDR.containsKey(k)) RH.put(k, HLDR.get(k));
+	 			}
+	 	
+	 		RH.put("subject", subj);
+	 		
+	 		String rht = J.CreateHeaders(RH);
+	 		rht=rht.trim()+"\n\n";
+	 		rht=rht.replace("\r\n", "\n");
+	 		String[] lin = rht.split("\\n");
+	 		rht=null;
+	 		int cx = lin.length;
+	 		for (int ax=0;ax<cx;ax++) ru.WriteLn(lin[ax]);
+	 		ru.WriteLn("");
+	 		msg=msg.replace("\r\n", "\n");
+	 		lin=msg.split("\\n");
+	 		msg=null;
+	 		System.gc();
+	 		cx = lin.length;
+	 		for (int ax=0;ax<cx;ax++) ru.WriteLn(lin[ax]);
+	 		ru.Close();
+	 		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, fromMail);
+	 		H.put("subject", "Rulez "+section+" set");
+	 		String rs="Message RULEZ "+section.toUpperCase()+" is now available\n\t"+Mid.Nick +"\n";
+	 		if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
+	 		Mid.SendMessage(MailFrom, H, rs);
+	 		
+	 		Mid.RulezList.put(section.toLowerCase(), subj.trim());
+	 		try { Mid.SaveRulezList(); } catch(Exception E) { Config.EXC(E, "SaveRulez2."+Mid.Nick); }
+
+	 		HashMap <String,String> Test = Mid.GetNewsRulez();
+	 			
+		 	try {
+		 		Test.put(section.toLowerCase(), Long.toString(hash,36));
+		 		Stdio.SFileSave(Mid, Const.RULEZNEWS, new byte[][] { J.HashMapPack(Test) }, Const.FI_RULEZ, true);
+	 			} catch(Exception E) {
+	 				Log("LoadNews2: "+E.getMessage());
+	 				if (Config.Debug) E.printStackTrace();
+	 				}
+	 	
+	 		Send("250 Id=nothing");
+	 		
+	 	} catch(Exception E) {
+	 		if (ru!=null) try { ru.Close(); } catch(Exception I) {}
+	 		throw E;
+	 		}
+	 	
+ 	}		
+		
+	private void SA_SSL(String fromMail,String[] tok,String msg) throws Exception {
+		String cmd = "";
+		int tl=tok.length;
+		if (tl>1) cmd = tok[1].toLowerCase().trim();
+		String rs=null;
+		
+		if (cmd.compareTo("test")==0 && tl>2) {
+			String host = tok[2].toLowerCase().trim();
+			boolean tkim = true;
+			if (tl>3 && tok[3].compareToIgnoreCase("notkim")==0) tkim=false;
+			rs = Mid.SSLManualVerify(host, tkim);
+			}
+		
+		if (cmd.compareTo("status")==0) rs = Mid.SSLEtoString();
+		
+		if (cmd.compareTo("check")==0) {
+				rs="";
+				try { Mid.CheckSSLOperations(); } catch(Exception E) { rs+="SSL Operation error: "+E.getMessage()+"\n"; }
+				rs += Mid.SSLEtoString();
+				}
+		
+		if (tl == 3 && cmd.compareTo("chg")==0) {
+			String ho = tok[2].toLowerCase().trim();
+			try {
+				Mid.SSLEIDCmd(ho, msg.split("\\n+"));
+				 rs ="SSL CHG Done!\n"+ Mid.SSLEtoString();
+			} catch(Exception E) {
+				rs+="SSL CHG Error: "+E.getMessage()+"\n";
+				}
+			}
+		
+		if (cmd.compareTo("empty")==0) {
+			Mid.SSLErrorTracker = new HashMap <String,Integer[]>();
+			rs = "SSLEID List Trakcer clear.\n";
+			}
+		
+		if (tl == 3 && cmd.compareTo("no")==0) {
+			String ho = tok[2].toLowerCase().trim();
+			Integer[] dta = null;
+			if (Mid.SSLErrorTracker.containsKey(ho)) dta = Mid.SSLErrorTracker.get(ho); else dta = J.newInteger(SrvIdentity.SSLEID_SIZE);
+			int tcr = (int) (System.currentTimeMillis()/1000L);
+			if (dta[SrvIdentity.SSLEID_First]==0) dta[SrvIdentity.SSLEID_First] = tcr;
+			dta[SrvIdentity.SSLEID_Last] = tcr;
+			dta[SrvIdentity.SSLEID_EndTime] = tcr+86400;
+			dta[SrvIdentity.SSLEID_CurID]=Config.TORIdentityNumber;
+			dta[SrvIdentity.SSLEID_Flags] = SrvIdentity.SSLEID_Flags_NoSSL | SrvIdentity.SSLEID_Flags_Persistent;
+			Mid.SSLErrorTracker.put(ho, dta);
+			rs="Now the host `"+ho+"` don't use SSL\n";
+			}
+		
+		if (tl == 3 && cmd.compareTo("clear")==0) {
+			String ho = tok[2].toLowerCase().trim();
+			Integer[] dta = null;
+			if (Mid.SSLErrorTracker.containsKey(ho)) Mid.SSLErrorTracker.remove(ho);
+			rs="Status data for `"+ho+"` removed\n";
+			}
+		
+		if (tl == 3 && cmd.compareTo("reset")==0) {
+			String ho = tok[2].toLowerCase().trim();
+			Integer[] dta = null;
+			if (Mid.SSLErrorTracker.containsKey(ho)) Mid.SSLErrorTracker.remove(ho);
+			String fn = Mid.GetFNName(ho)+".crt";
+			new File(fn).delete();
+			new File(fn+"h").delete();
+			rs="SSL data for `"+ho+"` removed\n";
+			}
+				
+		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+		if (rs==null) {
+				rs="Unknown command or bad syntax.\nSee RULEZ\n";
+				H.put("subject", "SSL operation error");
+			} else 	H.put("subject", "SSL operations");
+		rs=rs.replace("\n", "\r\n");
+		rs=rs.trim();
+		rs+="\r\n";
+		if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
+		Mid.SendMessage(MailFrom, H, rs);
+		Send("250 Id=nothing");
+	}
+	
 	private void SA_NEWUSER(String[] tok,String msg,boolean overridePermissions) throws Exception {
 		String vc="";
 		
@@ -2407,18 +2740,21 @@ public class SrvSMTPSession extends Thread {
 	}
 	
 	private void SA_AddSpam(String chi,String fromuser) throws Exception {
+		Exception EE=null;
 		String spam = J.getLtGt(chi);
 		if (fromuser!=null && fromuser.compareTo(SrvIdentity.SpamList)==0) throw new PException("@500 FUCK OFF");
 		if (fromuser==null) fromuser=SrvIdentity.SpamList;
-		
 		if (spam==null) throw new Exception("@500 Invalid mail address");
 		String lp = J.getLocalPart(spam);
 		if (lp.compareTo("server")==0) throw new Exception("@500 Can't ban a server. use *@"+J.getDomain(spam));
 		MailBox MB = Mid.UsrOpenW(Config,J.getLocalPart(fromuser),false);
-		MB.Spam.ProcList(MB.LocalPart, new String[] { chi }, null);
-		if (Config.Debug) Log("spam add ["+chi+"]");
-		Log(Config.GLOG_Event,"SetSpam "+chi);
-		MB.Close();
+		try {
+			MB.Spam.ProcList(MB.LocalPart, new String[] { chi }, null);
+			if (Config.Debug) Log("spam add ["+chi+"]");
+			Log(Config.GLOG_Event,"SetSpam "+chi);
+			} catch(Exception E) { EE=E; }
+			MB.Close();
+		if (EE!=null) throw EE;
 		Send("250 Id=nothing");
 	}
 	
@@ -2647,11 +2983,45 @@ public class SrvSMTPSession extends Thread {
 		String txt="Identification request:\n";
 		txt+="Onion: "+Mid.Onion+"\n";
 		txt+="Nick: "+Mid.Nick+"\n";
-		txt+="Server Sofrware: OnionMail Ver. "+Main.getVersion()+"\n";
-		txt+="Software source id: "+Main.CompiledBy+"\n";
+		
+		if (!Mid.NoVersion) {
+			txt+="Server Sofrware: OnionMail Ver. "+Main.getVersion()+"\n";
+			txt+="Software source id: "+Main.CompiledBy+"\n";
+			}
+		
 		txt+="RunString: "+Mid.GetRunString()+"\n";
 		txt+="VMAT Support: "+( (Mid.VMAT==null) ? "Disabled" : "Enabled")+"\n";
 		txt+="\nCertificate SHA-1: "+LibSTLS.GetCertHash(Mid.MyCert)+"\n";
+		
+		if (con instanceof SSLSocket) {
+			SSLSocket x = (SSLSocket) con;
+			SSLSession ha = x.getHandshakeSession();
+			SSLSession s = x.getSession();
+			txt+="SSL: YES\n";
+			if (ha!=null) {
+				txt+="SSL HandShake session info:\n"; 
+				txt+="SSL Chiper Suite: "+	ha.getCipherSuite()+"\n";
+				txt+="SSL Protocol: "+ha.getProtocol()+"\n";
+				txt+="SSL ID: "+Stdio.Dump(ha.getId())+"\n";
+				txt+="\n";
+				}
+				//TODO Verificare conf ssl
+			if (s!=null) {
+				txt+="SSL Session info:\n";
+				txt+="SSL Chiper Suite: "+	s.getCipherSuite()+"\n";
+				txt+="SSL Protocol: "+s.getProtocol()+"\n";
+				txt+="SSL ID: "+Stdio.Dump(s.getId())+"\n";
+				txt+="\n";
+				}
+			
+			txt+="SSL Protocols: ";
+			String t0[] = x.getSupportedProtocols();
+			for(String k:t0) {
+				txt+=k+" ";
+				}
+			txt+="\n";
+			
+			} else txt+="SSL: NO\n";
 		
 		if (Mid.IdentText!=null) {
 			txt+="\nServer comment:\n";
@@ -2728,7 +3098,7 @@ public class SrvSMTPSession extends Thread {
 			MailingList ML = Mid.OpenMailingList(list);
 			String fr = ML.GetRulezFile();
 			ML.Close();
-			SA_RULEZ(from,fr);
+			SA_RULEZ(from,fr,"");
 			Send("250 Id=nothing");
 			return;
 			}
@@ -3027,6 +3397,8 @@ public class SrvSMTPSession extends Thread {
 	Re.Par.put("exitroute", Re.Par.get( Mid.EnterRoute ? "yes":"no"));
 	Re.Par.put("exitnotice", Re.Par.get( Mid.ExitNoticeE ? "yes":"no"));
 	Re.Par.put("logvoucher", Re.Par.get( Mid.LogVoucherTo!=null ? "yes":"no"));
+	Re.Par.put("ruleznews", Re.Par.get( Mid.EnableRulezNews ? "yes":"no"));
+	
 	Re.Par.put("vmat", Re.Par.get("yes"));
 	Re.Par.put("msgxhour", Mid.MaxMsgXUserXHour==0 ? Re.Par.get("nomsgxhour") : 	Integer.toString(Mid.MaxMsgXUserXHour));
 	Re.Par.put("nick",Mid.Nick);
@@ -3037,88 +3409,10 @@ public class SrvSMTPSession extends Thread {
 	Send("250 Id=Nothing");	
 	} 
 	
-	private void SA_RULEZ(String da,String per) throws Exception {
-		String rul="";
-		if (per!=null) { rul=per+"\n";	 }
-		rul+=Mid.Maildir+"/rulez.eml\n";
-		rul+=Mid.Maildir+"/rulez.txt\n";
-		rul+=Mid.Maildir+"/rulez.rul\n";
-		rul+=Config.RootPathConfig+"rulez.eml\n";
-		rul+=Config.RootPathConfig+"rulez.rul\n";
-		rul+=Config.RootPathConfig+"rulez.txt";
-		rul=rul.trim();
-
-		for(String tr: rul.split("\\n+")) {
-			
-					if (new File(tr).exists()) {
-						boolean isr = tr.endsWith(".rul");
-						
-						FileInputStream r=null;
-						BufferedReader l=null;
-						MailBoxFile  ru=null;
-						HashMap <String,String> H=null;
-						if (isr) {
-							ru = new MailBoxFile();
-							ru.OpenAES(tr, Mid.Sale, false);
-							String tmp="";
-							while(true) {
-								String li = ru.ReadLn();
-								if (li==null || li.length()==0) break;
-								tmp+=li+"\r\n";
-								}
-							
-							l = J.getLineReader( new ByteArrayInputStream( tmp.getBytes()));
-							H = J.ParseHeaders(l);
-							H = J.FilterHeader(H);
-							tmp=null;
-							
-							} else {
-							r = new FileInputStream(tr);
-							l = J.getLineReader(r);
-							H = J.ParseHeaders(l);
-							H = J.FilterHeader(H);
-							}
-						
-						H.put("x-generated", "server cmd");
-						H.put("from", "server@"+Mid.Onion);
-						if (!H.containsKey("subject")) H.put("subject", Mid.Nick+" RULEZ ("+Mid.Onion+")");
-						H.put("to", da);
-						H.put("date", Mid.TimeString());
-						String msg="";
-						while(true) {
-							String s;
-							if (isr) s= ru.ReadLn(); else s = l.readLine();
-							
-							if (s==null) break;
-							s=s.replace("\r", "");
-							s=s.replace("\n", "");
-							msg+=s+"\n";
-							}
-						if (isr) ru.Close(); else {
-							l.close();
-							r.close();
-							}
-						
-						if (PGPSession) msg=Mid.SrvPGPMessage(da,H,msg);	
-						Mid.SendMessage(da, H, msg);
-						msg=null;
-						Send("250 Id=nothing");
-						return;
-					}
-			}
-		
-		Log(Config.GLOG_Event,"No rulez set in[] "+rul);
-		
-		HashMap <String,String> H = new HashMap <String,String>();
-		H.put("x-generated", "server cmd");
-		H.put("from", "server@"+Mid.Onion);
-		H.put("subject", Mid.Nick+" RULEZ ("+Mid.Onion+")");
-		H.put("to", da);
-		H.put("date", Mid.TimeString());
-		Mid.SendMessage(da, H, "NO RULEZ SET\n");
-		
+	private void SA_RULEZ(String da,String per,String osection) throws Exception { //XXX Moved to SrvIdentity!
+		Mid.SA_RULEZ(da, per, osection, PGPSession,false);
 		Send("250 Id=nothing");
-	}
+		}
 	
 	private void SA_VMAT(String from,String msg) throws Exception {
 		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
@@ -3251,9 +3545,11 @@ public class SrvSMTPSession extends Thread {
 			if (serverMode==SMTPServer.SM_InetAlt) re+="A";
 			if (serverMode==SMTPServer.SM_TorServer) re+="T";
 			re+=" "+Mid.Nick;
-			if (MailFrom!=null) re+="/A_"+Long.toString(MailFrom.hashCode(),36);
+			if (MailFrom!=null) re+="/A_"+J.UserLog(Mid,MailFrom);
 			return re;
 		}
+
+		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
 		

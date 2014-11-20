@@ -22,6 +22,9 @@ package org.tramaci.onionmail;
 import java.io.BufferedReader;
 import java.io.OutputStream;
 import java.net.Socket;
+
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
 
 public class SrvAction {
@@ -46,6 +49,11 @@ public class SrvAction {
 	public MXRecord[] MX = null;	
 	public boolean InternetConnection=false;
 	
+	public boolean acceptAllCrt=false;
+	
+	public SSLParameters SSLParam = null;
+	public SSLSession SSLSess = null;
+				
 	public String Tag="SrvAction";
 	
 	public SMTPReply firstReply=null;
@@ -53,7 +61,21 @@ public class SrvAction {
 	public Object[] RES=null;
 	public Object[] REQ=null;
 	
+	public static final int  APOX_INIT=0;
+	public static final int  APOX_CONNECT=1;
+	public static final int  APOX_HELLO=2;
+	public static final int  APOX_STARTTLS=3;
+	public static final int  APOX_STARTTLS_HELLO=4;
+	public static final int  APOX_TKIM=5;
+	public static final int  APOX_SESSION=6;
+	public static final int  APOX_END=7;
+	public int ActionPosition = APOX_INIT;
+	
 	public ExitRouterInfo currentExit=null;
+	public boolean TKIMOk=false;
+	public boolean isInSSL=false;
+	public boolean TestTKIM=false;
+	public SSLSocket SSLSocketPointer=null;
 	
 	SrvAction(SrvIdentity s,String connectTo,String t) {
 		Mid=s;
@@ -73,6 +95,9 @@ public class SrvAction {
 	public void Do() throws Exception {
 		
 		try {
+			ActionPosition= APOX_CONNECT;
+			TKIMOk=false;
+			isInSSL=false;
 			if (MX==null) MX = new MXRecord[] { new MXRecord(1,Server) };
 			int cx = MX.length-1;
 			for (int ax=0;ax<=cx;ax++) try {
@@ -91,6 +116,7 @@ public class SrvAction {
 			RO = RS.getOutputStream();
 			RI  =J.getLineReader(RS.getInputStream());
 			RS.setSoTimeout(Mid.Config.MaxSMTPSessionInitTTL);
+			ActionPosition= APOX_HELLO;
 			Re = new SMTPReply(RI);
 			firstReply=Re;
 			if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
@@ -109,18 +135,51 @@ public class SrvAction {
 			if (!SupTLS && DoInSSL && ForceSSL) throw new Exception("@500  Doesn't support STARTTLS `"+Server+"`");
 			if (!SupTORM && ForceTKIM) throw new Exception("@500 Doesn't support TORM `"+Server+"`");
 			if (!SupTKIM && ForceTKIM)  throw new Exception("@500 Doesn't support TKIM `"+Server+"`");
-						
+			
+			isInSSL=false;
+			
 			if (SupTLS && DoInSSL) try {
+				ActionPosition= APOX_STARTTLS;
 				Re = SrvSMTPSession.RemoteCmd(RO,RI,"STARTTLS");
 				if (Re.Code<200 || Re.Code>299) throw new Exception("@500 STARTLS Error `"+Server+"`");
-				SSLSocket SS = LibSTLS.ConnectSSL(RS, Mid.SSLClient,Server);
-				Mid.CheckSSL(SS, Server,Tag);
+				
+				SSLSocket SS=null;
+				try {
+					SS = LibSTLS.ConnectSSL(RS, Mid.SSLClient,Server);
+					} catch(Exception SE) {
+						if (Mid!=null) Mid.SSLErrorTrack(Server, SrvIdentity.SSLEID_Err);
+						throw SE;
+					}
+				SSLSocketPointer=SS;
+				
+				try {
+					SSLParam = SS.getSSLParameters();
+					SSLSess = SS.getSession();
+					} catch(Exception I) {}
+				
+				if (!acceptAllCrt) {
+						try {
+							Mid.CheckSSL(SS, Server,Tag);
+							
+							} catch(Exception E) {
+								if (E instanceof SException) {
+									SException SE = (SException) E;
+									SE.SSLParam=SSLParam;
+									SE.SSLSess=SSLSess;
+									SE.Host=HostName;
+									OnSSLError(SE);
+									}
+								throw E;
+								}
+						} else if (Mid.Config.Debug) Mid.Log("SrvAction: AllCRT");
+								
 				RO = null;
 				RO = SS.getOutputStream();
 				RI=null;
 				RI=J.getLineReader(SS.getInputStream());
 				RS=SS;	
-				
+				isInSSL=true;
+				ActionPosition= APOX_STARTTLS_HELLO;
 				Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+HostName);
 				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 				SupTORM = SrvSMTPSession.CheckCapab(Re,"TORM");
@@ -137,25 +196,32 @@ public class SrvAction {
 					}
 						
 			if (SupTKIM && DoInTKIM) {
+				ActionPosition= APOX_TKIM;
 				Re = SrvSMTPSession.RemoteCmd(RO,RI,"TKIM");
 				if (Re.Code<299 || Re.Code>399) throw new Exception("@"+Re.toString().trim()+ " (remote)"); //chkkk
 				byte[] rnd = Re.getData();
+				if (rnd.length!=256) throw new PException("@550 Invalid remote TKIM/RAND data: "+Tag+" `"+Server+"`"); 
 				try { rnd = Stdio.RSASign(rnd, Mid.SSK); } catch(Exception E) { 
 						Mid.Config.EXC(E, Tag+".RSASign(`"+Server+"`)");
 						rnd = new byte[0];
 						}
 				SMTPReply.Send(RO,220,J.Data2Lines(rnd, "TKIM/1.0 REPLY"));
 				Re = new SMTPReply(RI);
-				if (Re.Code<200 || Re.Code>299) Mid.Log(Config.GLOG_Event,Tag+": `"+Server+"` Error: "+Re.toString().trim());
-				}
+				if (Re.Code<200 || Re.Code>299) {
+						TKIMOk=false;
+						Mid.Log(Config.GLOG_Event,Tag+": `"+Server+"` Error: "+Re.toString().trim());
+						if (!TestTKIM) throw new Exception("@"+Re.Code+" TKIM Error: "+Re.Msg[0]);
+						} else TKIMOk=true;
+				} else TKIMOk=false;
 			
 			if (currentExit!=null) currentExit.setResult(true);
-			
+			ActionPosition= APOX_SESSION;
 			OnSession(RI,RO);
 			try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
 			try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
 			try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
 			try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
+			ActionPosition= APOX_END;
 			} catch(Exception E) {
 				try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
 				try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
@@ -165,4 +231,6 @@ public class SrvAction {
 		}
 	
 	public void OnSession(BufferedReader RI,OutputStream RO) throws Exception { Mid.Log(Tag+": NOP");	}
+	public void OnSSLError(SException Erro) throws Exception { Mid.Log(Tag+": SSLError: "+Erro.getMessage()); }
+	
 }

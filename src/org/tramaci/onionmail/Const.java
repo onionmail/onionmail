@@ -30,13 +30,17 @@ public class Const {
 		public static final int MX_Friends=				0x1A0B;
 		public static final int MX_Alias=					0x1A0C;
 		public static final int MX_RVMAT=				0x1A0D;
+		public static final int MX_SSLEID=				0x1A11;
+		
+		public static final int FI_RULEZ=				0x2b01;
+		public static final String RULEZNEWS=		"rulez-news";
 		public static final int MX_DERK=				0x7310;
 		public static final int MX_ExitRouterInfo=0x1A0E;
 		public static final int MX_RemotePhFile=	0xFCAF;
 		public static final int MX_RemotePhFileS=	0xFCAE;
 		public static final int MX_E_Boot=				0x7C01;
 		public static final int MX_1_Boot=				0x7C00;
-		
+				
 		public static final int MX_RKCTL=				0xfc4a;
 		
 		public static final int MS_Server = 			0x701;

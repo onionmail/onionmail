@@ -26,10 +26,8 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.io.RandomAccessFile;
 import java.math.BigInteger;
 import java.net.InetAddress;
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.Date;
@@ -200,6 +198,20 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public boolean VerfySenderViaSimulation=true;
 		public boolean NoBootFromSameMachine=false;
 		public boolean AutoDeleteReadedMessages=true;
+
+		public int SSLETRefreshRate = 15; //min
+		public boolean TORControlConf=false;
+		public int TORControlPort = 9151;
+		public String TORControlIP = null;
+		public String TORControlPass = "foo";
+		public int TORIdentityNumber=1;
+		public int MaxSSLEHash=3;
+		public int MaxSSLEHashP=10;
+		public boolean SSLSysopMessages=true;
+		public boolean SSLEDisabled = false;
+		public int TORCheckPolling = 0; //min
+		
+		public HashMap <String,String> DefaultUserConfig=null;
 		
 		public RSALog RLOG = null;
 		
@@ -355,10 +367,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			C.SMPTServer[ne].DisabledVMAT="\n";
 			C.SMPTServer[ne].AutoDeleteReadedMessages = C.AutoDeleteReadedMessages;
 			C.SMPTServer[ne].HTTPBasePath  = C.HTTPBasePath;
+			
 			for (String k:C.HTTPCached.keySet()) C.SMPTServer[ne].HTTPCached.put(k, C.HTTPCached.get(k));
 			for (String k:C.HTTPETEXVar.keySet()) C.SMPTServer[ne].HTTPETEXVar.put(k, C.HTTPETEXVar.get(k));
 			for (String k:C.HTTPAccess.keySet()) C.SMPTServer[ne].HTTPAccess.put(k, C.HTTPAccess.get(k));
 			for (String k:C.VMATErrorPolicy.keySet()) C.SMPTServer[ne].VMATErrorPolicy.put(k, C.VMATErrorPolicy.get(k));
+			if (C.SMPTServer[ne].DefaultUserConfig !=null) for (String k:C.DefaultUserConfig.keySet()) C.SMPTServer[ne].DefaultUserConfig.put(k, C.DefaultUserConfig.get(k));
 			
 			if (C.IAMOnion!=null) {
 					C.SMPTServer[ne].IAMOnion=new HashMap<String,String>();
@@ -405,6 +419,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						if (cmd.compareTo("identtextfile")==0) {
 							C.SMPTServer[ne].IdentText = J.MapPath(CPath, tok[1]);
 							if (!new File(C.SMPTServer[ne].IdentText).exists()) throw new Exception("IdentTextFile not found `"+C.SMPTServer[ne].IdentText+"`");
+							continue;
+						}
+							
+						if (cmd.compareTo("usrconfig")==0 && tok[1].compareToIgnoreCase("clear")==0) {
+							C.SMPTServer[ne].DefaultUserConfig = null;
 							continue;
 						}
 						
@@ -467,6 +486,16 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
+						if (cmd.compareTo("sslpermitautoupdate")==0) { 
+										C.SMPTServer[ne].SSLEIDPermitAutoChange  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("sslsenderrormsg")==0) { 
+										C.SMPTServer[ne].SSLEIDSendUserMessage  = Config.parseY(tok[1]);
+										continue;
+										}
+												
 						if (cmd.compareTo("showfriends")==0) { 
 										C.SMPTServer[ne].ShowFriends  = Config.parseY(tok[1]);
 										continue;
@@ -492,10 +521,20 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
-						if (cmd.compareTo("hashttp")==0) { 
+						if (cmd.compareTo("hashttp")==0) {
 										C.SMPTServer[ne].HasHTTP  = Config.parseY(tok[1]);
+										if (C.SMPTServer[ne].HasHTTP && C.SMPTServer[ne].HTTPSServer) throw new Exception("HTTPS Server arelady defined");
 										continue;
 										}
+						
+						if (cmd.compareTo("hashttps")==0) {
+										if (C.SMPTServer[ne].HasHTTP) throw new Exception("HTTP Server arelady defined");
+										C.SMPTServer[ne].HasHTTP  = Config.parseY(tok[1]);
+										C.SMPTServer[ne].HTTPSServer = C.SMPTServer[ne].HasHTTP;
+										continue;
+										}
+						
+						
 						
 						if (cmd.compareTo("httpservername")==0) { 
 										C.SMPTServer[ne].HTTPServerName  =tok[1];
@@ -965,6 +1004,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							continue;
 						}
 					
+						if (cmd.compareTo("enableruleznews")==0) {
+							C.SMPTServer[ne].EnableRulezNews = Config.parseY(tok[1]);
+							continue;
+							}
+						
 						if (cmd.compareTo("lang")==0) {
 							C.SMPTServer[ne].DefaultLang =J.GetLangSt(tok[1]);
 							if (C.SMPTServer[ne].DefaultLang==null) throw new Exception("Invalid or unknown language `"+tok[1]+"`");
@@ -982,6 +1026,36 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							C.SMPTServer[ne].PublicControlIP=Config.ParseIp(tok[1]);
 							continue;
 							}
+						
+						if (cmd.compareTo("defusrnews")==0) {
+							if (C.SMPTServer[ne].DefaultUserConfig == null ) C.SMPTServer[ne].DefaultUserConfig=new HashMap <String,String>();
+							 C.SMPTServer[ne].DefaultUserConfig.put("newsrulez", "1");
+							 tok[1]=tok[1].toLowerCase().trim();
+							 if (!tok[1].matches("[a-z0-9\\_\\-]{1,40}")) throw new Exception("Invalid rulez section");
+							  C.SMPTServer[ne].DefaultUserConfig.put("newsrulez-"+tok[1], "0def");
+							  continue;
+							}
+						
+						if (cmd.compareTo("defusr")==0) {
+							String[] Tk = tok[1].split("\\s+");
+							if (Tk.length<2) throw new Exception("Syntax error");
+							if (C.SMPTServer[ne].DefaultUserConfig == null ) C.SMPTServer[ne].DefaultUserConfig=new HashMap <String,String>();
+							C.SMPTServer[ne].DefaultUserConfig.put(Tk[0].trim(), Tk[1].trim());
+							continue;
+						}
+						
+						if (cmd.compareTo("onupdatenews")==0) {
+							String[] Tk = tok[1].split("\\s+");
+							int cx = Tk.length;
+							C.SMPTServer[ne].OnUpdateUserNews="";
+							for (int ax=0;ax<cx;ax++) {
+								Tk[ax]=Tk[ax].toLowerCase().trim();
+								if (!Tk[ax].matches("[a-z0-9\\-\\_]{1,40}")) throw new Exception("Invalid rulez name `"+Tk[ax]+"`");
+								C.SMPTServer[ne].OnUpdateUserNews+=Tk[ax]+" ";
+								}
+							C.SMPTServer[ne].OnUpdateUserNews=C.SMPTServer[ne].OnUpdateUserNews.trim();
+							continue;
+						}
 						
 						if (cmd.compareTo("maxmsgsize")==0) {
 							String st0 =tok[1].replace(" ", "");
@@ -1055,6 +1129,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 
 			BufferedReader br;
 			Config C = new Config();
+			C.TORIdentityNumber = 1;
+				
 			C.LocalFisrtIp=0;
 			C.MaxHosts=0;
 			String RunBanner=null;
@@ -1140,6 +1216,47 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									if (!x.exists() || !x.isDirectory() || !x.canRead()) throw new Exception("Path access error `"+CPath+"`");
 									}
 								
+								if (cmd.compareTo("ssletrefreshrate")==0) { fc=true; C.SSLETRefreshRate = Config.parseInt(tok[1], "minutes", 5, 1440); }
+								
+								if (cmd.compareTo("torcheckpolling")==0) { 
+										fc=true; 
+										String t = tok[1].toLowerCase().trim();
+										if (t.contains("h")) {
+											t = t.replace("h","").trim();
+											C.TORCheckPolling = Config.parseInt(t, "hours", 1, 96)*60;
+											} else if (t.contains("d")) {
+											t = t.replace("d","").trim();
+											C.TORCheckPolling = Config.parseInt(t, "days", 1, 30)*1440;
+											} else if (t.contains("m")) {
+												t = t.replace("m","").trim();
+												C.TORCheckPolling = Config.parseInt(t, "minutes", 5, 1440);
+											} else if (
+														t.compareTo("no")==0 || 
+														t.compareTo("disabled")==0
+														) {
+												C.TORCheckPolling=0;
+											} else throw new Exception("Syntax error: Specify n{M|H|D}");
+										 
+										}
+																
+								if (cmd.compareTo("sslsysopmessages")==0) { fc=true; C.SSLSysopMessages=Config.parseY(tok[1]); }
+								if (cmd.compareTo("disablessle")==0) { fc=true; C.SSLEDisabled=Config.parseY(tok[1]); }
+								
+								if (cmd.compareTo("ssltolerance")==0 && tok.length==3) {
+										fc=true;
+										C.MaxSSLEHashP = Config.parseInt(tok[1].replace("%", "").trim(), "pergentage", 1, 100);
+										C.MaxSSLEHash= Config.parseInt(tok[1], "certificates", 1, 65535);
+										}
+								
+								if (cmd.compareTo("torcontrol")==0 && tok.length==4) {
+										fc=true;
+										if (!tok[1].matches("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}")) throw new Exception("Invalid TOR IP address");
+										C.TORControlIP = tok[1];
+										C.TORControlPort = Config.parseInt(tok[1], "port", 1, 65535);
+										C.TORControlPass = tok[2];
+										C.TORControlConf=true;
+										}
+																
 								if (cmd.compareTo("dnsserver")==0) { fc=true; C.DNSServer = ParseIp(tok[1]); }
 								if (cmd.compareTo("torip")==0) { fc=true; C.TorIP = ParseIp(tok[1]); }
 								
@@ -1514,6 +1631,23 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("passwordmaxstrangerchars")==0) { fc=true; C.PasswordMaxStrangerChars=Config.parseInt(tok[1],"Chars", 1, 256); }
 								if (cmd.compareTo("maxdofriendold")==0) { fc=true; C.MaxDoFriendOld=Config.parseInt(tok[1],"Minutes", 1, 1440); }
 								
+								if (cmd.compareTo("defusrnews")==0) {
+									if (C.DefaultUserConfig == null ) C.DefaultUserConfig=new HashMap <String,String>();
+									 C.DefaultUserConfig.put("newsrulez", "1");
+									 tok[1]=tok[1].toLowerCase().trim();
+									 if (!tok[1].matches("[a-z0-9\\_\\-]{1,40}")) throw new Exception("Invalid rulez section");
+									  C.DefaultUserConfig.put("newsrulez-"+tok[1], "0def");
+									  fc=true;
+									}
+						
+								if (cmd.compareTo("defusr")==0) {
+									if (tok.length<3) throw new Exception("Syntax error");
+									if (C.DefaultUserConfig == null ) C.DefaultUserConfig=new HashMap <String,String>();
+									C.DefaultUserConfig.put(tok[1].trim(), tok[2].trim());
+									fc=true;
+									}
+								
+								
 								if (cmd.compareTo("vmaterr")==0) {
 									if (tok.length<3) throw new Exception("Syntax error");
 									tok[1]=tok[1].toUpperCase();
@@ -1659,7 +1793,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									C.SPAMSrvCheck = dnsbl.split("\\n+");
 									dnsbl="1";
 								}
-						
+								
 								if (cmd.compareTo("dnsblnochecknetarea")==0) { fc=true; C.DNSBLNoCheck    =NetArea.ParseNet(tok[1]); }
 								
 								if (cmd.compareTo("dnsblcachesize")==0) { fc=true; C.DNSBLCacheSize =Config.parseInt(tok[1],"entry",1024); }

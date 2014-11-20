@@ -46,6 +46,8 @@ public class MailBox {
 	public SrvIdentity SID = null; 
 	public HashMap <String,String> UserProp = new HashMap <String,String>();
 	
+	public String getUserIndex() { return UserIndex; }
+	
 	MailBox(SrvIdentity SE,String lp,String uindexf, PublicKey p, boolean create) throws Exception { 
 		SID=SE;
 		Config=SE.Config;
@@ -145,7 +147,10 @@ public class MailBox {
 			
 			byte[]  bd = Pack();
 			int fr = Index.GetFree();
-			if (fr==-1) throw new Exception("@500 Mailbox full (id-1)");
+			if (fr==-1) {
+					Close(); //ADDED! .dbx.dbx close!
+					throw new Exception("@500 Mailbox full (id-1)");
+					}
 			Index.BlockWrite(fr, bd);
 			Index.Update();
 			DbId = fr;
@@ -327,6 +332,14 @@ public class MailBox {
 		Index=null;
 		UserIndex=null;
 		List=null;
+		}
+
+	public static void AutoClose(MailBox O) throws Exception {
+			if (O==null) return;
+			try { O.Close(); } catch(Exception E) { 
+				O.Log("AutoClose: "+E.getMessage());
+				if (O.Config.Debug) E.printStackTrace();
+				}
 		}
 	
 	public void Log(String st) { Config.GlobalLog(Config.GLOG_Server+Config.GLOG_Event, "MailBox `"+LocalPart+"`", st); 	}

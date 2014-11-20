@@ -23,7 +23,9 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.InputStream;
@@ -33,6 +35,7 @@ import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.URLEncoder;
+
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -47,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32;
 
 import javax.crypto.SecretKey;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -67,6 +71,7 @@ public class SrvIdentity {
 	public int RetryTime=400; 
 	public boolean ShowFriends = true;
 	public boolean Friendly = true;
+	public boolean HTTPSServer=false;
 	
 	public boolean HasHTTP=false;
 	public int LocalHTTPPort = 80;		
@@ -77,6 +82,7 @@ public class SrvIdentity {
 	public HashMap <String,Boolean> HTTPCached = new HashMap <String,Boolean>();
 	public HashMap <String,Integer> HTTPAccess = new HashMap <String,Integer>();
 	public HashMap <String,String> HTTPETEXVar = new HashMap <String,String>();
+	public HashMap <String,String> DefaultUserConfig = null;
 	
 	public String HTTPRootLogin=null;
 	public String HTTPRootPass= null;
@@ -187,6 +193,7 @@ public class SrvIdentity {
 	public volatile int NewUsrLastDayCnt = 0;
 	public int NewUsrLastHour = 0;
 	public volatile int NewUsrLastHourCnt = 0;
+	public volatile boolean EnableRulezNews = true;
 	
 	public boolean NewLstEnabled = false;
 	public int NewLstMaxXDay = 0;
@@ -237,6 +244,8 @@ public class SrvIdentity {
 	public volatile int statsRunningPOP3Session = 0;
 	public volatile int statsMaxRunningPOP3Session = 0;
 	
+	public volatile boolean SSLEIDSendUserMessage = false;
+	
 	public HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 	public HashMap<String,String> IAMOnion=null;
 	
@@ -244,6 +253,9 @@ public class SrvIdentity {
 	public boolean AutoPGP=true;
 	public boolean AutoPGPUpdate=false;
 	public String AutoPGPID = "%n OnionMail Server";
+	
+	public String OnUpdateUserNews = null;
+	//public boolean hasServerNotice=false;
 	
 	public static final int ST_NotLoaded=0;		//A
 	public static final int ST_Loaded=1;				//B
@@ -407,11 +419,17 @@ public class SrvIdentity {
 	}
 	
 	private void StartProcs() throws Exception {
-		/*
+	
+		try { 
+			RefreshRulezList();
+			SaveRulezList();
+			} catch(Exception E) { Config.EXC(E, "RfShRules."+Nick); }
+	
+		
 		//TODO LEVARE!!!
-		if (Main.Oper==0) return;  //TODO LEVARE!!!
+		//if (Main.Oper==0) return;  //TODO LEVARE!!!
 		//TODO LEVARE!!!
-		*/
+		
 		
 		if (Main.Oper!=0) return;
 		if (executor!=null) {
@@ -599,7 +617,7 @@ public class SrvIdentity {
 					if (ls[ax].startsWith("rulez.")) continue;
 					if (ls[ax].compareTo("res")==0) continue;
 					if (ls[ax].compareTo("!FIXME!")==0) return true;
-					throw new Exception("@Server directory error: Unknown content or unsupported server type `"+Maildir+"`");
+					throw new Exception("@Server directory error: Unknown content or unsupported legacy server type `"+Maildir+"`");
 					}
 				return false;
 				}
@@ -644,8 +662,7 @@ public class SrvIdentity {
 		Main.echo("\n");
 		
 	}
-	
-		
+			
 	public void Open(byte[][] sk) throws Exception {
 		
 		File F = new File(Maildir);
@@ -656,9 +673,17 @@ public class SrvIdentity {
 			if (!F.exists()) throw new Exception("Can't open path `"+Maildir+"/"+p+"`");
 			}
 		
-		 F = new File(Maildir+"/net");
-		 if (!F.exists()) if (!F.mkdir()) throw new Exception("Can't create path `"+Maildir+"/net`");
-		 		
+		for (String p : new String[] {  "net" , "data" , "local","rulez" }) {
+			F = new File(Maildir+"/"+p);
+			 if (!F.exists()) {
+				 	if (!F.mkdir()) throw new Exception("Can't create path `"+Maildir+"/net`"); else {
+				 		F.setExecutable(true, true);
+				 		F.setReadable(true, true);
+				 		F.setReadable(true,true);
+				 		}
+			 		}
+			}
+				 		
 		if (Config.UseBootSequence && !new File(Maildir+"/head/boot").exists()) CVMF3805TMP = sk.clone(); else CVMF3805TMP=null; 
 		
 		byte[][] Head = new byte[1][];
@@ -886,6 +911,7 @@ public class SrvIdentity {
 	
 	public void UsrSetConfig(String local,HashMap <String,String> H) throws Exception {
 		HashMap <String,String> O = UsrGetConfig(local);
+		if (O==null) O =new HashMap <String,String> ();
 		for(String K:H.keySet()) O.put(K, H.get(K));
 		String un=UFname(local);
 		un+=".pr";
@@ -1022,11 +1048,15 @@ public class SrvIdentity {
 				un+".pr",
 				null };
 		
+		MailBox M=null;
 		try {
-			MailBox M = UsrOpenW(Config,local,false);
+			M = UsrOpenW(Config,local,false);
 			if (M.Spam !=null && !M.Spam.exists(local)) lst[4] = M.Spam.GetFile(local);
 			M.Close();
-			} catch(Exception E) { Config.EXC(E, "DestroyUser.GetUBL"); } 
+			} catch(Exception E) { 
+					Config.EXC(E, "DestroyUser.GetUBL"); 
+						MailBox.AutoClose(M); 
+						} 
 		
 		for (String f:lst) try {
 			if (f==null) continue;
@@ -1075,17 +1105,36 @@ public class SrvIdentity {
 		
 		String un=UFname(local);
 		Stdio.file_put_bytes(un+".idx",US);
-
+		
+		MailBox M=null;
 		try {
-			MailBox M = UsrOpenW(Config,local,true);
+			M = UsrOpenW(Config,local,true);
 			if (M.Spam !=null && !M.Spam.exists(local)) M.Spam.UsrCreateList(local);
 			M.Close();
 			
-			} catch(Exception E) { Config.EXC(E, "CreateUser.CreateUBL"); } 
+			} catch(Exception E) { 
+				Config.EXC(E, "CreateUser.CreateUBL");
+				MailBox.AutoClose(M); 
+				} 
 		
 		try {
-			UsrSetConfig(local,new HashMap <String,String> ());
+			HashMap <String,String>  uc =new HashMap <String,String>();
+			if (DefaultUserConfig!=null) for (String k:DefaultUserConfig.keySet()) { uc.put(k, DefaultUserConfig.get(k)); }
+			if (uc.containsKey("newsrulez")) {
+				HashMap <String,String> Test= GetNewsRulez();
+				for (String k:Test.keySet()) {
+					String t0="newsrulez-"+k;
+					if (uc.containsKey(t0)) uc.put(t0, Test.get(k));
+					}
+				}
+			UsrSetConfig(local,uc);
+			uc=null;
 			} catch(Exception E) { Config.EXC(E, "CreateUser.MKConf"); }
+		
+		GPG=null;
+		Sk=null;
+		Pk=null;
+		System.gc();
 		
 		}
 	
@@ -1152,7 +1201,18 @@ public class SrvIdentity {
 		if (!Hldr.containsKey("delivery-date")) Hldr.put("delivery-date", TimeString());
 		if (!Hldr.containsKey("message-id")) Hldr.put("message-id", "<"+J.RandomString(16)+"@"+ ((this.EnterRoute && !to.endsWith(".onion")) ? ExitRouteDomain : Onion)+">");
 			
-		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body,null);
+		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body,null,false);
+		}
+	
+	public void SendClearMessage(String to,HashMap <String,String> Hldr,String Body) throws Exception {
+		to = J.getMail(to, false);
+		if (to==null) throw new PException(503,"Inalid mail address");
+		String dom = J.getDomain(to);
+		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
+		if (!Hldr.containsKey("delivery-date")) Hldr.put("delivery-date", TimeString());
+		if (!Hldr.containsKey("message-id")) Hldr.put("message-id", "<"+J.RandomString(16)+"@"+ ((this.EnterRoute && !to.endsWith(".onion")) ? ExitRouteDomain : Onion)+">");
+		Hldr.put("x-ssl", "no");
+		if (dom.compareTo(Onion)==0) SendLocalMessage(J.getLocalPart(to),Hldr,Body); else SendRemoteSession(to,Hldr.get("from"),Hldr, Body,null,true);
 		}
 	
 	public String SrvPGPMessage(String tousr,HashMap <String,String> Hldr,String Body) throws Exception {
@@ -1191,32 +1251,41 @@ public class SrvIdentity {
 	
 	public void SendLocalMessageStream(String MailTo,HashMap <String,String> Hldr,BufferedReader Ms,MailBoxFile Mb) throws Exception {
 		String usr = J.getLocalPart(MailTo);
-		MailBox M = UsrOpenW(Config,usr,false);
-		int mi = M.Index.GetFree();
-		if (mi==-1) {
-			M.Close();
-			throw new PException("@452  Mailbox full!");
-			}
-		
-		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());	
-			long MessageBytes=0;
-		Message MS = M.MsgCreate();
-
-		MS.SetHeaders(Hldr);
-		while(true) {
-			String li;
-			if (Ms!=null) li = Ms.readLine(); else li = Mb.ReadLn();
-		
-			MessageBytes+=li.length()+2;
-			if (MessageBytes>MaxMsgSize) {
-				MS.Close();
-				throw new PException("@452 Message too big");
+		MailBox M = null;
+		Message MS=null;
+		try {
+			M= UsrOpenW(Config,usr,false);
+			int mi = M.Index.GetFree();
+			if (mi==-1) {
+				M.Close();
+				throw new PException("@452  Mailbox full!");
 				}
-			if (li.compareTo(".")==0) break;
-			MS.WriteLn(li);
+			
+			if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());	
+				long MessageBytes=0;
+				MS = M.MsgCreate();
+	
+			MS.SetHeaders(Hldr);
+			while(true) {
+				String li;
+				if (Ms!=null) li = Ms.readLine(); else li = Mb.ReadLn();
+			
+				MessageBytes+=li.length()+2;
+				if (MessageBytes>MaxMsgSize) {
+					MS.Close();
+					throw new PException("@452 Message too big");
+					}
+				if (li.compareTo(".")==0) break;
+				MS.WriteLn(li);
+				}
+			MS.End();
+			M.Close();
+		
+		} catch(Exception P) {
+			MailBox.AutoClose(M);
+			if (MS!=null) MS.Close();
+			throw P;
 			}
-		MS.End();
-		M.Close();
 		
 	}
 	
@@ -1225,33 +1294,41 @@ public class SrvIdentity {
 		StatMsgIn++;
 		if (Config.Debug) Log("LocalMessage "+Nick);
 		if (!Hldr.containsKey("date")) Hldr.put("date", TimeString());
-		
-		MailBox M = UsrOpenW(Config,LocalPart,false);
-		int mi = M.Index.GetFree();
-		if (mi==-1) {
-			M.Close();
-			throw new Exception("@500 Mailbox full");
-			}
-		long MessageBytes=0;
-				
-		Message MS = M.MsgCreate();
-		MS.SetHeaders(Hldr);
-		
-		Body=Body.replace("\\r", "");
-		String[] I = Body.split("\\n");
-		
-		for (int ax=0;ax<I.length;ax++) {
-			String li = I[ax];
-			if (li.compareTo(".")==0) break; 
-			MessageBytes+=li.length()+2;
-			if (MessageBytes>MaxMsgSize) {
-				MS.Close();
-				throw new Exception("@500 Message too big");
+		MailBox M=null;
+		Message MS=null;
+		try {
+			M = UsrOpenW(Config,LocalPart,false);
+			int mi = M.Index.GetFree();
+			if (mi==-1) {
+				M.Close();
+				throw new Exception("@500 Mailbox full");
 				}
-			MS.WriteLn(li);
+			long MessageBytes=0;
+					
+			MS = M.MsgCreate();
+			MS.SetHeaders(Hldr);
+			
+			Body=Body.replace("\\r", "");
+			String[] I = Body.split("\\n");
+			
+			for (int ax=0;ax<I.length;ax++) {
+				String li = I[ax];
+				if (li.compareTo(".")==0) break; 
+				MessageBytes+=li.length()+2;
+				if (MessageBytes>MaxMsgSize) {
+					MS.Close();
+					throw new Exception("@500 Message too big");
+					}
+				MS.WriteLn(li);
+				}
+					
+			MS.End();
+			M.Close();
+		} catch(Exception E) {
+			MailBox.AutoClose(M); 
+			if (MS!=null) MS.Close();
+			throw E;
 			}
-		MS.End();
-		M.Close();
 	}
 	
 	public MailingList CreateMailingList(String loc,String tit,String Owner,String Passwd,boolean isopen,boolean isgpg) throws Exception {
@@ -1279,39 +1356,48 @@ public class SrvIdentity {
 	
 	public void SendLocalMessage(String LocalPart,HashMap <String,String> Hldr,MailBoxFile I) throws Exception {
 		StatMsgIn++;
-		
-		MailBox M = UsrOpenW(Config,LocalPart,false);
-		int mi = M.Index.GetFree();
-		if (mi==-1) {
-			M.Close();
-			throw new Exception("@500 Mailbox full");
-			}
-		long MessageBytes=0;
-		
-		Message MS = M.MsgCreate();
-		MS.SetHeaders(Hldr);
-			
-		while(true) {
-			String li = I.ReadLn();
-			if (li==null) break;
-			if (li.compareTo(".")==0) break;
-			
-			MessageBytes+=li.length()+2;
-			if (MessageBytes>MaxMsgSize) {
-				MS.Close();
-				throw new Exception("@500 Message too big");
+		MailBox M =null;
+		Message MS=null;
+		try {
+			M = UsrOpenW(Config,LocalPart,false);
+			int mi = M.Index.GetFree();
+			if (mi==-1) {
+				M.Close();
+				throw new Exception("@500 Mailbox full");
 				}
-			MS.WriteLn(li);
-			}
-		MS.End();
-		M.Close();
-	}
+			long MessageBytes=0;
 			
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,MailBoxFile MBF,String VMATTO) throws Exception { 									RawRemoteSend2(MailFrom,MailTo, Hldr, MBF,null,  null , null ,VMATTO);	}
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,String Msg,String VMATTO) throws Exception { 											RawRemoteSend2(MailFrom,MailTo,Hldr, null, Msg, null,null,VMATTO); 		}
-	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,BufferedReader I, OutputStream O,String VMATTO) throws Exception { 	RawRemoteSend2(MailFrom,MailTo, Hldr,null,null,   I,  O,VMATTO); 				}
+			MS = M.MsgCreate();
+			MS.SetHeaders(Hldr);
+				
+			while(true) {
+				String li = I.ReadLn();
+				if (li==null) break;
+				if (li.compareTo(".")==0) break;
+				
+				MessageBytes+=li.length()+2;
+				if (MessageBytes>MaxMsgSize) {
+					MS.Close();
+					throw new Exception("@500 Message too big");
+					}
+				MS.WriteLn(li);
+				}
+			MS.End();
+			M.Close();
+			} catch(Exception E) {
+				MailBox.AutoClose(M);
+				if (MS!=null) MS.Close();
+				throw E;
+			}
+	}
+	
+
+	
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,MailBoxFile MBF,String VMATTO) throws Exception { 									RawRemoteSend2(MailFrom,MailTo, Hldr, MBF,null,  null , null ,VMATTO,false);		}
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,String Msg,String VMATTO, boolean noSSL) throws Exception { 				RawRemoteSend2(MailFrom,MailTo,Hldr, null, Msg, null,null,VMATTO,noSSL); 		}
+	public void SendRemoteSession(String MailTo,String MailFrom,HashMap <String,String> Hldr,BufferedReader I, OutputStream O,String VMATTO) throws Exception { 	RawRemoteSend2(MailFrom,MailTo, Hldr,null,null,   I,  O,VMATTO,false); 				}
 		
-	private  void RawRemoteSend2(String MailFrom,String MailTo,HashMap <String,String> Hldr,final MailBoxFile MBF,final String MSG, final BufferedReader I,final OutputStream O,String VmatToX) throws Exception {
+	private  void RawRemoteSend2(String MailFrom,String MailTo,HashMap <String,String> Hldr,final MailBoxFile MBF,final String MSG, final BufferedReader I,final OutputStream O,String VmatToX,boolean forceNoSSL) throws Exception {
 		ExitRouterInfo ex=null;
 		String t0=null;
 		String tlp = J.getLocalPart(MailTo);
@@ -1344,6 +1430,11 @@ public class SrvIdentity {
 				tdm = J.getDomain(MailTo);
 				toTor=true;
 				Tag+="-RVMAT";
+				if (tdm.compareTo(Onion)==0) {
+					String fd = J.getDomain(MailFrom);
+					String fl = J.getLocalPart(MailFrom);
+					if (fd.compareTo(Onion)==0) throw new PException("@550 VMAT Loop trouble: Your server is rebouding message.");
+					}
 				} else RVMATLookup = !tdm.endsWith(".onion");
 						
 			}
@@ -1483,8 +1574,8 @@ public class SrvIdentity {
 							}
 					 	} else {
 					 		if (RVMATLookup2) {
-					 				Log("NO VMAT: `"+Server+"` Can't Lookup `"+Long.toString(MailTo2.hashCode(),36)+"`");
-					 				} else if(VmatTo2!=null) Log("NO VMAT: `"+Server+"` Can't VMAT TO `"+Long.toString(VmatTo2.hashCode(),36)+"`");
+					 				Log("NO VMAT: `"+Server+"` Can't Lookup `"+J.UserLog(Mid,MailTo2)+"`");
+					 				} else if(VmatTo2!=null) Log("NO VMAT: `"+Server+"` Can't VMAT TO `"+J.UserLog(Mid,VmatTo2)+"`");
 					 	}
 					
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"DATA");
@@ -1584,6 +1675,56 @@ public class SrvIdentity {
 					RES[0] = MessageBytes;
 					}//session
 			
+				public void OnSSLError(SException Erro) throws Exception { 
+						Log(Tag+": SSLError: "+Erro.getMessage());
+						if (SSLEIDSendUserMessage==false) return;
+						
+						HashMap <String,String> Hldr0 = SrvSMTPSession.ClassicHeaders( "server@"+Onion, MailFrom2);
+						Hldr0.put("subject", "Delivery SSL status");
+						
+						String msg="Sending message to: "+MailTo2+"\r\n";
+						msg+="Action: Message blocked!\r\n";
+						msg+="Error: "+Erro.getMessage()+"\r\n";
+						msg+="Debug SrvAction tag: "+Tag+"\r\n";
+					
+						SSLSession s =Erro.SSLSess;
+						if (s!=null) {
+							msg+="SSL Session info:\n";
+							msg+="SSL Chiper Suite: "+	s.getCipherSuite()+"\n";
+							msg+="SSL Protocol: "+s.getProtocol()+"\n";
+							msg+="SSL ID: "+Stdio.Dump(s.getId())+"\n";
+							msg+="\n";
+							try {
+							java.security.cert.Certificate[] cp = s.getPeerCertificates();
+								if (cp!=null && cp.length>0) {
+									int cx =cp.length;
+									msg+="PeerCertificates:\n";
+									for (int ax=0;ax<cx;ax++) msg+=cp[ax].toString()+"\n";
+									msg+="\n";
+									}
+							 } catch(Exception I) {}
+							try {
+								java.security.cert.Certificate[] cp = s.getLocalCertificates();
+								if (cp!=null && cp.length>0) {
+									int cx =cp.length;
+									msg+="PeerCertificates:\n";
+									for (int ax=0;ax<cx;ax++) msg+=cp[ax].toString()+"\n";
+									msg+="\n";
+									}
+								} catch(Exception I) {}
+							}
+				
+						try {
+							String t0 = MailFrom2;
+							if (J.getLocalPart(t0).endsWith(".onion")) {
+								String dm = J.getDomain(t0);
+								t0 = J.IfInet2Tor(t0, dm);
+								}
+							Mid.SendClearMessage(t0, Hldr0, msg);
+						} catch(Exception E) { Log("Can't send NoSSL x SSL messge: "+E.getMessage()); }
+				
+				}//OnSSLError
+				
 			};//doAction
 		A.RES = new Long[1];
 		A.DoInSSL=true;
@@ -1591,8 +1732,22 @@ public class SrvIdentity {
 		A.ForceSSL= !toInet;
 		A.ForceTKIM = false;
 		A.HostName = toInet ? (MXDomain==null ? ExitRouteDomain : MXDomain) : Onion;
+		
+		if (A.HostName!=null) try {
+			if (SSLErrorTracker.containsKey(A.HostName)) {
+				Integer[] dta = SSLErrorTracker.get(A.HostName);
+				if (0!=(dta[SrvIdentity.SSLEID_Flags]&SrvIdentity.SSLEID_Flags_NoSSL)) {
+					A.DoInSSL=false;
+					Hldr3.put("x-ssl", "no, by SSLEID.");
+					Log("SSLEID: Don't use SSL to `"+A.HostName+"`"); 
+					}
+				}
+			} catch(Exception EX) { Config.EXC(EX, "SSLEID:APP."+Nick); }
+		
 		A.InternetConnection = toInet;
 		A.currentExit=ex;
+		if (forceNoSSL) A.DoInSSL=false;
+						
 		A.Do();
 		
 		StatMsgOut++;
@@ -1640,7 +1795,7 @@ public class SrvIdentity {
 	} 	
 	
 	
-	private String GetFNName(String O) {
+	protected String GetFNName(String O) {
 		try {
 			return Maildir+"/feed/"+ J.md2st(Stdio.md5a(new byte[][] { Sale, O.toLowerCase().getBytes(),"Manifest2".getBytes() }));
 		} catch(Exception E) {
@@ -1724,7 +1879,10 @@ public class SrvIdentity {
 		} catch(Exception E) {
 			if (Config.Debug) Config.EXC(E, "CheckSSL "+cod);
 			//XXX ??? String msg=E.getMessage();
-			throw new Exception(E+" COD="+cod);
+			if (E instanceof SException) {
+				((SException) E).concat("COD="+cod);
+				throw E;
+				} else throw new Exception(E+" COD="+cod);
 		}
 	}
 		
@@ -2575,7 +2733,12 @@ public class SrvIdentity {
 			
 			if (!new File(fn).exists()) {
 				int cx= C.length; 
-				if (CheckCertValidity) for (int ax=0;ax<cx;ax++) C[ax].checkValidity();
+				if (CheckCertValidity) try {
+					for (int ax=0;ax<cx;ax++) C[ax].checkValidity();
+					} catch(Exception SE) {
+					SSLErrorTrack(host, SrvIdentity.SSLEID_Err);
+					throw new SException(SE,"@500 Validity");
+					}
 				Log("New SSL CRT for `"+host+"`");
 				SSLSaveNew(C,host);
 				///SSLToVerify.put(host, Stdio.Dump(hash).toLowerCase());
@@ -2586,13 +2749,353 @@ public class SrvIdentity {
 		String t0 = fn+"h";
 		if (new File(t0).exists()) {
 			byte[] h1 = Stdio.file_get_bytes(fn+"h");
-			if (!Arrays.equals(h1,hash)) throw new Exception("@500 SSL Hash not match `"+host+"`");
+			if (!Arrays.equals(h1,hash)) {
+					SSLErrorTrack(host, SrvIdentity.SSLEID_EHash);
+					throw new SException("@500 SSL Hash not match `"+host+"`");
+					}
 			}
 		
 		byte[] in = Stdio.file_get_bytes(fn);
 		in = Stdio.AES2Dec(X[0], X[0], in);
-		LibSTLS.VerifyChain (in,C,host);
+		try {
+			LibSTLS.VerifyChain (in,C,host);
+			} catch(Exception ES) {
+				SSLErrorTrack(host, SrvIdentity.SSLEID_EHash);
+				throw new SException(ES,"@500 VerifyChain");
+				}
+		
 		if (Config.Debug) Log("SSL OK For `"+host+"` CryptHash `"+Stdio.Dump(LibSTLS.CertHash(C, host))+"`");	
+		
+		if (ifSSLE(host)) SSLErrorTrack(host, SrvIdentity.SSLEID_Ok);
+		
+		}
+		
+		/////////////////////////////// SSLEID SSL //////////////////////////////
+		
+		
+		public static final int SSLEID_First = 0;
+		public static final int SSLEID_Last = 1;
+		public static final int SSLEID_Err = 2;
+		public static final int SSLEID_Ok = 3;
+		public static final int SSLEID_EHash = 4;
+		public static final int SSLEID_EndTime = 5;
+		public static final int SSLEID_Socket = 6;
+		public static final int SSLEID_Hits = 7;
+		public static final int SSLEID_CanChange = 8;
+		public static final int SSLEID_Flags = 9;
+		public static final int SSLEID_CurID = 10;
+		public static final int SSLEID_SIZE = 11;
+		
+		public static final int SSLEID_Flags_Changed=1;
+		public static final int SSLEID_Flags_NoSSL=2;
+		public static final int SSLEID_Flags_BadServer=4;
+		public static final int SSLEID_Flags_IncompatibleSSL = 8;
+		public static final int SSLEID_Flags_Fixed = 16;
+		public static final int SSLEID_Flags_Persistent=128;
+		
+		public static final int SSLEID_Flags_MASK = SSLEID_Flags_Changed | SSLEID_Flags_NoSSL | SSLEID_Flags_BadServer | SSLEID_Flags_IncompatibleSSL | SSLEID_Flags_Persistent | SSLEID_Flags_Fixed;
+		
+		public HashMap <String,Integer[]> SSLErrorTracker = new  HashMap <String,Integer[]>();
+		private volatile long PreventTooManySSLErrorTrackGarbages=0;
+		public volatile boolean SSLEIDPermitAutoChange = false;
+		public volatile boolean iWantChangeIdentity = false;
+		
+		public void SSLEIDCmd(String host,String[] oper) throws Exception {
+			
+				host =host.trim();
+				Integer[] dta;
+				if (SSLErrorTracker.containsKey(host)) dta = SSLErrorTracker.get(host); else dta = J.newInteger(SrvIdentity.SSLEID_SIZE);
+				int cx = oper.length;
+				for (int ax=0;ax<cx;ax++) {
+					oper[ax]=oper[ax].trim();
+					if (oper[ax].length()==0) continue;
+					String[] Tok = oper[ax].split("\\=",2);
+					if (Tok.length!=2) throw new Exception("Syntax error in line "+(cx+1));
+				
+					String nval = Tok[0].toLowerCase().trim();
+					Tok[1]=Tok[1].trim();
+					if (Tok[1].length()==0 || nval.length()==0 ) throw new Exception("Syntax error in line "+(cx+1));
+					
+					int val = J.parseInt(Tok[1].toLowerCase());
+				
+					if (nval.compareTo("tor")==0) dta[SrvIdentity.SSLEID_CurID] = val;
+					if (nval.compareTo("chg")==0) dta[SrvIdentity.SSLEID_CanChange] = val;
+					if (nval.compareTo("ecrt")==0) dta[SrvIdentity.SSLEID_EHash] = val;
+					if (nval.compareTo("err")==0) dta[SrvIdentity.SSLEID_Err] = val;
+					if (nval.compareTo("hit")==0) dta[SrvIdentity.SSLEID_Hits] = val;
+					if (nval.compareTo("ok")==0) dta[SrvIdentity.SSLEID_Ok] = val;
+					if (nval.compareTo("sok")==0) dta[SrvIdentity.SSLEID_Socket] = val;
+					
+					if (nval.compareTo("b")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_BadServer, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+					if (nval.compareTo("c")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_Changed, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+					if (nval.compareTo("i")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_IncompatibleSSL, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+					if (nval.compareTo("n")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_NoSSL, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+					if (nval.compareTo("p")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_Persistent, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+					if (nval.compareTo("f")==0) dta[SrvIdentity.SSLEID_Flags] = J.setBit(SrvIdentity.SSLEID_Flags_Fixed, (int)  dta[SrvIdentity.SSLEID_Flags] , val!=0);
+				}
+				
+			int tcr=(int)(System.currentTimeMillis()/1000L);
+			
+			if (dta[SrvIdentity.SSLEID_First]==0) dta[SrvIdentity.SSLEID_First]=tcr;
+			dta[SrvIdentity.SSLEID_Last] = tcr;
+			dta[SrvIdentity.SSLEID_EndTime] = tcr + (60* Config.SSLETRefreshRate*2);
+			SSLErrorTracker.put(host, dta);
+				
+		}
+		
+		public String SSLEtoString() {
+			 
+			String msg="";
+			
+			int[] par = new int[] {
+					SrvIdentity.SSLEID_CurID				,
+					SrvIdentity.SSLEID_EHash				,
+					SrvIdentity.SSLEID_CanChange		,
+					SrvIdentity.SSLEID_Err					,
+					SrvIdentity.SSLEID_Socket				,
+					SrvIdentity.SSLEID_Ok					,
+					SrvIdentity.SSLEID_Hits					,
+					SrvIdentity.SSLEID_Flags				}
+					;
+			
+			String[] he = new String[] { "T.Id", "ECrt" , "Chg." , "Err." , "Sok.", "Ok", "Hits", "Flags" } ;
+			int[] sz = new int[] { 4,4,4,4,4,4,4,6 } ;
+					
+			
+			msg+=J.Spaced("Host",25)+" ";
+			for (int ax=0;ax<he.length;ax++) msg+=J.Spaced(he[ax],sz[ax])+" ";
+			msg+=J.Spaced("Date",16)+" ";
+			msg+=J.Spaced("Expiry",16)+" ";
+			msg+="\n";
+			
+			for(String host:SSLErrorTracker.keySet()) {
+				Integer[] dta = SSLErrorTracker.get(host);
+				msg+=J.Spaced(host,25)+" ";
+				
+				for (int ax=0;ax<par.length;ax++) {
+					int v = dta[par[ax]];
+					String s = null;
+					
+					if (par[ax]==SrvIdentity.SSLEID_Flags) {
+						s="";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_Fixed)) s+="F"; else s+="-";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_IncompatibleSSL)) s+="I"; else s+="-";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_BadServer)) s+="B"; else s+="-";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_Changed)) s+="C"; else s+="-";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_NoSSL)) s+="N"; else s+="-";
+						if (0!=(v&SrvIdentity.SSLEID_Flags_Persistent)) s+="P"; else s+="-";
+						}
+										
+					if (s==null) s=Integer.toString(v);
+					msg+=J.Spaced(s, sz[ax])+" ";
+					}
+			msg+=J.Spaced(Stdio.relativeDate( (int) dta[SrvIdentity.SSLEID_Last]),16)+" ";
+			
+			if (0!=(dta[SrvIdentity.SSLEID_Flags]& SrvIdentity.SSLEID_Flags_Persistent)) 
+					msg+=J.Spaced("(none)",16)+" "; 
+				else
+					msg+=J.Spaced(Stdio.relativeDate( (int) dta[SrvIdentity.SSLEID_EndTime]),16)+" ";
+			
+			msg+="\n";
+			}
+		return msg;
+		}
+		
+		public void SaveSSLEID() throws Exception {
+			int cx = SSLErrorTracker.size();
+			byte[][] dtb = new byte[cx][];
+			byte[][] dta = new byte[cx][];
+			int bp=0;
+			for(String host:SSLErrorTracker.keySet()) {
+				Integer[] i = SSLErrorTracker.get(host);
+				int cl=i.length;
+				int[] dw = new int[cl];
+				for (int al=0;al<cl;al++) dw[al] = i[al];
+				dtb[bp] = Stdio.Stosxi(dw,2 );
+				dta[bp] = host.getBytes();
+				bp++;
+				}
+			
+			byte[] b = Stdio.MxAccuShifter(new byte[][] {
+						 Stdio.MxAccuShifter(dta,1) ,
+						 Stdio.MxAccuShifter(dtb,2)
+					}, Const.MX_SSLEID,true)
+					;
+			dta=null;
+			dtb=null;
+
+			byte[] key = Stdio.sha256a(new byte[][] { Sale, Subs[3] , Nick.getBytes() } );
+			byte[] iv = Stdio.md5a(new byte[][] { key, Sale });
+			
+			b = Stdio.AES2Enc(key, iv, b);
+			Stdio.file_put_bytes(Maildir+"ssleid.dat", b);
+			
+		}
+		
+		public void LoadSSLEID() throws Exception {
+						
+			String fn =Maildir+"ssleid.dat";
+			if (!new File(fn).exists()) return;
+			
+			byte[] b= Stdio.file_get_bytes(fn);
+
+			byte[] key = Stdio.sha256a(new byte[][] { Sale, Subs[3] , Nick.getBytes() } );
+			byte[] iv = Stdio.md5a(new byte[][] { key, Sale });
+			
+			b = Stdio.AES2Dec(key, iv, b);
+			byte dta[][] = Stdio.MxDaccuShifter(b, Const.MX_SSLEID);
+			b=null;
+			byte dtb[][] = Stdio.MxDaccuShifter(dta[1], 2);
+			dta = Stdio.MxDaccuShifter(dta[0], 1);
+			
+			int cx = dta.length;
+			for (int ax=0;ax<cx;ax++) {
+				int[] dw = Stdio.Lodsxi(dtb[ax], 2);
+				Integer[] val = J.newInteger(SrvIdentity.SSLEID_SIZE);
+				for (int al=0;al<dw.length;al++) val[al]=dw[al];
+				String host = new String(dta[ax]);
+				host=host.toLowerCase().trim();
+				SSLErrorTracker.put(host, val);
+				}
+			
+			dta=null;
+			dtb=null;
+			
+		}
+			
+		public void CheckSSLOperations() throws Exception {
+			int eHash=0;
+			int nHost=0;
+			boolean lastExitBad=false;
+
+			String cld="";
+			int tcr = (int) (System.currentTimeMillis()/1000L);
+			String msg="";
+			
+			for (String host:SSLErrorTracker.keySet()) {
+				nHost++;
+				Integer[] dta = SSLErrorTracker.get(host);
+				
+				if (0!=(dta[SrvIdentity.SSLEID_Flags] & SrvIdentity.SSLEID_Flags_Fixed)) continue;
+				
+				if (host.endsWith(".onion")) {
+					dta[SrvIdentity.SSLEID_Flags] |= SrvIdentity.SSLEID_Flags_BadServer;
+					eHash++;
+					continue;
+					}
+				
+				if (dta[SrvIdentity.SSLEID_Err]>0) {
+							if (dta[SrvIdentity.SSLEID_Err]>0 && dta[SrvIdentity.SSLEID_Ok] ==0) {
+									dta[SrvIdentity.SSLEID_Flags] |= SrvIdentity.SSLEID_Flags_NoSSL | SrvIdentity.SSLEID_Flags_Persistent | SrvIdentity.SSLEID_Flags_IncompatibleSSL;
+									Log("The SSL Certificate of `"+host+"` is incompatible.");
+									msg+="The SSL Certificate of `"+host+"` is incompatible.\n";
+									}
+							}  	
+								
+				if (dta[SrvIdentity.SSLEID_CurID]==Config.TORIdentityNumber) {
+						if (dta[SrvIdentity.SSLEID_EHash]>0) {
+								eHash++;
+								if ( dta[SrvIdentity.SSLEID_EHash]>dta[SrvIdentity.SSLEID_Ok] ) dta[SrvIdentity.SSLEID_CanChange]++;
+								dta[SrvIdentity.SSLEID_EHash]=0;
+								dta[SrvIdentity.SSLEID_Ok]=0;
+								dta[SrvIdentity.SSLEID_EndTime] = (int)(System.currentTimeMillis()/1000L)+86400;
+								Log("The SSL Certificate of `"+host+"` is changing.");
+								msg+="The SSL Certificate of `"+host+"` is changing.\n";
+								}
+					
+					} else {
+						if (dta[SrvIdentity.SSLEID_EHash]>0) {
+								if ( dta[SrvIdentity.SSLEID_EHash]>dta[SrvIdentity.SSLEID_Ok] ) {
+									dta[SrvIdentity.SSLEID_Flags] |= SrvIdentity.SSLEID_Flags_Changed;
+									dta[SrvIdentity.SSLEID_EndTime] = (int)(System.currentTimeMillis()/1000L)+86400;
+									dta[SrvIdentity.SSLEID_CurID] = Config.TORIdentityNumber;
+									if (SSLEIDPermitAutoChange) try {
+											Log("The SSL Certificate of `"+host+"` is updated");
+											msg+="The SSL Certificate of `"+host+"` is updated\n";
+											String fn = GetFNName(host)+".crt";
+											new File(fn).delete();
+											new File(fn+"h").delete();
+											} catch(Exception I) {
+												Config.EXC(I, "SSLOperations.ChCRT."+Nick);
+											} else {
+												msg+="Please verify the SSL Certificate of `"+host+"`\n";
+												Log("The SSL Certificate of `"+host+"` is changed. Please verify!");
+											}
+									}
+								}
+					if (dta[SrvIdentity.SSLEID_EHash]==0 && dta[SrvIdentity.SSLEID_Ok]>0 && dta[SrvIdentity.SSLEID_CanChange]>0) {
+						 dta[SrvIdentity.SSLEID_Flags]=0;
+						 dta[SrvIdentity.SSLEID_EndTime]=0;
+						 lastExitBad=true;
+						}
+					}
+			SSLErrorTracker.put(host, dta);
+			
+			if (
+					(dta[SrvIdentity.SSLEID_Flags]&SrvIdentity.SSLEID_Flags_Persistent)==0 &&
+					tcr>dta[SrvIdentity.SSLEID_EndTime]
+					) cld+=host+"\n";
+			}			
+		
+			for (String host:cld.split("\\n+")) SSLErrorTracker.remove(host);
+			PreventTooManySSLErrorTrackGarbages=System.currentTimeMillis()+5000L;
+			
+			int p =(int)  Math.ceil((eHash / (nHost!=0 ? nHost : 1))*100.0);
+			if (eHash>Config.MaxSSLEHash || p>Config.MaxSSLEHashP) iWantChangeIdentity=true;
+			if (eHash>0) Log("Bad SSL Hosts = "+eHash+" Change identity = "+ ( iWantChangeIdentity ? "yes": "no")+" LastExit was bad = "+(lastExitBad?"Yes":"no"));
+			
+			if (eHash>0) msg="Bad SSL Hosts "+eHash+"\n"+msg;
+			if (iWantChangeIdentity) msg="I Whant to change TOR identity!\n"+msg;
+			if (lastExitBad) msg="Last TOR ExitNode is bad!\n"+msg;
+			if (Config.SSLSysopMessages && msg.length()>0) try {
+				msg+=SSLEtoString();
+				msg=msg.replace("\n", "\r\n");
+				HashMap <String,String> Hldr= SrvSMTPSession.ClassicHeaders("server@"+Onion, "sysop@"+Onion);
+				SendLocalMessage("sysop", Hldr, msg);
+				msg=null;
+				} catch(Exception I) { Config.EXC(I,Nick+": Can't send sysop SSL message!"); }
+			
+		}
+		
+		public boolean ifSSLE(String host) { 
+				if (Config.SSLEDisabled) return false;
+				return SSLErrorTracker.containsKey(host.toLowerCase().trim()); }
+		
+		public void SSLErrorTrack(String host,int SSLEID) throws Exception {
+			if (Config.SSLEDisabled) return;
+			
+			host=host.toLowerCase().trim();
+			long tcrl = System.currentTimeMillis();
+			int tcr = (int) (tcrl/1000L);
+			Integer[] dta=null;
+			if (SSLErrorTracker.containsKey(host)) dta = SSLErrorTracker.get(host); else {
+				dta = J.newInteger(SrvIdentity.SSLEID_SIZE);
+				dta[SrvIdentity.SSLEID_First] = tcr;
+				dta[SrvIdentity.SSLEID_CurID]=Config.TORIdentityNumber; 
+				}
+					
+			dta[SSLEID]++;
+			dta[SrvIdentity.SSLEID_Hits]++;
+			dta[SrvIdentity.SSLEID_Last] = tcr;
+			dta[SrvIdentity.SSLEID_EndTime] = tcr+ (Config.SSLETRefreshRate*120);
+			
+			SSLErrorTracker.put(host, dta);
+			
+			if (PreventTooManySSLErrorTrackGarbages>tcrl) return;
+			PreventTooManySSLErrorTrackGarbages=tcrl+5000L;
+			
+			synchronized(SSLErrorTracker) {
+				String del="";
+				for(String k:SSLErrorTracker.keySet()) {
+					dta = SSLErrorTracker.get(k);
+					if ((dta[SrvIdentity.SSLEID_Flags]&SrvIdentity.SSLEID_Flags_Persistent)!=0) continue;
+					if (tcr>dta[SrvIdentity.SSLEID_EndTime]) del +=k+"\n";
+					}
+				
+				String garb[] = del.split("\\n+");
+				for (String k:garb) SSLErrorTracker.remove(k);
+				}
+						
 		}
 		
 		//////////////
@@ -2631,6 +3134,9 @@ public class SrvIdentity {
 			}
 			return pw;
 		}
+		
+		
+		
 	/*
 		public void ChechPendingSSL(HashMap <String,String> hls,String[] SrvA) throws Exception { //TODO Da usare!
 			int scx=SrvA.length;
@@ -4263,7 +4769,7 @@ byte[][] Cobj = new byte[][] {
 					return true;
 					}
 				} catch(Exception E) {
-					Config.EXC(E, Nick+".setSendingVMAT `"+Long.toString(localpart.hashCode(),36)+"`");
+					Config.EXC(E, Nick+".setSendingVMAT `"+J.UserLog(this,localpart)+"`");
 				}
 			return false;
 		}
@@ -4626,6 +5132,101 @@ public String ExpandStr(String in) {
 	return rs;
 }
 
+///// SSLVerify //////
+
+public String SSLManualVerify(String host,boolean useTKIMv) throws Exception {
+	
+	SrvAction A = new SrvAction(this,host,"SSLMVerif") {
+			public void OnSession(BufferedReader RI,OutputStream RO) throws Exception { 
+					Mid.Log(Tag+": Server Ok, TKIM="+this.TKIMOk);
+					
+					RES[0] +="Session started:\n";
+					RES[0] +="TKIM: "+ (this.SupTKIM ? "Supported" : "Unsupported") + ", "+(this.TKIMOk ? "Verified" : "Not Verified")+"\n";
+					
+			
+					if (this.SupTLS && this.SSLSocketPointer!=null) try {
+						Mid.CheckSSL(this.SSLSocketPointer, this.Server,this.Tag);
+						Mid.Log(Tag+": Server Ok, SSL=Ok");
+						RES[0]+="SSL: OK, Verified\n";
+						} catch(Exception SE) {
+							Mid.Log(Tag+": Server Error, SSL Error: "+SE.getMessage());
+							RES[0]+="SSL: Error "+SE.getMessage()+"\n";
+						} else RES[0]+="SSL Not enabled!\n";
+					
+					if (this.SupTLS && this.SSLSocketPointer!=null) try {
+						SSLSession ha = this.SSLSocketPointer.getHandshakeSession();
+						SSLSession s = this.SSLSocketPointer.getSession();
+						if (ha!=null) {
+							RES[0]+="SSL HandShake session info:\n"; 
+							RES[0]+="SSL Chiper Suite: "+	ha.getCipherSuite()+"\n";
+							RES[0]+="SSL Protocol: "+ha.getProtocol()+"\n";
+							RES[0]+="SSL ID: "+Stdio.Dump(ha.getId())+"\n";
+							RES[0]+="\n";
+							}
+							
+						if (s!=null) {
+							RES[0]+="SSL Session info:\n";
+							RES[0]+="SSL Chiper Suite: "+	s.getCipherSuite()+"\n";
+							RES[0]+="SSL Protocol: "+s.getProtocol()+"\n";
+							RES[0]+="SSL ID: "+Stdio.Dump(s.getId())+"\n";
+							RES[0]+="\n";
+							}
+						
+						RES[0]+="SSL Certificates:\n";
+						javax.security.cert.X509Certificate[] C = LibSTLS.getCert(this.SSLSocketPointer);
+						int cx =C.length;
+						for (int ax=0;ax<cx;ax++) RES[0]+="Certifiate "+(ax+1)+"\n"+C[ax].toString()+"\n\n";
+						} catch(Exception E) {
+							RES[0]+="Error: "+E.getMessage()+"\n";
+							Config.EXC(E, "SSLVerify."+Mid.Nick);
+							if (Config.Debug) E.printStackTrace();
+						}
+					
+					SrvSMTPSession.RemoteCmd(RO,RI,"QUIT");
+					}
+			};
+	
+	A.acceptAllCrt=true;
+	A.DoInSSL=true;
+	A.DoInTKIM=true;
+	A.ForceSSL=true;
+	A.InternetConnection=false;
+	A.ForceTKIM=false;
+	A.TestTKIM=useTKIMv;
+	A.RES = new String[] { "" };
+	
+	A.RES[0]+="Test server and SSL of `"+host+"` ";
+	if (useTKIMv) A.RES[0]+=" using TKIM:\n"; else A.RES[0]+="without TKIM:\n"; 
+	A.RES[0]+="\nBegin SMTP session test:\n\n";
+	Log("Test server `"+host+"` TKIM="+useTKIMv);
+	long tcr=System.currentTimeMillis();
+	try {
+		A.Do();
+		A.RES[0]+="Operation complete!\n";
+		} catch(Exception GE) {
+			A.RES[0]+="Operation Error: "+GE.getMessage()+"\n";
+			A.RES[0]+="Session position: ";
+			if (A.ActionPosition==SrvAction.APOX_CONNECT) A.RES[0]+="Connecting";
+			if (A.ActionPosition==SrvAction.APOX_END) A.RES[0]+="End of session";
+			if (A.ActionPosition==SrvAction.APOX_HELLO) A.RES[0]+="Server EHLO";
+			if (A.ActionPosition==SrvAction.APOX_INIT) A.RES[0]+="Initialize ServerAction";
+			if (A.ActionPosition==SrvAction.APOX_SESSION) A.RES[0]+="SMTP Session in progress";
+			if (A.ActionPosition==SrvAction.APOX_STARTTLS) A.RES[0]+="STARTTLS Handshake";
+			if (A.ActionPosition==SrvAction.APOX_STARTTLS_HELLO) A.RES[0]+="EHLO after STARTTLS Handshake";
+			if (A.ActionPosition==SrvAction.APOX_TKIM) A.RES[0]+="Server TKIM auth";
+			A.RES[0]+="\n";
+		}
+	long ftr = System.currentTimeMillis();	
+	tcr = ftr-tcr;
+	A.RES[0]+="Time length of the transaction "+
+				Long.toString((long)Math.floor(tcr/60000))+":"+
+				Long.toString((long)Math.floor(tcr/1000) % 60)+"."+
+				Long.toString(tcr % 1000)+"\n\n";
+	return (String) A.RES[0];
+	}
+
+//////////// QUEUE/////////////
+
 public MailQueueSender[] QueueSender= null;
 public MailQueue Queue = null;
 private ScheduledExecutorService QueueRun=null;
@@ -4693,6 +5294,214 @@ public void EnableQueue() throws Exception {
 	QueueRun.scheduleAtFixedRate(ServerOp,60,300, TimeUnit.SECONDS); 
 	hasQueue=true;
 	}
+
+public HashMap <String,String> RulezList = null;
+
+public void RefreshRulezList() throws Exception {
+	if (RulezList==null) RulezList=new HashMap <String,String>();
+	for(File dh: new File[] { new File(Config.RootPathConfig) , new File(Maildir),new File(Maildir+"/rulez") }) {
+	String[] lst = dh.list();
+	int cx =lst.length;
+	for (int ax=0;ax<cx;ax++) {
+		String s = lst[ax];
+		
+		if (
+				s.startsWith("rulez") && (
+						s.endsWith(".rul") 	|| 
+						s.endsWith(".txt") )
+						) {
+				String[] Tok = s.split("\\-",2);
+				String sec=null;
+				if (Tok.length>1) sec=Tok[1].toLowerCase(); else sec="rulez."; 
+				Tok = sec.split("\\.");
+				sec=Tok[0].trim();
+				RulezList.put(sec.toLowerCase(), "!");
+			}
+		}
+	}
+
+	for (String f:new String[] { Maildir+"/rulez/rulez.lst" ,  Config.RootPathConfig+"/rulez.list"  }) {
+		if (!new File(f).exists()) continue;
+		byte[] fi = Stdio.file_get_bytes(f);
+		if (f.endsWith(".lst")) {
+				fi = Stdio.AES2Dec(Subs[4], Subs[3], fi);
+				byte[][] r = Stdio.MxDaccuShifter(fi,0x5aa5);
+				fi=r[0];
+				}
+		String lst = new String(fi);
+		fi=null;
+		lst=lst.trim();
+		String[] lin = lst.split("\\n+");
+		int cx =lin.length;
+		if (!lin[0].contains("[RULEZ]")) {
+			Log("Invalid rulez file list `"+f+"`");
+			continue;
+			}
+		for (int ax=1;ax<cx;ax++) {
+			String[] tok = lin[ax].trim().split("\\s+",2);
+			if (tok.length<2) continue;
+			tok[0] = tok[0].toLowerCase();
+			if (tok[0].matches("[a-z0-9\\-\\_]{1,40}") && RulezList.containsKey(tok[0])) {
+					RulezList.put(tok[0], tok[1].trim());
+					}
+			}
+		}
+	}
+
+public void SaveRulezList() throws Exception {
+	String re="[RULEZ]\n";
+	for (String k:RulezList.keySet()) {
+		re=re+k.toLowerCase()+"\t"+RulezList.get(k)+"\n";
+		}
+	byte[] b= re.getBytes();
+	b = Stdio.MxAccuShifter(new byte[][] { b} , 0x5aa5 ,true);
+	b =Stdio.AES2Enc(Subs[4], Subs[3], b);
+	Stdio.file_put_bytes(Maildir+"/rulez/rulez.lst", b);
+	}
+
+public String getRulezText(String per,String osection,HashMap <String,String> Hldr,boolean asNew) throws Exception {
+				
+		osection=osection.toLowerCase().trim();
+		String section="";
+		if (osection.matches("[a-z0-9]{1,40}")) section=osection;
+		boolean isList = section.compareTo("list")==0;
+		String list="";
+		if (isList) {
+			for (String k:RulezList.keySet()) {
+				if (k.contains("-") || k.contains("_")) continue;
+				list+=J.Spaced(k, 20)+J.Spaced(RulezList.get(k), 50)+"\n";
+				}
+			}
+
+		if (section.length()>0) section="-"+section;
+		String[] rul =new String[] {
+					per!=null ? Maildir+"/rulez/"+per+section : null ,
+							Maildir+"/rulez/rulez"+section+".txt",
+							Maildir+"/rulez/rulez"+section+".rul",
+							Maildir+"/rulez"+section+".txt",
+							Maildir+"/rulez"+section+".rul",
+							Config.RootPathConfig+"rulez"+section+".txt",
+							Config.RootPathConfig+"rulez"+section+".rul"}
+							;
+				
+		for(String tr: rul) {
+					if (tr==null) continue;
+					if (new File(tr).exists()) {
+						boolean isr = tr.endsWith(".rul");
+						
+						FileInputStream r=null;
+						BufferedReader l=null;
+						MailBoxFile  ru=null;
+						HashMap <String,String> H=null;
+						if (isr) {
+							ru = new MailBoxFile();
+							ru.OpenAES(tr, Sale, false);
+							String tmp="";
+							while(true) {
+								String li = ru.ReadLn();
+								if (li==null || li.length()==0) break;
+								tmp+=li+"\r\n";
+								}
+							
+							l = J.getLineReader( new ByteArrayInputStream( tmp.getBytes()));
+							H = J.ParseHeaders(l);
+							H = J.FilterHeader(H);
+							tmp=null;
+							
+							} else {
+							r = new FileInputStream(tr);
+							l = J.getLineReader(r);
+							H = J.ParseHeaders(l);
+							H = J.FilterHeader(H);
+							}
+						
+						H.put("x-generated", "server cmd");
+						H.put("from", "server@"+Onion);
+						if (!H.containsKey("subject")) H.put("subject", Nick+" RULEZ "+section.toUpperCase()+" ("+Onion+")");
+						H.put("date", TimeString());
+						String msg="";
+						while(true) {
+							String s;
+							try {
+								if (isr) s= ru.ReadLn(); else s = l.readLine();
+								} catch(EOFException EX) { break; }
+							
+							if (s==null) break;
+							s=s.replace("\r", "");
+							s=s.replace("\n", "");
+							msg+=s+"\n";
+							if (msg.length()>131072) break;
+							}
+						
+						if (isr) ru.Close(); else {
+							l.close();
+							r.close();
+							}
+						
+						if (msg.contains("%%")) {
+							msg=msg.replace("%%ONION%%", Onion);
+							msg=msg.replace("%%NICK%%", Nick);
+							msg=msg.replace("%%EXIT%%", EnterRoute ? ExitRouteDomain : Onion );
+							if (isList) msg=msg.replace("%%LIST%%", list);
+							}
+						if (msg.contains("\\%\\%")) msg=msg.replace("\\%\\%","%%");
+						list=null;
+						
+						for (String k:H.keySet()) {
+							String v = H.get(k);
+							
+							if (v.contains("%%")) {
+								v=v.replace("%%ONION%%", Onion);
+								v=v.replace("%%NICK%%", Nick);
+								v=v.replace("%%EXIT%%", EnterRoute ? ExitRouteDomain : Onion );
+								}
+							Hldr.put(k, v);
+							}
+						
+						Hldr.put("date", TimeString());
+						Hldr.put("x-generated", "server cmd");
+						if (asNew) {
+							String t0 = Hldr.get("subject");
+							if (t0==null) t0="";
+							t0 = ("[RULEZ "+osection.toUpperCase()).trim()+"] "+t0;
+							Hldr.put("subject", t0);
+							Hldr.put("x-generated", "rulez news");
+							}
+						return msg;
+					} 
+			}
+		
+		Log(Config.GLOG_Event,"No rulez set in[] "+rul+" Section= `"+osection+"`");
+		if (asNew) return null;
+		
+		Hldr.put("x-generated", "server cmd");
+		Hldr.put("from", "server@"+Onion);
+		Hldr.put("subject", Nick+" RULEZ "+section.toUpperCase()+" ("+Onion+")");
+		Hldr.put("date", TimeString());
+		return "NO RULEZ SET" + (osection.length()>0 ? " for `"+osection+"`" : "")+"\n";
+		}
+
+public void SA_RULEZ(String da,String per,String osection,boolean PGPSession,boolean asNew) throws Exception {
+		
+		HashMap <String,String> H = new HashMap <String,String>();
+		String msg = getRulezText(per, osection, H,asNew);
+		if (msg==null) return;
+		H.put("to", da);
+		if (asNew) H.put("reply-to", "sysop@"+Onion);
+		
+		if (PGPSession) msg=SrvPGPMessage(da,H,msg);	
+		SendMessage(da, H, msg);
+		msg=null;
+		}
+
+	public HashMap <String,String> GetNewsRulez() {
+		try {
+			byte[][] b = Stdio.SFileLoad(this, Const.RULEZNEWS, Const.FI_RULEZ, true);
+			return J.HashMapUnPack(b[0]);
+			} catch (Exception E) {
+				return new HashMap <String,String>();
+			}
+		}
 
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

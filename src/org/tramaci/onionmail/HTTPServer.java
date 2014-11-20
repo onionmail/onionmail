@@ -56,7 +56,7 @@ public class HTTPServer extends Thread {
 	public volatile String IndexFile="index.etex";
 	public volatile int CAPTCHAMode = 0;
 	public volatile int CAPTCHASize=6;
-	
+	public volatile boolean HTTPSServer = false;
 	public volatile short CountChWidth = 0;
 	public volatile short CountChHeight = 0;
 	public volatile short LastSavedCounter = 0;

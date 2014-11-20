@@ -571,30 +571,68 @@ public class J {
 		return q;
 	}
 	
+	public static String shuffle(String in) {
+		int cx =in.length();
+		char[] c = in.toCharArray();
+		for (int ax=0;ax<cx;ax++) {
+			int r = Stdio.NewRndInt(cx-1);
+			char m = c[ax];
+			c[ax]=c[r];
+			c[r]=m;
+			}
+		return new String(c);
+	}
+	
+	public static String GenEPassword(int sz) {
+		String PWLA="1234567890QAZXSWEDCVFRTGBNHYUJMKIOPLqwedsazxcvfrtgbnhyuioplkjm~|\\`'\"/*-+_<>,.:;@#[]!{=}%)&?($^";
+		PWLA=J.shuffle(PWLA);
+		int PWLAL = PWLA.length();
+		int blo = (int)(Math.floor(sz/PWLAL));
+		int add = sz % PWLAL;
+		String q="";
+		for (int ax=0;ax<blo;ax++) {
+			q+=PWLA;
+			PWLA=J.shuffle(PWLA);
+			q=J.shuffle(q);
+			}
+		if (add>0) q+=J.GenPassword(add,add);
+		q=J.shuffle(q);
+		return q;
+		}
+	
 	public static String GenPassword(int sz,int mcs) {
-		String PWLA="1234567890QAZXSWEDCVFRTGBNHYUJMKIOPLqwedsazxcvfrtgbnhyuioplkjmn";
-		String PWLB="~|\\`'\"/*-+_<>,.:;@#[]+!{=}%)&?($^/";
+		String PWLA="1234567890QAZXSWEDCVFRTGBNHYUJMKIOPLqwedsazxcvfrtgbnhyuioplkjm";
+		String PWLB="~|\\`'\"/*-+_<>,.:;@#[]!{=}%)&?($^";
+		String PWLC=PWLA+PWLB;
+		PWLA = J.shuffle(PWLA);
+		PWLB = J.shuffle(PWLB);
 		int PWLAL=PWLA.length();
-		int PWLBL=PWLB.length();
+		int PWLCL=PWLAL+PWLB.length();
 		String q="";
 		byte[] s = new byte[sz];
 		Stdio.NewRnd(s);
-		int cs=0;
-		int r=0;
+		long rip = Stdio.NewRndLong()&0x7FFFFL;
+		int cs=mcs;
+
 		for (int ax=0;ax<sz;ax++) {
 			int c = (int)(255&s[ax]);
-			c+=r;
-			if (cs<mcs && (c>192)) {
-				cs++;
-				r+= c/PWLBL;
-				c = c % PWLBL;
-				q+=PWLB.substring(c,c+1);
-				} else {
-				c+= c/PWLAL;					
-				c = c % PWLAL;
-				q+=PWLA.substring(c,c+1);
+			boolean str = (cs>0);
+			int mc = str ? PWLCL : PWLAL;
+			rip +=c;
+			c = (int) Math.abs( rip % mc);
+			rip = rip / mc;
+			
+			if (c>PWLAL) cs--;
+			q+=PWLC.charAt(c);
+			
+			if ((ax&3)==0) {
+				PWLA = J.shuffle(PWLA);
+				PWLB = J.shuffle(PWLB);
+				PWLC=PWLA+PWLB;
 				}
+			
 			}
+		q=J.shuffle(q);
 		return q;
 	}
 	
@@ -867,7 +905,9 @@ public class J {
 		int bp=0;
 		for (String K:M.keySet()) {
 			a[bp] = K.getBytes();
-			b[bp] = M.get(K).getBytes();
+			String vl = M.get(K);
+			if (vl==null) vl="";
+			b[bp] = vl.getBytes();
 			bp++;
 			}
 		
@@ -1539,6 +1579,63 @@ public class J {
 		loc=loc.replace('\n', '.');
 		return loc+"@"+dom+".onion";
 		}
+
+	public static Integer[] newInteger(int x) {
+			Integer[] y = new Integer[x];
+			for (int ax=0;ax<x;ax++) y[ax] = new Integer(0);
+			return y;
+		}
+
+	public static String UserLog(SrvIdentity srv,String usr) {
+		if (usr==null) return "(N)";
+		boolean isLocal=!usr.contains("@");
+		if (usr.compareTo("sysop")==0) return usr;
+		String ff="";
+		String pr="";
+		if (isLocal) {
+			pr="L";
+			if (usr.compareTo("sysop")==0 || usr.compareTo("server")==0) return usr;
+			if (usr.endsWith(".onion")) ff=".o";
+			if (usr.endsWith(".op")) ff=".op";
+			if (usr.endsWith(".list")) ff=".ls";
+			if (usr.endsWith(".app")) return usr;
+			} else {
+			pr="C";
+			if (srv!=null && usr.contains("@"+srv.Onion)) ff+=".L";
+			if (srv!=null && srv.EnterRoute && usr.contains(".onion@"+srv.ExitRouteDomain)) ff+=".X";
+			if (usr.contains(".onion@")) ff=".o";
+			if (usr.contains(".list@")) ff=".ls";
+			if (usr.startsWith("server@")) return "srv@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			if (usr.startsWith("sysop@")) return "srv@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			if (usr.contains(".app@")) return J.getLocalPart(usr)+"@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			}
+		
+		String dom="";
+		String loc="";
+		if (isLocal) {
+				loc=usr;
+				if (srv!=null) dom=srv.Onion;
+				} else {
+			dom=J.getDomain(usr);
+			loc=J.getLocalPart(usr);
+			} 
+				
+		int a = loc.hashCode();
+		int b = (int)(Math.floor(System.currentTimeMillis()/86400000L));
+		b^=b<<1;
+		b^=Main.RandLog;
+		dom+="/"+Long.toString(Main.RandLog);
+		int e = dom.hashCode();
+		if (e!=0) e^=b;
+		e = (int)(Math.abs(e % 1296));
+		String c = Long.toString(Main.RandLog)+"/"+Long.toString(a,36)+"/"+loc+"/"+Long.toString(b,36);
+		String d = Long.toString(e,36);
+		c = Long.toString(c.hashCode() ^ ((b&0x7FFF)<<31),36);
+		if (dom.length()>0) ff="@"+d+ff;
+		return pr+c+ff;
+		}
 	
+	public static int setBit(int mask,int old,boolean value) { return value ? old|mask : old&(-1^mask) ; }
+		
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

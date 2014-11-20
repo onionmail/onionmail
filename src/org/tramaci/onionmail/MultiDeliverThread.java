@@ -57,10 +57,13 @@ public class MultiDeliverThread extends Thread {
 				
 						String to = MailTo[ax];
 						String srv = J.getDomain(to);
+						
 						HashMap <String,String> Hldr2 =(HashMap <String,String>) (toTor[ax] ?  Hldr.clone() : HldrInet.clone());
 								
 						Hldr2.put("delivery-date", Mid.TimeString());
-												
+						
+						
+						
 						if (srv.compareTo(Mid.Onion)==0) Mid.SendLocalMessageStream(to, Hldr2, null, Message); else Mid.SendRemoteSession(to, MailFrom,Hldr2, Message,null);
 						
 						} catch(Exception E) {
@@ -71,16 +74,23 @@ public class MultiDeliverThread extends Thread {
 							if (ms.startsWith("@")) {
 								ms=ms.substring(1);
 								Error[ax] = "To `"+MailTo[ax]+"` Error: "+ms;
-								Mid.Log("Mul to `"+Long.toString(MailTo[ax].hashCode(),36)+"` Error: "+ms+"\n");
+								Mid.Log("Mul to `"+J.UserLog(Mid, MailTo[ax])+"` Error: "+ms+"\n");
 								Mid.StatError++;
 								} else {
-								String ms2="Error X"+Long.toHexString(ms.hashCode());
-								if (ms.contains("Socks:")) {
+								String ms2="Error X"+Long.toHexString(ms.hashCode() & 0x7FFFFFFFFFL);
+								if (ms.contains("Socks:") || E instanceof java.net.ConnectException) {
 										ms2="Network error";
 										if (MailTo[ax].endsWith(".onion") || ms.contains("H5B")) ms2+=" Onion route is down";
+										if (E instanceof java.net.ConnectException) ms2="Connection error "+Integer.toHexString((""+E.getMessage()).hashCode());
 										}
+								
+								if (E instanceof java.net.SocketException) ms2="Network Socket error "+Integer.toHexString((""+E.getMessage()).hashCode());
+								if (E instanceof java.net.NoRouteToHostException) ms2="No route to host";
+								if (E instanceof java.net.SocketTimeoutException) ms2="Network timeout";
+								if (E instanceof java.net.UnknownHostException) ms2="Unknown host";
+								
 								Error[ax] = "To `"+MailTo[ax]+"` Error: "+ms2;
-								Mid.Log("Mul Exc `"+Long.toString(MailTo[ax].hashCode(),36)+"` Error: "+ms+"\n");
+								Mid.Log("Mul Exc `"+J.UserLog(Mid,MailTo[ax])+"` Error: "+ms+"\n");
 								Mid.StatException++;
 								}
 						}
@@ -159,11 +169,30 @@ public class MultiDeliverThread extends Thread {
 				}
 		
 		Hldr = H;
-		MailTo=to;
+		
+		int cx = to.length;
+		MailTo = new String[cx];
+		
+		for (int ax=0;ax<cx;ax++) {
+			if (!to[ax].endsWith(".onion")) {
+				String lp = J.getLocalPart(to[ax]);
+				String dm =J.getDomain(to[ax]);
+				VirtualRVMATEntry VM = Mid.VMAT.loadRVMATinTor(lp, dm);
+				if (VM!=null) {
+					dm = J.getDomain(VM.onionMail);
+					if (dm.compareTo(Mid.Onion)==0) {
+						if (Config.Debug) Mid.Log("MRouteLocalInVMAT `"+J.UserLog(Mid, to[ax])+"` > `"+J.UserLog(Mid, VM.onionMail)+"`");
+						MailTo[ax]=VM.onionMail;
+						}
+					}
+				}
+			if (MailTo[ax]==null) MailTo[ax]=to[ax];
+			}
+		
 		MailFrom=from.toLowerCase().trim();
 		if (MailFrom.endsWith(".onion")) MailFromInet = Srv.mailTor2Inet(MailFrom, ExitDom); else MailFromInet=MailFrom; //XXX Verificare
 		
-		int cx=MailTo.length;
+		cx=MailTo.length;
 		toTor = new boolean[cx];
 		Error = new String[cx];
 		MailToInet = new String[cx];

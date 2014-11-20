@@ -147,7 +147,7 @@ public class Spam {
 		String st = new String(db);
 		
 		if (!st.startsWith("SPAM\n")) {
-			Config.GlobalLog(Config.GLOG_Spam, NickSrv, "InvalidSpamList for `"+Long.toString(local.hashCode(),36)+"`");
+			Config.GlobalLog(Config.GLOG_Spam, NickSrv, "InvalidSpamList for `"+J.UserLog(null,local)+"`");
 			return new String[0];
 			}
 		String[] lst=st.split("\\n",2);

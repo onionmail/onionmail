@@ -284,12 +284,13 @@ public class LibSTLS {
 	      SSLSocket sslSocket = (SSLSocket) (sf.createSocket(con, Host, con.getPort(), true));
           sslSocket.setUseClientMode(true);
           LibSTLS.setCiphers(sslSocket);
+        
             try {
             	sslSocket.startHandshake();
             	} catch(Exception E) {
             		if (Debug) E.printStackTrace();
             		if (E.getMessage().toLowerCase().contains("could not generate dh keypair")) {
-            				throw new PException("JAVA SSL BUG: JDK-7044060 Update your JDK!"); 
+            				throw new PException("JAVA SSL BUG: JDK-7044060 Update your JAVA!"); 
             		} else throw E;
             	}
             return sslSocket;
@@ -557,8 +558,7 @@ public class LibSTLS {
 				stat=2;
 				C[ax].checkValidity();
 				stat=3;
-				crt[ax]=Stdio.Public2Arr(P);
-						//Stdio.Arr2Public(key[ax], new String(fmt[ax]));				
+				crt[ax]=Stdio.Public2Arr(P);		
 				} catch(Exception E) {
 					E.printStackTrace();
 					String m = E.getMessage();
@@ -569,9 +569,7 @@ public class LibSTLS {
 		if (!CmpsbAB(key,crt)) throw new Exception("@500 SSL_CERT: Public Keys do not match for `"+host+"`");
 		
 		}
-		
-	
-	
+			
 	public static byte[] CertHash(javax.security.cert.X509Certificate[] C,String Host) throws Exception {
 		if (C.length==0) {
 			return Stdio.sha1a(new byte[][] {

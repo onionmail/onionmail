@@ -20,20 +20,17 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 
-import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
+//import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
 import org.tramaci.onionmail.MailingList.MLUserInfo;
 
 public class ControlSession extends Thread{
@@ -307,7 +304,16 @@ public class ControlSession extends Thread{
 				}
 			
 				if (cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
-							
+				
+				if (cmd.compareTo("sslcheck")==0 && Tok.length>1) {
+					String host = Tok[1].toLowerCase().trim();
+					boolean t=true;
+					if (Tok.length>2) t = Config.parseY(Tok[2]);
+					String rp = SRVS[CurSrv].SSLManualVerify(host,t);
+					ReplyA(true, "SSLManualVerify", rp.split("\\n"));
+					continue;
+					}
+				
 				if (cmd.compareTo("getkey")==0) {
 						String[] t0 =new String[] { J.Base64Encode(Stdio.Public2Arr(SRVS[CurSrv].SPK)) };
 						ReplyA(true,"RSA Public Key",t0);
@@ -489,6 +495,92 @@ public class ControlSession extends Thread{
 			if (cmd.compareTo("vrfy")==0 && serveruser && Tok.length==2) {
 				String m0 = Tok[1];
 				Reply(SRVS[CurSrv].UsrExists(m0),"Ok");
+				continue;
+				}
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==1) {
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==2 && Tok[1].compareToIgnoreCase("run")==0) {
+				SRVS[CurSrv].CheckSSLOperations();
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("torid")==0) {
+				try { Main.ChangeTORIdentity(Config); } catch(Exception E) {
+					Reply(false,"Error: "+E.getMessage());
+					continue;
+					}
+				Reply(true,"ID: "+Config.TORIdentityNumber);
+			} 
+			
+			if (cmd.compareTo("toridf")==0) {
+				Config.TORIdentityNumber++;
+				Reply(true,"ID: "+Config.TORIdentityNumber);
+			} 
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==2 && Tok[1].compareToIgnoreCase("clear")==0) {
+				SRVS[CurSrv].SSLErrorTracker = new HashMap <String,Integer[]>();
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==3 && Tok[1].compareToIgnoreCase("no")==0) {
+				Integer[] dta = J.newInteger(SrvIdentity.SSLEID_SIZE);
+				dta[SrvIdentity.SSLEID_First] = (int) (System.currentTimeMillis()/1000L);
+				dta[SrvIdentity.SSLEID_Last] = dta[SrvIdentity.SSLEID_First];
+				dta[SrvIdentity.SSLEID_Flags] = SrvIdentity.SSLEID_Flags_NoSSL | SrvIdentity.SSLEID_Flags_Persistent;
+				SRVS[CurSrv].SSLErrorTracker.put(Tok[2].toLowerCase().trim(), dta);
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==3 && Tok[1].compareToIgnoreCase("del")==0) {
+				Tok[2]=Tok[2].toLowerCase().trim();
+				if (SRVS[CurSrv].SSLErrorTracker.containsKey(Tok[2])) SRVS[CurSrv].SSLErrorTracker.remove(Tok[2]);
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==5 && Tok[1].compareToIgnoreCase("chg")==0) {
+				// ssleid chg host name val
+				String host =Tok[2].toLowerCase().trim();
+			
+				if (Tok[2].compareTo("?")==0) {
+					Reply(true,"tor chg ecrt err hit ok sok b c i n p");
+					continue;
+					}
+			
+				try {
+					 SRVS[CurSrv].SSLEIDCmd(host, new String[] { Tok[3].trim()+"="+Tok[4].trim() } );
+					} catch(Exception E) {
+						Reply(false,"Error: "+E.getMessage());
+						continue;
+					}
+								
+				String msg = SRVS[CurSrv].SSLEtoString();
+				ReplyA(true,"SSLEID",msg.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("sslclear")==0 && serveruser && Tok.length==2) {
+				String host = Tok[1].trim().toLowerCase();
+				String fn = SRVS[CurSrv].GetFNName(host)+".crt";
+				
+				Reply(
+						new File(fn).delete() &&
+						new File(fn+"h").delete() ,
+						"SSL CRT "+host)
+						;
+				
 				continue;
 			}
 			
@@ -1160,7 +1252,7 @@ public class ControlSession extends Thread{
 		
 		try {
 			Log(Config.GLOG_Event,"Control.Send `"+J.getDomain(to)+"`");
-			S.SendRemoteSession(to, "server@"+S.Onion, H,st,null);
+			S.SendRemoteSession(to, "server@"+S.Onion, H,st,null,false);
 			Reply(true,"Id=Nothing");
 		} catch (Exception E) {
 			String ms = E.getMessage()+"";
@@ -1659,8 +1751,8 @@ public class ControlSession extends Thread{
 					}
 						return Q;
 				}
-		
 
+		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_All, "CTRL", st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_All, "CTRL", st); 	}		
 		

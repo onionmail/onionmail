@@ -28,6 +28,8 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.util.HashMap;
 
+import javax.net.ssl.SSLSocket;
+
 public class SrvHTTPRequest extends Thread{
 	protected Socket con = null;
 	protected OutputStream O = null;
@@ -130,6 +132,20 @@ public class SrvHTTPRequest extends Thread{
 		ServerName=Mid.HTTPServerName !=null ? Mid.HTTPServerName : Mid.Config.HTTPServerName;
 		BasePath = Mid.HTTPBasePath!=null ? Mid.HTTPBasePath+"/" : Mid.Maildir+"/http/";
 		BasePath=BasePath.replace("//", "/");
+		
+		if (sp.HTTPSServer) {
+				SSLSocket SL;
+				try {
+						SL = LibSTLS.AcceptSSL(con, s.SSLServer, s.Onion);
+					} catch(Exception E) {
+						if (Config.Debug) {
+							Log(Config.GLOG_Bad,"LibSTLS: "+E.getMessage());
+							E.printStackTrace();
+							}
+						throw new Exception("@500 Invalid SSL Session: "+E.toString());
+						}
+			con=SL;
+			}
 		
 		Ir = con.getInputStream();
 		O=con.getOutputStream();
@@ -974,8 +990,6 @@ public class SrvHTTPRequest extends Thread{
 		if (li.contains("<!-- KDESTROY -->")) {
 			if (Session!=null && Session.containsKey("erro") && Session.get("erro").length()==0) 	deleteSession();
 			}
-		
-		
 	}
 	
 	private boolean SA_NEWUSER() throws Exception {
@@ -1098,11 +1112,10 @@ public class SrvHTTPRequest extends Thread{
 
 	private void SA_RULEZ() throws Exception {
 		String rul="";
-
-		rul+=Mid.Maildir+"/rulez.eml\n";
+		rul+=Mid.Maildir+"/rulez/rulez.txt\n";
+		rul+=Mid.Maildir+"/rulez/rulez.rul\n";
 		rul+=Mid.Maildir+"/rulez.txt\n";
 		rul+=Mid.Maildir+"/rulez.rul\n";
-		rul+=Mid.Config.RootPathConfig+"rulez.eml\n";
 		rul+=Mid.Config.RootPathConfig+"rulez.rul\n";
 		rul+=Mid.Config.RootPathConfig+"rulez.txt";
 		rul=rul.trim();

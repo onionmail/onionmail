@@ -242,6 +242,16 @@ public class Stdio {
 		
 	}
 	
+	protected static int NewRndInt(int mx) {
+		try {
+		SecureRandom random = SecureRandom.getInstance("SHA1PRNG");		
+		return random.nextInt(mx);
+		} catch(Exception E) {
+			return (int) ((int) (Math.random()*Math.pow(2, 31)) ^ System.currentTimeMillis()&0x7FFFFFFFL);
+		}
+		
+	}
+	
 	protected static void NewRnd(byte[] rnd) {
 		try {
 		SecureRandom random;
@@ -708,7 +718,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
         aes.init(true, ivAndKey);
         return AES2cipher(aes, data);
     }
-	
+	 
 	 public static byte[] AES2Dec(byte[] key, byte[] iv,byte[] data) throws Exception {
      try {
 		PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
@@ -1106,10 +1116,63 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 		for (int ax=0;ax<cx;ax++) System.arraycopy(blk[ax], 0, out, ax*size, trim);
 		return out;
 	}
+	
+	public static byte[] MxAccuShifter16(byte[][] arr,int magic,boolean rnd) throws Exception {
+		int top =0;
+		int obj = arr.length;
+		if (obj>65535) throw new Exception("_MX:TOOBIG");
+		
+		for (int ax=0;ax<obj;ax++) top+=arr[ax].length;
+		int bp = 7+(obj*2);
+		top+=bp;
+		int oldtop=top;
+		top =( (top>>4) + (((top&15)!=0) ? 1:0))<<4;
+		byte[] out = new byte[top];
+				
+		if (rnd) {
+			long t0 = System.currentTimeMillis();
+			for (int ax=oldtop;ax<top;ax++) out[ax]=(byte) (255&(((long)( Math.random()*256.0)) ^ (t0>>(ax&31))));
+			}
+		
+		PokeB(0,magic,out);
+		PokeB(2,top,out);
+		out[4] =-1;
+		PokeB(5,obj,out);
+				
+		for (int ax=0;ax<obj;ax++) {
+			int dx = arr[ax].length;
+			PokeB(7+(ax*2),dx,out);
+			System.arraycopy(arr[ax], 0, out, bp, dx);
+			bp+=dx;
+			}
+		return out;
+	}
+	
+	public static byte[][] MxDaccuShifter16(byte[] in,int magic) throws Exception {
+		int t0 =PeekB(0,in); 
+		if (t0!=magic) throw new Exception("_MX:MAGIC "+Integer.toHexString(t0));
+		int top = PeekB(2,in);
+		if (top>in.length) throw new Exception("_MX:DIM "+top+" "+in.length);
+		int obj=(int)(255&in[4]);
+		if (obj!=255) throw new Exception("nonMX16");
+		obj = PeekB(5,in);
+		
+		byte[][] out= new byte[obj][];
+		int bp = 7+(obj*2);
+		for (int ax=0;ax<obj;ax++) {
+			int dx = PeekB(7+(ax*2),in);
+			if (dx+bp>top) throw new Exception("_MX:OVER");
+			out[ax] = new byte[dx];
+			System.arraycopy(in, bp,out[ax],0,dx);
+			bp+=dx;
+		}
+		return out;
+	}
+		
 	public static byte[] MxAccuShifter(byte[][] arr,int magic,boolean rnd) throws Exception {
 		int top =0;
 		int obj = arr.length;
-		if (obj>255) throw new Exception("_MX:TOOBIG");
+		if (obj>254) return MxAccuShifter16(arr,magic,rnd);
 		
 		for (int ax=0;ax<obj;ax++) top+=arr[ax].length;
 		int bp = 5+(obj*2);
@@ -1139,9 +1202,12 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 	public static byte[][] MxDaccuShifter(byte[] in,int magic) throws Exception {
 		int t0 =PeekB(0,in); 
 		if (t0!=magic) throw new Exception("_MX:MAGIC "+Integer.toHexString(t0));
+		int obj=(int)(255&in[4]);
+		if (obj==255) return MxDaccuShifter16(in,magic);
+				
 		int top = PeekB(2,in);
 		if (top>in.length) throw new Exception("_MX:DIM "+top+" "+in.length);
-		int obj=(int)(255&in[4]);
+				
 		byte[][] out= new byte[obj][];
 		int bp = 5+(obj*2);
 		for (int ax=0;ax<obj;ax++) {
@@ -1261,6 +1327,54 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 		}
 	
 	public static void echo(String st) { System.out.print(st); }
+
+	public static String relativeDate(int tcr) {
+		int t =(int) (System.currentTimeMillis()/1000L)-tcr;
+		String sign = t<0 ? "" : "ago";
+		t=Math.abs(t);
+		if (t<1000) return "now";
+		t=(int) Math.floor(t/60);
+		if (t>525600) return (Integer.toString((int) Math.floor(t/525600))+" Years "+sign).trim();
+		if (t>43200) return (Integer.toString((int) Math.floor(t/43200))+" Months "+sign).trim();
+		if (t>1440) return  (Integer.toString((int) Math.floor(t/1440))+" Days "+sign).trim();
+		return (Integer.toString((int) Math.floor(t/60))+":" +Integer.toString((int) (t%60))+" "+sign).trim();
+		} 
+		
+	public static void SFileSave(SrvIdentity srv,String FileIntName,byte[][] data,int Magic,boolean ServerArea) throws Exception {
+		byte[] key = Stdio.sha256a(new byte[][] { srv.Sale , FileIntName.getBytes() ,srv.Subs[13],Integer.toString(Magic,ServerArea ? 36 : 35).getBytes() } );
+		byte[] iv = Stdio.md5a(new byte[][] { key , Integer.toString(Magic,ServerArea ? 33 : 32).getBytes(), srv.Subs[ 15& key[0]] , FileIntName.getBytes() , srv.Subs [15& key[15&key[1]]]});
+		FileIntName = new String(srv.Subs[ServerArea ? 15 : 14]) + FileIntName;
+		int a = FileIntName.hashCode();
+		FileIntName=null;
+		a=a^srv.Subs[15][15&srv.Subs[15][ServerArea ? 7 : 8]];
+		long b=(a^a<<1) &  0x7FFFFFFFFL;
+		String fn = srv.Maildir+(ServerArea ? "/head/" : "/usr/") +Long.toString(b,16)+".dat";
+		byte[] d = Stdio.MxAccuShifter( data, Magic,true );
+		d = Stdio.AESEnc2(key, iv, d);
+		Stdio.file_put_bytes(fn, d);
+		J.WipeRam(key);
+		J.WipeRam(iv);
+		key=null;
+		iv=null;
+		} 
+	
+	public static byte[][] SFileLoad(SrvIdentity srv,String FileIntName,int Magic,boolean ServerArea) throws Exception {
+		byte[] key = Stdio.sha256a(new byte[][] { srv.Sale , FileIntName.getBytes() ,srv.Subs[13],Integer.toString(Magic,ServerArea ? 36 : 35).getBytes() } );
+		byte[] iv = Stdio.md5a(new byte[][] { key , Integer.toString(Magic,ServerArea ? 33 : 32).getBytes(), srv.Subs[ 15& key[0]] , FileIntName.getBytes() , srv.Subs [15& key[15&key[1]]]});
+		FileIntName = new String(srv.Subs[ServerArea ? 15 : 14]) + FileIntName;
+		int a = FileIntName.hashCode();
+		FileIntName=null;
+		a=a^srv.Subs[15][15&srv.Subs[15][ServerArea ? 7 : 8]];
+		long b=(a^a<<1) &  0x7FFFFFFFFL;
+		String fn = srv.Maildir+(ServerArea ? "/head/" : "/usr/") +Long.toString(b,16)+".dat";
+		byte[] d = Stdio.file_get_bytes(fn);
+		d = Stdio.AESDec2(key, iv, d);
+		J.WipeRam(key);
+		J.WipeRam(iv);
+		key=null;
+		iv=null;
+		return Stdio.MxDaccuShifter(d, Magic);
+		} 
 	
 	public void DBG(String M) {
 		System.out.print("DBG: "+this.getClass().getSimpleName()+"\t "+M+"\n");

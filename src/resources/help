@@ -17,6 +17,7 @@ Use:
 	onionmail [-q] --pgp
 	onionmail -q --test-java-b
 	onionmail [-q] --test-java
+	onionmail ...
 	
 	Options:      
 
@@ -91,6 +92,52 @@ Use:
 	-ntx		Do not test the hidden service connections and 
 			terminate.
 
+	Others OnionMail special commands and utilities:
+
+	--test-java	Try to test RSA, DH, DSA key generation 
+			(KeyPairGenerator).
+
+	--test-java-b	Same of --test-java but in bath mode.
+	
+	--rnd-passwd	Generate a random password.
+			Use: --rnd-passwd <lenght> <maxSpecCh>
+			Whare <maxSpecCh> is the number of special charatters.
+
+	--rnd-passcr	Same of --rnd-passwd but print the encrypted password.
+
+	--rnd-epass 	Generate a random password that have the same chance 
+			for each charatters (with length multiple of 94).
+
+	--rnd-passcrn	Random and crypt multiple passwords generator.
+			It generate some passwords in clear and encrypted 
+			formats, print all passwords with a tag.
+
+			There are two usage of this function:
+			--rnd-passcrn <a> <b> <c>
+			a = Number of password to generate.
+			b = Charatters length.
+			c = Number of special charatters.
+
+			Example: --rnd-passcrn 3 8 8
+			This generates 3 passwords.
+
+			--rnd-passcrn { [e]<len> ... }
+			len = Password length.
+			e = Generate a passsword with --rnd-epass mode.
+
+			Example: --rnd-passcrn { 10 e94 20 e940 }
+			This generates 4 passwords.
+
+		Output fomat of --rnd-passcrn
+
+		P<number>: <password>
+		S<number>: <encrtypted password>
+		T<number>: <type>
+
+		Where:
+			number = The number of password.
+			type = Password type (N = normal, E = --rnd-epass ).
+
 	List of OnionMail's batch headers:
 	Name			Type	Meaning
 	%NICK%-pgp-root		path	Set the public PGP ASCII armor key file
@@ -136,3 +183,6 @@ Use:
 	OM:[RUNNING]	OnionMail till running.
 	OM:[TEST]GOOD	Java test Ok.
 	OM:[TEST]BAD	Java test Error.
+
+If you use OnionMail java file directly use:
+	java -jar onionmail.jar <parameters>

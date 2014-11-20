@@ -20,24 +20,18 @@
 
 //XXX Migliorare le eccezioni
 
-
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.BindException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Arrays;
@@ -53,8 +47,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0006_0007_0410L;
-	public static String Version="1.6.8.1040";
+	public static long VersionID = 0x0001_0007_0009_04CFL;
+	public static String Version="1.7.9.1231";
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
@@ -67,6 +61,8 @@ public class Main {
 	public static ControlService[] CSP = null; 
 	
 	public static long[] statusHash = null;
+	
+	public static volatile long RandLog = 0x4F5450454550544FL;
 	
 	public static volatile int MaxThread = 0;
 	public static volatile int PercThread=0;
@@ -112,19 +108,32 @@ public class Main {
 	public static String RandomHeart=null;
 	public static boolean RSAGenBC = false;
 	private static boolean verbose=false;
+	private static volatile int SSLETRefreshRateTCR = 0;
+	private static volatile int TORCheckPollingRefreshRateTCR=0;
+	public static final int STEST_NOP=0;
+	public static final int STEST_OK=1;
+	public static final int STEST_SMTPE=2;
+	public static final int STEST_SOCK=3;
+	public static final int STEST_SWAP=4;
+	public static final int STEST_POP3ERR=5;
+	public static final int STEST_POP3SOCK=6;
 	
-	public void SelfTest() throws Exception {
+	public static volatile long cday = 0;
+	public static volatile long tcrd = 0;
+		
+	public int[] SelfTest(boolean term,boolean out) throws Exception {
 		int cx= SMTPS.length;
-		if (!Config.LogStdout) Main.echo("Self server test:\n");
+		if (out && !Config.LogStdout) Main.echo("Self server test:\n"); else Config.GlobalLog(Config.GLOG_All, "MAIN", "Start test servers");
 		
 		Socket	RS=null;
 		OutputStream RO=null;
 		BufferedReader RI=null;
 		SMTPReply Re=null;
 		int fun=0;
+		int[] Rs = new int[cx];
 		
 		for (int ax=0;ax<cx;ax++) {
-			if (!Config.LogStdout) Main.echo("\tTest: "+J.Spaced(SMTPS[ax].Identity.Nick, 25)+"... SMTP ");
+			if (out && !Config.LogStdout) Main.echo("\tTest: "+J.Spaced(SMTPS[ax].Identity.Nick, 25)+"... SMTP "); else Config.GlobalLog(Config.GLOG_All,SMTPS[ax].Identity.Nick, "SMTP Test start");
 				try {
 					RS=null;
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, SMTPS[ax].Identity.Onion,25);
@@ -135,11 +144,13 @@ public class Main {
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO iam.onion");
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim());
-					if (!Re.Msg[0].toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new Exception("Fatal error: The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":25` is not `"+SMTPS[ax].Identity.Nick+"`");
+					if (!Re.Msg[0].toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new PException("Fatal error: The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":25` is not `"+SMTPS[ax].Identity.Nick+"`");
 					try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception I) {}
 					try { if (RS!=null) RS.close(); } catch(Exception I) {}
 					try { if (RO!=null) RO.close(); } catch(Exception I) {}
 					try { if (RI!=null) RI.close(); } catch(Exception I) {}
+					Rs[ax] = Main.STEST_OK;
+					Config.GlobalLog(Config.GLOG_All,SMTPS[ax].Identity.Nick, "SMTP Test Ok");
 					} catch(Exception E) {
 						try { if (RS!=null) RS.close(); } catch(Exception I) {}
 						try { if (RO!=null) RO.close(); } catch(Exception I) {}
@@ -147,15 +158,23 @@ public class Main {
 						String mx = E.getMessage();
 						if (mx.startsWith("@")) {
 								mx=mx.substring(1);
-								Main.echo("Error: "+mx+"\n");
+								if (out) Main.echo("Error: "+mx+"\n");
 								Config.GlobalLog(Config.GLOG_Server, SMTPS[ax].Identity.Nick, "Server SMTP test error: "+mx);
+								Rs[ax] = Main.STEST_SMTPE;
 								} else {
-								Main.echo("Exception: "+mx+"\n");
+								if (E instanceof PException) {
+									if (out) Main.echo(E.getMessage());
+									Config.GlobalLog(Config.GLOG_Bad | Config.GLOG_All | Config.GLOG_Server, "MAIN", E.getMessage());
+									Rs[ax]=Main.STEST_SWAP;
+									if (term) System.exit(2);
+									}  
+								if (out) Main.echo("Exception: "+mx+"\n");
 								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
+								Rs[ax] = Main.STEST_SOCK;
 								} 
 					}
 				
-				if (!Config.LogStdout) Main.echo("POP3 ");
+				if (out && !Config.LogStdout) Main.echo("POP3 "); else  Config.GlobalLog(Config.GLOG_All,SMTPS[ax].Identity.Nick, "POP3 Test start");
 				
 				try {
 					RS=null;
@@ -164,16 +183,17 @@ public class Main {
 					RI  =J.getLineReader(RS.getInputStream());
 					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
 					String in = RI.readLine();
-					if (!in.toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new Exception("Fatal error: POP3 The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":"+SMTPS[ax].Identity.LocalPOP3Port+"` is not `"+SMTPS[ax].Identity.Nick+"`");
+					if (!in.toLowerCase().contains(SMTPS[ax].Identity.Onion)) throw new PException("Fatal error: POP3 The server at `"+J.IP2String(SMTPS[ax].Identity.LocalIP)+":"+SMTPS[ax].Identity.LocalPOP3Port+"` is not `"+SMTPS[ax].Identity.Nick+"`");
 				
 					try { 
-						RO.write("quit\r\n".getBytes());
+						RO.write("QUIT\r\n".getBytes());
 						in = RI.readLine();
 						} catch(Exception I) {}
 					
 					try { if (RS!=null) RS.close(); } catch(Exception I) {}
 					try { if (RO!=null) RO.close(); } catch(Exception I) {}
 					try { if (RI!=null) RI.close(); } catch(Exception I) {}
+					Config.GlobalLog(Config.GLOG_All,SMTPS[ax].Identity.Nick, "POP3 Test Ok");
 					} catch(Exception E) {
 						try { if (RS!=null) RS.close(); } catch(Exception I) {}
 						try { if (RO!=null) RO.close(); } catch(Exception I) {}
@@ -181,22 +201,26 @@ public class Main {
 						String mx = E.getMessage();
 						if (mx.startsWith("@")) {
 								mx=mx.substring(1);
-								Main.echo("Error: "+mx+"\n");
+								if (out) Main.echo("Error: "+mx+"\n");
 								Config.GlobalLog(Config.GLOG_Server, SMTPS[ax].Identity.Nick, "Server POP3 test error: "+mx);
+								Rs[ax] = Main.STEST_POP3ERR;
 								} else {
-								Main.echo("Exception: "+mx+"\n");
+								if (out) Main.echo("Exception: "+mx+"\n");
 								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
-								System.exit(2);
+								if (E instanceof PException) {
+									Rs[ax] = Main.STEST_SWAP;
+									if (term) System.exit(2);
+									} else Rs[ax]=Main.STEST_SOCK;
 								} 
 					}
 				
-				if (!Config.LogStdout) Main.echo("Ok\n");
+				if (out && !Config.LogStdout) Main.echo("Ok\n");
 				fun++;
 			}
 		
-		if (!Config.LogStdout) Main.echo("\nTest complete: "+cx+" Servers "+(cx-fun)+" Errors "+fun+" Ok\n\n");
+		if (out && !Config.LogStdout) Main.echo("\nTest complete: "+cx+" Servers "+(cx-fun)+" Errors "+fun+" Ok\n\n");
 		if (cx==fun) Config.GlobalLog(Config.GLOG_All, "MAIN.TEST", "OnionMail "+fun+" servers, running Ok");
-		
+		return Rs;
 		}
 	
 	private static void RedirectOut() throws Exception {
@@ -458,7 +482,9 @@ public class Main {
 		SMTPServer[] sa = new SMTPServer[numSrv];
 		System.arraycopy(SMTPS, 0, sa, 0,  numSrv);
 		SMTPS=sa;
-			
+		
+		Main.RandLog = Stdio.NewRndLong();
+		
 		echo("Control port:\t"+J.IP2String(Config.ControlIP)+":"+Config.ControlPort+"\t");
 		try {
 			CS = new ControlService(Config,SMTPS);
@@ -526,7 +552,11 @@ public class Main {
 		}
 	
 	Thread.sleep(2000);		
-	if (!Main.noTest) SelfTest();
+	int pause = (int) (System.currentTimeMillis()/1000L)+15*60;
+	SSLETRefreshRateTCR = pause;
+	TORCheckPollingRefreshRateTCR=pause;
+	
+	if (!Main.noTest) SelfTest(true,true);
 	if (Config.UseKernel) startKernel(); 
 	}
 	
@@ -575,7 +605,7 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-					
+						
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -612,7 +642,7 @@ public static void main(String args[]) {
 					
 				}
 						
-			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\tSome rights reserved\n\n");
+			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org & mes3hacklab\n\tSome rights reserved\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;
@@ -663,6 +693,77 @@ public static void main(String args[]) {
 					fm=true;
 				}
 				
+				if (cmd.compareTo("--rnd-passwd")==0 && ax+2<args.length) {
+					int lp = J.parseInt(args[ax+1]);
+					int sc =J.parseInt(args[ax+2]);
+					if (lp>0 && sc>0) Main.echo( (fp ? "Password:" : "") +J.GenPassword(lp, sc)+"\n");
+					System.exit(0);	
+					}
+				
+				if (cmd.compareTo("--rnd-passcr")==0 && ax+2<args.length) {
+					int lp = J.parseInt(args[ax+1]);
+					int sc =J.parseInt(args[ax+2]);
+					if (lp>0 && sc>0) {
+							String p =J.GenPassword(lp, sc);
+							Main.echo( (fp ? "Password: " : "") +p+"\n");
+							Main.echo( (fp ? "Crypt: " : "")+ J.GenCryptPass(p)+"\n");
+							}
+					System.exit(0);	
+					}
+				
+				if (cmd.compareTo("--rnd-epass")==0 && ax+1<args.length) {
+					Main.echo(J.GenEPassword(J.parseInt(args[ax+1]))+"\n");
+					System.exit(0);
+				}
+				
+				if (cmd.compareTo("--rnd-passcrn")==0 && ax+3<args.length) {
+					int cl = J.parseInt(args[ax+1]);
+					int lp = J.parseInt(args[ax+2]);
+					int sc =J.parseInt(args[ax+3]);
+					int[] pt=null;
+					boolean[] isEkey=null;
+					if (args[ax+1].contains("{")) {
+						String tmp="";
+						for (int al=ax+2;al<cx;al++) {
+							String t0 = args[al].replace('{', ' ');
+							t0 = t0.replace('}', ' ');
+							t0 = t0.replace('\n', ' ');
+							tmp=tmp+t0.trim()+"\n";
+							if (args[al].contains("}")) break;
+							}
+						String[] tmp2= tmp.split("\\n+");
+						cl = tmp2.length;
+						pt =new int[cl];
+						isEkey = new boolean[cl];
+						for (int al =0;al<cl;al++) {
+								String t0 = tmp2[al];
+								isEkey[al] = t0.contains("E");
+								isEkey[al] = t0.contains("e");
+								t0=t0.replace('E', ' ');
+								t0=t0.replace('e', ' ');
+								t0=t0.trim();
+								pt[al] = J.parseInt(t0);
+								}	
+						}
+					
+					for (int al=0;al<cl;al++) {
+						long t = System.currentTimeMillis();
+						t+=100;
+						t+=127&Stdio.NewRndLong();
+						while(System.currentTimeMillis()<t) Stdio.NewRndLong();
+						if (pt!=null) lp=sc=pt[al];
+						boolean ek = isEkey==null ? false : isEkey[al];
+						String p = ek ? J.GenEPassword(lp) : J.GenPassword(lp, sc);
+						String n = Integer.toString(al+1);
+						Main.echo(
+									"P"+n+": "+p+"\n"+
+									"S"+n+": "+J.GenCryptPass(p)+"\n"+
+									"T"+n+": " + (ek ? 'E' : 'N')+"\n")
+									;
+						}
+					System.exit(0);	
+					}
+				
 				if (cmd.compareTo("-bm")==0) {
 					BatchMode();
 					fm=true;
@@ -680,7 +781,7 @@ public static void main(String args[]) {
 						}
 							
 				if (cmd.compareTo("--gen-passwd")==0) { 
-						GenPassword(); 
+						GenPassword(fp); 
 						return; 
 						}
 				
@@ -911,8 +1012,8 @@ public static void main(String args[]) {
 			}
       }
 
-	private static void GenPassword() throws Exception {
-		echo("\nPassword generator tool\nEnter password (UTF-8 encoding):\n");
+	private static void GenPassword(boolean fp) throws Exception {
+		if (fp) echo("\nPassword generator tool\nEnter password (UTF-8 encoding):\n");
 		BufferedReader i =J.getLineReader(System.in);
 		String p =i.readLine();
 		p=p.trim();
@@ -992,7 +1093,6 @@ public static void main(String args[]) {
 	public void startKernel() {
 		if (Main.Kernel!=null) return;
 		ScheduledExecutorService K = Executors.newSingleThreadScheduledExecutor();
-		
 		Runnable KernelImpl = new Runnable() {
 			@Override
 			public void run() {
@@ -1000,6 +1100,13 @@ public static void main(String args[]) {
 					int ctask=0;
 					int maxt=0;
 					int grbt=0;
+					
+					tcrd = System.currentTimeMillis()/86400000L;
+					if (tcrd!=cday) {
+						cday=tcrd;
+						Main.RandLog=Stdio.NewRndLong();
+						}
+					
 					String nodup=",";
 					//if (Config.Debug) Config.GlobalLog(Config.GLOG_All, "Kernel", "StartGarbage");
 					if (Main.SMTPS!=null) {
@@ -1155,6 +1262,51 @@ public static void main(String args[]) {
 								}
 						
 					} catch(Exception KP) { Config.EXC(KP, "Kernel"); }	
+				
+				if (Config.TORCheckPolling>0) try {
+					
+					int tcr = (int) (System.currentTimeMillis()/1000L);
+					if (tcr<TORCheckPollingRefreshRateTCR) return;
+					TORCheckPollingRefreshRateTCR = tcr + Config.TORCheckPolling*60;
+					
+					PollingAllTest();
+					
+					} catch(Exception EP) { Config.EXC(EP, "Main.PollingAllTest"); }
+				
+				if (Config.SSLEDisabled) return;
+				
+				int tcr = (int) (System.currentTimeMillis()/1000L);
+				if (tcr<SSLETRefreshRateTCR) return;
+				SSLETRefreshRateTCR = tcr + Config.SSLETRefreshRate*60;
+				
+				try { 
+					boolean changeid=false;
+					int cx = Main.Config.SMPTServer.length;
+					for (int ax=0;ax<cx;ax++) {
+						if (Main.Config.SMPTServer[ax]==null) continue;
+						
+						try {
+							Main.Config.SMPTServer[ax].CheckSSLOperations();
+							} catch(Exception KPS) { Config.EXC(KPS, "Kernel.SSL:"+Main.Config.SMPTServer[ax].Nick); }
+						
+						changeid|=Main.Config.SMPTServer[ax].iWantChangeIdentity;
+						Main.Config.SMPTServer[ax].iWantChangeIdentity=false;
+						}
+					
+					if (changeid) {
+							Config.GlobalLog(Config.GLOG_All, "Kernel.SSL", "Change TOR identity request.");
+						if (Config.TORControlConf) {
+								ChangeTORIdentity(Config);
+								Config.TORIdentityNumber = 0x7FFFFFFF & (Config.TORIdentityNumber+1);
+								if (Config.TORIdentityNumber==0) Config.TORIdentityNumber=1;
+								Config.GlobalLog(Config.GLOG_All, "Kernel.SSL", "TOR identity changed: `"+Config.TORIdentityNumber+"`");
+							} else {
+								Config.TORIdentityNumber = 0x7FFFFFFF & (Config.TORIdentityNumber+1);
+								if (Config.TORIdentityNumber==0) Config.TORIdentityNumber=1;
+								Config.GlobalLog(Config.GLOG_All, "Kernel.SSL", "Warning: Dummy TOR identity change: `"+Config.TORIdentityNumber+"`");
+							}
+						}
+					} catch(Exception KP) { Config.EXC(KP, "Kernel.SSL/TORID"); }
 				}/*run*/
 			};
 		
@@ -1415,7 +1567,7 @@ public static void main(String args[]) {
 		if (ConfVars.containsKey("global-stderr")) System.err.print(ConfVars.get("global-stderr")+"\n");
 	}
 		
-	//TODO Mettere nelle statistiche
+	//XXX Mettere nelle statistiche
 	public static volatile short CurThreads = 0;
 	public static volatile short MaxThreads = 0;
 	public static volatile short CurFuffaThreads = 0;
@@ -1465,6 +1617,53 @@ public static void main(String args[]) {
 		CurFuffaThreads=fuffaThread;
 		if (CurFuffaThreads>MaxFuffaThreads) MaxFuffaThreads=CurFuffaThreads;
 		return rs;
+	}
+	
+	public void PollingAllTest() throws Exception {
+		int[] ts = SelfTest(false, false);
+
+		boolean ch = false;
+		int cx = ts.length;
+		for (int ax=0;ax<cx;ax++) {
+			if (ts[ax]==Main.STEST_POP3SOCK)  {ch=true; break; }
+			if (ts[ax]==Main.STEST_SMTPE)  {ch=true; break; }
+			}
+		if (!ch) return;
+		Config.GlobalLog(Config.GLOG_All | Config.GLOG_Event, "MAIN", "Some servers are unreachable." + (Config.TORControlConf ? "Change TOR identity." : "I need to change TOR identity but TOR control port is not configured"));
+		if (Config.TORControlConf) Main.ChangeTORIdentity(Config);
+	}
+	
+	@SuppressWarnings("resource")
+	public static void ChangeTORIdentity(Config Config) throws Exception {
+		String ip;
+		if (Config.TORControlIP!=null ) ip = Config.TORControlIP; else  ip ="127.0.0.1";
+		Socket t = null;
+		t= new Socket(ip,Config.TORControlPort);
+		BufferedReader I = null;
+		OutputStream O = null;
+		Exception E=null;
+		try {
+			I = J.getLineReader(t.getInputStream());
+			O = t.getOutputStream();
+			String s = "AUTHENTICATE";
+			if (Config.TORControlPass!=null) s+=" \""+Config.TORControlPass+"\"";
+			s+="\r\n";
+			O.write(s.getBytes());
+			String i = I.readLine();
+			if (!i.startsWith("250 ")) throw new Exception(i.trim());
+			s = "SIGNAL NEWNYM\r\n";
+			O.write(s.getBytes());
+			i = I.readLine();
+			if (!i.startsWith("250 ")) throw new Exception(i.trim());
+			s = "QUIT\r\n";
+			O.write(s.getBytes());
+			i = I.readLine();
+			} catch(Exception Ei) {E=Ei;}
+		
+		try { if (t!=null) t.close(); } catch(Exception EI) {}
+		try { if (O!=null) O.close(); } catch(Exception EI) {}
+		try { if (I!=null) I.close(); } catch(Exception EI) {}
+		if (E!=null) throw E;
 	}
 	
 	private static void EXCM(Exception E) {

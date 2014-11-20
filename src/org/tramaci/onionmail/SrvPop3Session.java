@@ -144,6 +144,9 @@ public class SrvPop3Session extends Thread {
 						continue;
 						}
 					Login=Tok[1];
+					
+					if (Mid.EnableRulezNews) GetNews();
+					
 					Reply(true);
 					}
 				
@@ -161,9 +164,11 @@ public class SrvPop3Session extends Thread {
 					
 					try {
 						Pass=Tok[1];
+						if (MB!=null) try { MB.Close(); } catch(Exception IC) { Mid.Log("MbClose2: "+IC.getMessage()); }
 						MB = Mid.UsrOpenW(Config,Login,Pass);
 						} catch(Exception E) {
 							if (Config.Debug) { Config.EXC(E, "POP3Pass"); }
+							MailBox.AutoClose(MB); 
 							Reply(false," "+E.getMessage());
 							continue;
 						}
@@ -183,7 +188,9 @@ public class SrvPop3Session extends Thread {
 		if (MB==null || Login==null) throw new Exception("@Too many errors");
 		
 		////////////////// mailbox /////////////////////////
-			
+		
+		
+		
 		LoginHash=0;
 		int cx = Login.hashCode();
 			
@@ -500,6 +507,7 @@ public class SrvPop3Session extends Thread {
 		O=null;
 		EndTime=1;
 		Mid.Garbage();
+		if (MB!=null) try { MB.Close(); } catch(Exception IC) { Mid.Log("MbClose: "+IC.getMessage()); }
 		try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
 	}
 	
@@ -522,6 +530,7 @@ public class SrvPop3Session extends Thread {
 			try { in.close(); } catch(Exception i) {}
 			try { br.close(); } catch(Exception i) {}
 			try { O.close(); } catch(Exception i) {}
+			try { if (MB!=null) MB.Close(); } catch(Exception i) {}
 		}
 	
 	public boolean isConnected() { 
@@ -865,8 +874,63 @@ public class SrvPop3Session extends Thread {
 		ReplyA(true,"PEM",st.split("\\n"));
 		} else Reply(false,"ERROR");
 	}
+
+		private void GetNews() {
+			
+			try {
+			HashMap <String,String> conf = Mid.UsrGetConfig(Login);
+			if (conf==null) return;
+			
+			if (conf.containsKey("disableruleznews") && conf.get("disableruleznews").contains("1")) return;
+			
+			if (Mid.OnUpdateUserNews!=null && !conf.containsKey("ruleznews")) {
+				String s0 = Integer.toString(Mid.OnUpdateUserNews.hashCode(),36);
+				String s1 = conf.get("onupdatenews");
+				if (s1==null || s0.compareTo(s1)!=0) {
+					conf.put("onupdatenews", s0);
+					conf.put("ruleznews", "1");
+					String[] nw = Mid.OnUpdateUserNews.split("\\s+");
+					int cx = nw.length;
+					for (int ax=0;ax<cx;ax++) {
+							if (nw[ax].length()>0) conf.put("ruleznews-"+nw[ax], "0upd");
+							}
+					}
+				}
+			
+			String news="";
+			if (conf.containsKey("ruleznews") && conf.get("ruleznews").contains("1")) {
+					HashMap <String,String> Test = Mid.GetNewsRulez();
+		 			if (Test.size()==0) return;
+		 			
+					for (String k:conf.keySet()) {
+						if (!k.startsWith("ruleznews-")) continue;
+						String[] tk = k.split("\\-",2);
+						String vl = conf.get(k);
+						if (tk[1].length()==0) continue;
+						if (Test.containsKey(tk[1]) && Test.get(tk[1]).compareTo(vl)!=0) news+=tk[1]+"\n";
+						}
+				
+				news=news.trim();
+				String[] lst = news.split("\\n+");
+				int cx =lst.length;
+				for (int ax=0;ax<cx;ax++) {
+					if (lst[ax].length()>0 && Test.containsKey(lst[ax])) conf.put("ruleznews-"+lst[ax], Test.get(lst[ax]));
+					}
+				Mid.UsrSetConfig(Login, conf);
+								
+				for (int ax=0;ax<cx;ax++) {
+					lst[ax]=lst[ax].trim();
+					if (lst[ax].length()>0) Mid.SA_RULEZ(Login+"@"+Mid.Onion,null,lst[ax],false,true);
+					}
+				}
+			} catch(Exception E) {
+				Log("RulezNewsPOP3: "+E.getMessage());
+				if (Config.Debug) E.printStackTrace();
+			} 
+			
+		}
 		
-		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}
-		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"POP3S "+Mid.Nick+  (Login!=null ? "/"+Login : ""), st); 	}		
+		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "POP3S "+Mid.Nick+   "/"+J.UserLog(Mid, Login) , st); 	}
+		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"POP3S "+Mid.Nick+  "/"+J.UserLog(Mid, Login), st); 	}		
 		protected void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
