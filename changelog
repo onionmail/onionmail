@@ -1,3 +1,74 @@
+11.01.2015 OnionMail ver. 1.8.0:
+
+     Important update OnionMail:
+     News:
+
+         New commands for SysOp with its help as RULEZ SYSOP.
+         New commands for users (see file RULEZ).
+         New scripts and tools included in the installation package OnionMail:
+         onm-cli onm-srv onm-stat onm-new
+
+         Wizard to add servers to the system OnionMail (onm-new):
+         With this update, configure multiple instances of the same server OnionMail has never been easier.
+
+         FRIEND command to force the cycle of friendship between the server (only sysop).
+         New graphic themes for the web service:
+         OnionMail is also available in black.
+
+         Ability to select the output node prior to enrollment.
+         Update Wizard for TAILS.
+         Added the functions required by many SysOp.
+         Configuring users via etc / users.conf.
+
+     updates:
+
+         Improved handling of thread.
+         New features in the command line.
+         Improvement of the HTTP server.
+         Improved algorithm for networks of servers OnionMail.
+         
+11.16.2014 OnionMail 1.7.9:
+
+     Project status: (OS) (in production).
+     Important update OnionMail:
+     News:
+
+         File Management RULEZ with multiple files managed by the sysop.
+         New commands for SysOp with its help as RULEZ SYSOP.
+         SSLEID functions for error handling SSL and updating certificates.
+         Checking the server via email messages (only sysop).
+         Implementing NEWS via files RULEZ.
+         Password generator command line.
+         New APIs for the Control Port.
+         Validating TOR and change request identity.
+         Web Control switch: control conditional execution of scripts ETEX.
+         Verification of the use of proxy or Tor2web.
+         Added the functions required by many SysOp.
+         Configuring users via etc / users.conf.
+
+     updates:
+
+         Improvement in the management of resources.
+         File RULEZ and SYSOP RULEZ updated to version 1.7.
+         File RULEZ custom.
+         New features in the command line.
+         Hash based on random addresses in the logs.
+         Improved random password generator.
+         Integration with the batch mode.
+         Improvement of the HTTP server.
+
+     Bugs removed:
+
+         VMAT Routing v2.0:
+         Fixed a bug that asks log after twice around servers with OnionMail 1.0.x.
+         SSL:
+         Fixed the error by disabling TLS and checks.
+         Fixata Linux compatibility with servers OnionMail old that do not yet support VMAT.
+         Fixed a bug that keeps open files .dbx.dbx on error.
+         Fixed a bug on MxAccuShifter and MxDaccuShifter for blocks with more than 255 pieces.
+         Fixed MX_MAGIC: xxxx, Bad Block and the like.
+         Fixed leak usernames POP3 sessions with errors.
+
 08/16/2014 OnionMail Ver 1.6.5.893:
 	Fix config variables.
 	Fix BOOT PUSH/DERK propagation F(X) issue.

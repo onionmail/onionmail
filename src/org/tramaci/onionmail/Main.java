@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014  by Tramaci.Org
+ * Copyright (C) 2013-2015  by Tramaci.Org & OnionMail Project
  * This file is part of OnionMail (http://onionmail.info)
  * 
  * OnionMail is free software; you can redistribute it and/or modify
@@ -47,8 +47,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0007_0009_04CFL;
-	public static String Version="1.7.9.1231";
+	public static long VersionID = 0x0001_0008_0000_0567L;
+	public static String Version="1.8.0.1383";
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
@@ -57,6 +57,8 @@ public class Main {
 	public static MultiDeliverThread[] MultiTthread = null;
 	public static HTTPServer[] HTTP = null;
 
+	public static ExtraThread[] ETH = new ExtraThread[10];
+	
 	public static ControlService CS = null;
 	public static ControlService[] CSP = null; 
 	
@@ -120,7 +122,17 @@ public class Main {
 	
 	public static volatile long cday = 0;
 	public static volatile long tcrd = 0;
-		
+	
+	public static volatile long cmdFlags = 0;
+	
+	public static final long CF_B_NOBOOTPWL = 1<<11;
+	public static final long CF_U_NOSYSOPPWL = 1<<30;
+	public static final long CF_BIGPWL=1<<35;
+	public static final long CF_R_ROOTPGPPOX=1<<27;
+	public static final long CF_W_SSLNOWILC=1<<32;		//NO *.ExitRouteDomain in SSL certificate.
+	public static final long CF_C_EXPORTDER=1<<12;			//Export DER SSL certificate.
+	public static final long CF_F_NOSKIPFRIEND=1<<15;
+	
 	public int[] SelfTest(boolean term,boolean out) throws Exception {
 		int cx= SMTPS.length;
 		if (out && !Config.LogStdout) Main.echo("Self server test:\n"); else Config.GlobalLog(Config.GLOG_All, "MAIN", "Start test servers");
@@ -301,8 +313,7 @@ public class Main {
 		}
 		return false;
 	}
-	
-	
+		
 	@SuppressWarnings("static-access")
 	public void Start(String fc) throws Exception {
 		int numSrv=0;
@@ -416,13 +427,7 @@ public class Main {
 			for (int ax=0;ax<cx;ax++) {
 				echo("\nStart "+J.Limited("`"+Config.SMPTServer[ax].Nick+"`",40)+"\n");
 				echo("\tOnion:\t"+Config.SMPTServer[ax].Onion+"\n");
-				
-				
-			/*	String x;
-				if (Config.SMPTServer[ax].EnterRoute) x=J.IP2String(Config.SMPTServer[ax].LocalIP); else if (Config.SMPTServer[ax].ExitIP==null) x="0.0.0.0"; else x=J.IP2String(Config.SMPTServer[ax].ExitIP);
-				echo("\tSMTP:\t"+J.Limited( x +	":"+Config.SMPTServer[ax].LocalPort,23));
-				x=null;*/
-				
+						
 				echo("\tExit:  \t");
 				if (Config.SMPTServer[ax].EnterRoute) echo("YES!\n\tQFDN:\t"+Config.SMPTServer[ax].ExitRouteDomain+"\n"); else echo("No\n");
 								
@@ -448,6 +453,17 @@ public class Main {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "SMTP."+Config.SMPTServer[ax].Nick);
 					System.exit(2);
+					}
+				
+				if ((Main.cmdFlags & Main.CF_C_EXPORTDER)!=0) {
+						int ecx = Config.SMPTServer.length;
+						for (int eax=0;eax<ecx;eax++) try {
+							String fo = Config.SMPTServer[eax].Maildir+"/certificate.der";
+							if (new File(fo).exists()) continue;
+							byte[] der =  Config.SMPTServer[eax].MyCert.getEncoded();
+							Stdio.file_put_bytes(fo, der);
+							der=null;
+							} catch(Exception E) { Main.echo("ExportDer: "+E.getMessage()+"\n"); }
 					}
 				
 				try {
@@ -605,7 +621,8 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-						
+					
+			
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -642,11 +659,33 @@ public static void main(String args[]) {
 					
 				}
 						
-			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org & mes3hacklab\n\tSome rights reserved\n\n");
+			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2015 by Tramaci.org\n\t(C) 2014-2015 by OnionMail Project\n\t(C) 2014-2015 by mes3hacklab\n\tSome rights reserved.\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;
-				String cmd = args[ax].toLowerCase().trim();		
+				String cmd = args[ax].trim();		
+				
+				if (cmd.startsWith("-F:")) {
+					fm=true;
+					int i = cmd.indexOf(':');
+					String st=cmd.substring(i+1);
+					st=st.toLowerCase();
+					st=st.trim();
+					i = st.length();
+					
+					for (int j = 0; j < i; j++) {
+						String fl = st.substring(j,j+1);
+						try {
+							int k = Integer.parseInt(fl,36);
+							Main.cmdFlags |= 1<<k;
+							} catch(Exception E) {
+								Main.echo("Invalid flag: `"+fl+"`\n");
+								Main.Helpex();
+								return;
+							}
+						}
+					
+					}
 				
 				if (cmd.compareTo("-d")==0) fm=true;
 				
@@ -1100,7 +1139,6 @@ public static void main(String args[]) {
 					int ctask=0;
 					int maxt=0;
 					int grbt=0;
-					
 					tcrd = System.currentTimeMillis()/86400000L;
 					if (tcrd!=cday) {
 						cday=tcrd;
@@ -1121,6 +1159,7 @@ public static void main(String args[]) {
 										nodup+=Main.SMTPS[ax].Identity.Nick+",";
 										}
 									Main.SMTPS[ax].Garbage();
+									Main.SMTPS[ax].Identity.VoucherLogGarbage();
 									}
 								} catch(Exception KP) { Config.EXC(KP, "Kernel:SMTP"); }
 							} //smtp
@@ -1151,7 +1190,9 @@ public static void main(String args[]) {
 									}
 								} catch(Exception KP) { Config.EXC(KP, "Kernel:ControlPort"); }
 							} //pop3
-									
+					
+					try { ExtraThread.doGarbage(); } catch(Exception KP) { Config.EXC(KP, "Kernel:ExtraThread"); }
+					
 					if (Main.ListThreads !=null) {
 								int cx = Main.ListThreads.length;
 								maxt+=cx;

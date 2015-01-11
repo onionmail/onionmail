@@ -155,7 +155,7 @@ public class SrvSMTPSession extends Thread {
 		} catch(Exception E) {
 			isDismissed=true;
 						
-			if (E instanceof PException || E instanceof SocketException) {
+			if (E instanceof PException || E instanceof SocketException || E instanceof InterruptedException ) {
 					InetAddress sp = con.getInetAddress();
 					if (sp.getAddress()[0]!=127) try {
 						if (Mid.BlackList!=null) Mid.BlackList.setIP(sp, 1);
@@ -167,6 +167,7 @@ public class SrvSMTPSession extends Thread {
 			String msg = E.getMessage();
 			if (msg==null) msg="Exception.Null";
 			
+			if (E instanceof InterruptedException) msg="@550 Timeout you are too slow!";
 			if (E instanceof SocketException) msg="@550 Network Error: "+E.getMessage();
 			if (E instanceof IOException || E instanceof SecurityException) {
 				long rnd = Stdio.NewRndLong() & 0x7FFFFFFFL;
@@ -348,7 +349,10 @@ public class SrvSMTPSession extends Thread {
 		String[] Tok = null;
 		////////				-- HELO state --
 		HelloMode=0;
+		setTimeout(Config.MaxSMTPSessionInitTTL);
+		
 		for (int ax=0;ax<2;ax++) {
+			J.RunCheck();
 			Tok = GetSMTPCommands(3,new String[] { "HELO" , "EHLO" , "QUIT" },"503 Why not say hello?",null);
 			if (Tok==null) continue;
 			
@@ -375,6 +379,8 @@ public class SrvSMTPSession extends Thread {
 		
 		HelloData = Tok[1];
 		
+		setTimeout(Config.MaxSMTPSessionTTL);
+		
 		if (HelloMode==1) Send("250 "+(Mid.EnterRoute&& !IPisLocal ? Mid.ExitRouteDomain : Mid.Onion)+" Hello "+HelloData+" [0.0.0.0]");
 		if (HelloMode==2) {
 				
@@ -395,6 +401,7 @@ public class SrvSMTPSession extends Thread {
 	int mtr=8;
 	int ax=0;
 	while(true) {
+			J.RunCheck();
 			Tok = GetSMTPCommands(3,new String[] { 
 							"MAIL FROM:" , "RCPT TO:" ,"TORM VMAT TO:", "AUTH LOGIN","AUTH PLAIN","TORM K","TORM IAM",
 							"TORM WHO","TORM DERK","TORM PUSH","TORM MX","TORM VMAT", "DATA","STARTTLS","QUIT",
@@ -1483,6 +1490,7 @@ public class SrvSMTPSession extends Thread {
 		Hldr.put("server-mode", Short.toString(ParentServer.serverMode));
 				
 		while(true) {
+			J.RunCheck();
 			String li = I.readLine();
 			if (li==null) break;
 			li=li.trim();
@@ -1670,8 +1678,8 @@ public class SrvSMTPSession extends Thread {
 				}		
 			MS.SetHeaders(Hldr);
 			while(true) {
+				J.RunCheck();
 				String li = I.readLine();
-			
 				MessageBytes+=li.length()+2;
 				if (MessageBytes>Mid.MaxMsgSize) {
 					MS.Close();
@@ -1723,7 +1731,7 @@ public class SrvSMTPSession extends Thread {
 		boolean isTor=Server.endsWith(".onion");
 		
 		try { 
-				if (Mid.Spam!=null && Mid.Spam.isSpam(SrvIdentity.SpamList, "*@"+Server)) { //TODO Verificat
+				if (Mid.Spam!=null && Mid.Spam.isSpam(SrvIdentity.SpamList, "*@"+Server)) { //XXX TODO Verificat
 						Log(Config.GLOG_Event,"SpamServer `"+Server+"`");
 						Mid.StatSpam++;
 						return false; 
@@ -1821,6 +1829,7 @@ public class SrvSMTPSession extends Thread {
 		
 		
 		while(true) {
+			J.RunCheck();
 			String li = I.readLine();
 			if (li==null) break;
 			li=li.trim();
@@ -1948,6 +1957,131 @@ public class SrvSMTPSession extends Thread {
 				Send("250 Id=nothing");
 		}
 	
+	private void SA_ForceFriend(String MailFrom,HashMap <String, String> Hldr,String[] Tok) throws Exception {
+		
+		String oni = Tok[1].toLowerCase().trim();
+		String orgoni=oni;
+		if (!oni.matches("[a-z0-9]{16}\\.onion")) {
+			ExitRouteList RL= Mid.GetExitList();
+			ExitRouterInfo EX = RL.selectBestExit();
+			MXRecord[] MX = Mid.remoteSMTPTest(EX.domain,oni);
+			RL=null;
+			EX=null;
+			
+			SrvAction Sa = new SrvAction(Mid,MX,"ForceFriend") {
+					public void OnSession(BufferedReader RI,OutputStream RO) throws Exception {
+						SMTPReply Re;
+						if (this.SupTORM==false) throw new PException("@550 The server `"+this.HostName+"` doesn't support TORM");
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM K");
+						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote/to)"); 
+						String[] extra = new String[8];
+						Re.getData(extra);
+						if (extra.length<5) throw new PException("@550 Invalid interNos Extra Packet data on TORM K");
+						if (extra[2].compareTo("RSA")!=0) throw new PException("@550 Invalid interNos Extra Packet data on TORM K: Key TYPE `"+extra[2]+"`");
+						String loni = extra[1].toLowerCase().trim();
+						if (!loni.matches("[a-z0-9]{16}\\.onion")) throw new PException("@550 Invalid hidden service name `"+loni+"` in InterNos Extra Packetd data on TORM K");
+						
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM "+Mid.Onion+" V2.0");
+						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
+						SrvManifest M = Mid.ReceiveManifest(Re,loni);
+						if (M.Friends!=null) {
+							this.RES = new String[] { loni };
+							if (Mid.friendsForceAdd==null) Mid.friendsForceAdd="";
+							for (String o:M.Friends) {
+								o=o.toLowerCase().trim();
+								if (!o.matches("[a-z0-9]{16}\\.onion")) continue;
+								if (!("\n"+Mid.friendsForceAdd+"\n").contains("\n"+o+"\n")) {
+									Mid.friendsForceAdd=Mid.friendsForceAdd.trim()+"\n"+o;
+									Mid.friendsForceAdd=Mid.friendsForceAdd.trim();
+									}
+								}
+							} else this.RES = new String[] { loni };
+						
+						}			
+				};
+				
+			Sa.RES = new String[] { oni };
+			Sa.DoInSSL=true;
+			Sa.DoInTKIM=true;
+			Sa.Do();
+			oni = (String) Sa.RES[0];
+			}
+		
+		if (Mid.friendsForceAdd==null) Mid.friendsForceAdd="";
+		boolean added=false;
+		if (("\n"+Mid.friendsForceAdd+"\n").contains("\n"+oni+"\n")) added=false; else {
+				added=true;
+				 Mid.friendsForceAdd=Mid.friendsForceAdd.trim()+"\n"+oni;
+				 Mid.friendsForceAdd=Mid.friendsForceAdd.trim();
+				 }
+		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+		H.put("subject", "Add Friend request");
+		String ml="Server `"+oni+"` "+ ( added ? " is " : " is not ")+"added to the firend list.\r\n";
+		if (orgoni.compareTo(oni)!=0) ml+="Hostame of server: `"+orgoni+"`\r\n";
+		
+		if (0==( Mid.Status & SrvIdentity.ST_FriendRun)) {
+			try {
+				ExtraThread ETH = new ExtraThread(Mid,"DoFriends:Forced",600,ExtraThread.ETH_ID_FRIENDS ^ Mid.Nick.hashCode()) {
+					public void Run() throws Exception {
+						this.Server.Log("DoFriends Request start.");
+						this.Server.FriendOk=false; 
+						this.Server.LastFriend=0;
+						this.Server.DoFriends(); 
+						this.Server.SearchExit();
+						this.Server.Log("DoFriends Request end.");
+						
+						try {
+							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, (String) this.VAR[0]);
+							H.put("subject", "Add Friend request (Search Exit)");
+							H.put("to", (String) this.VAR[0]);
+							String ml="End of search exit:\r\n";
+							ml+="Friend server: `"+(String)this.VAR[1]+"`\r\n";
+							ml+="Server Hostname: `"+(String)this.VAR[2]+"`\r\n";
+							ml+="Search start at: `"+(String)this.VAR[3]+"`\r\n";
+							ml+="Complente.\r\nExit list:\r\n";
+							
+							ExitRouteList RL = Mid.GetExitList();
+							ExitRouterInfo[] el = RL.getAll();
+							int cx=el.length;
+							for (int ax=0;ax<cx;ax++) ml+=el[ax].toInfoString()+"\r\n";
+							ml+="\r\n\t"+this.Server.Nick+"\r\n";
+							Server.SendMessage((String) VAR[0],H,ml);
+							ml=null;
+							} catch(Exception E) {
+								Server.Log("Error on message: "+E.getMessage());
+								if (Server.Config.Debug) E.printStackTrace();
+							}
+						
+						}
+					
+						public void onError(Exception E) throws Exception {
+							this.Server.FriendOk=false; 
+							this.Server.LastFriend=0;
+							this.Server.Log("DoFriend:Forced Error: "+E.getMessage());
+							if (Server.Config.Debug) E.printStackTrace();
+							}
+					
+					} ;
+				
+				ETH.VAR = new Object[] { MailFrom , oni , orgoni, Mid.TimeString() };
+				ETH.start();
+				
+				} catch(Exception E) {
+					ml+="Error starting DoFriends: "+E.getMessage()+"\r\n";
+					 if (Config.Debug) E.printStackTrace();
+				}			
+			} else ml+="Exit list will be update to the next server refresh time\r\n";
+		
+		ml+="List of firends to add:\r\n\t";
+		String[] t0 = Mid.friendsForceAdd.split("\\n+");
+		ml+=J.Implode("\r\n\t", t0);
+		t0=null;
+		ml+="\r\n\r\n\t"+Mid.Nick+"\r\n";
+		if (PGPSession) ml=Mid.SrvPGPMessage(MailFrom,H,ml);	
+		Mid.SendMessage(MailFrom, H, ml);
+		Send("250 Id=nothing");
+		}
+	
 	private void ServerAction(String MailFrom,HashMap<String,String> Hldr,String msg) throws Exception {
 		
 		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0,true)) throw new PException(500,"SA6001 Operation not permitted");
@@ -1955,7 +2089,7 @@ public class SrvSMTPSession extends Thread {
 		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] {
 				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","SET RULEZ","DELETE RULEZ","RULEZ", "SET IS SPAM","SPAM LIST",
 				"NEWS ADD","NEWS DEL","NEWS","EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT",
-				"VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM","SSL","LOGID"
+				"VOUCHER LOG", "VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM","SSL","LOGID", "FRIEND"
 				});
 		if (Tok==null) throw new PException(503,"Unknown server action `"+Hldr.get("subject").trim()+"`");
 		
@@ -2125,6 +2259,37 @@ public class SrvSMTPSession extends Thread {
 		if (loc.compareTo("sysop")!=0) throw new PException("@550 Access denied to SysOp command");
 		///////////////////////// SYSOP USER /////////////////////////////
 		
+		if (Tok[0].compareTo("FRIEND")==0 && Tok.length>1) {
+			SA_ForceFriend(MailFrom,Hldr,Tok);
+			return;	
+			}
+				
+		if (Tok[0].compareTo("VOUCHER LOG")==0 && Tok.length>1) {
+			String t0 = Tok[1].toLowerCase();
+			String ml=null;
+			
+			if (t0.compareTo("clear")==0) {
+				if (Tok.length>2) Mid.VoucherLogDel(Tok[2]); else Mid.VoucherLogClear();
+				ml="Voucher log deleted!\n";
+				} else if (t0.compareTo("all")==0) {
+					ml="Voucher logs:\n";
+					ml+=Mid.VoucherLogGet(null);
+					} else {
+					ml=Mid.VoucherLogGet(Tok[1]);
+					if (ml==null) ml="No log for this voucher:\n"+Tok[1]+"\n"; else ml="Voucher log:\n"+ml+"\n";					
+					}
+			
+			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+			H.put("subject", "Voucher Log request");
+			ml=ml.replace("\n", "\r\n");
+			ml=ml.trim();
+			ml+="\r\n";
+			if (PGPSession) ml=Mid.SrvPGPMessage(MailFrom,H,ml);	
+			Mid.SendMessage(MailFrom, H, ml);
+			Send("250 Id=nothing");
+			return;	
+		}
+		
 		if (Tok[0].compareTo("LOGID")==0 && Tok.length>1) {
 			String ml =J.getMail( Tok[1].toLowerCase().trim(),false);
 			if (ml==null) throw new Exception("@500 Invalid mail address `"+Tok[1]+"`");
@@ -2139,6 +2304,7 @@ public class SrvSMTPSession extends Thread {
 			r.put("N/S Address", J.UserLog(null, ml));
 			r.put("N/S Local Part", J.UserLog(null, lp));
 			r.put("Full Address", J.UserLog(Mid, ml));
+			r.put("Log Address", J.scrubMail(" "+ml+" "));
 			
 			if (Mid.EnterRoute) {
 				ml = J.IfTor2Inet(ml, Mid.ExitRouteDomain);
@@ -2262,6 +2428,7 @@ public class SrvSMTPSession extends Thread {
 	
 			if (Tok[0].compareTo("VOUCHER DELETE")==0 && Tok.length>1) {
 				Mid.VoucherTest(Tok[1], true);
+				Mid.VoucherLog(Tok[1], SrvIdentity.VOUCHER_USED, "DeleteBy/SysOp");
 				
 				String rs="Voucher:\n"+Tok[1]+"\nIs now DISABLED\n\t"+Mid.Nick;
 				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
@@ -2500,7 +2667,9 @@ public class SrvSMTPSession extends Thread {
 		boolean vca=overridePermissions;
 		if (tok.length>2) {
 			vc = tok[2].trim();
-			if (Mid.VoucherTest(vc, true)==1) vca=true;
+			int r =Mid.VoucherTest(vc, true); 
+			if (r==1) vca=true;
+			Mid.VoucherLog(vc, r, "NEWUSER/MailMsg");
 			}
 		
 		if (!vca) Mid.CanAndCountCreateNewUser();
@@ -2550,7 +2719,7 @@ public class SrvSMTPSession extends Thread {
 	public boolean isOld() { return System.currentTimeMillis()> EndTime; }
 
 	public void End() {
-		if (con.isConnected()) closeh();
+		closeh();
 		try {this.interrupt(); } catch(Exception I) {}
 	}
 
@@ -2561,7 +2730,7 @@ public class SrvSMTPSession extends Thread {
 		maxtry--;
 		String li="";
 		
-		for (int tr = 0 ;tr<=maxtry;tr++) { ////////////TODO ??? Delirio
+		for (int tr = 0 ;tr<=maxtry;tr++) { ////////////XXX ??? Delirio???
 			li = I.readLine();
 			if (li==null || !con.isConnected()) Log("Remote connection close!");
 			if (!con.isConnected()) throw new PException("@500 Connection lost");
@@ -2907,6 +3076,28 @@ public class SrvSMTPSession extends Thread {
 		
 		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, from);
 
+		if (Tok[1].compareToIgnoreCase("UPDATE")==0) {
+			if (Login==null || Login.compareTo("sysop")!=0) throw new PException("@550 Access denied"); 
+			ExtraThread ETH = new ExtraThread(Mid,"ExitUpdate",300,ExtraThread.ETH_ID_EXITUP ^ Mid.Nick.hashCode()) {
+				public void Run() throws Exception {
+					Mid.SearchExit();
+					ExitRouteList RL = Mid.GetExitList();
+					ExitRouterInfo[] el = RL.getAll();
+					HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, (String) VAR[0]);
+					H.put("subject", "Updated exit list");
+					String qq="Exit list:\r\n";
+					int cx=el.length;
+					for (int ax=0;ax<cx;ax++) qq+=el[ax].toInfoString()+"\r\n";				
+					Server.SendMessage((String) VAR[0], H, qq);
+					}
+				};
+				
+			ETH.VAR = new Object[] { from };
+			try {  ETH.start(); } catch(Exception E) { throw new PException("@550 Error: "+E.getMessage()); }
+			Send("250 Id=Nothing");
+			return;
+			}		
+		
 		if (Tok[1].compareToIgnoreCase("VMAT")==0) {
 			
 		if (RL.isEmpty()) {
@@ -3005,7 +3196,7 @@ public class SrvSMTPSession extends Thread {
 				txt+="SSL ID: "+Stdio.Dump(ha.getId())+"\n";
 				txt+="\n";
 				}
-				//TODO Verificare conf ssl
+				//XXX Verificare conf ssl
 			if (s!=null) {
 				txt+="SSL Session info:\n";
 				txt+="SSL Chiper Suite: "+	s.getCipherSuite()+"\n";
@@ -3549,9 +3740,12 @@ public class SrvSMTPSession extends Thread {
 			return re;
 		}
 
+		public void setTimeout(int Usecs) {
+			EndTime = System.currentTimeMillis() + Usecs;
+		}
 		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,LogPart(), st); 	}
-		
+	
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

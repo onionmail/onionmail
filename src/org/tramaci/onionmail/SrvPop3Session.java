@@ -61,7 +61,9 @@ public class SrvPop3Session extends Thread {
 	
 	private boolean TLSON=false;
 	public boolean isDismissed = false;
-		
+	
+	private String selectedRQUSExit=null;
+	
 	private void BeginPOP3Session() throws Exception {
 
 		Mid.StatPop3++;
@@ -78,7 +80,8 @@ public class SrvPop3Session extends Thread {
 		String Pass=null;
 		
 		while(isConnected() && !isOld()) {
-			String[] Tok = 	ReadCommands(5,new String[] {"QUIT","USER ","PASS ","CAPA","APOP","STLS","STARTTLS","RQUS"});
+			//J.RunCheck();
+			String[] Tok = 	ReadCommands(10,new String[] {"QUIT","USER ","PASS ","CAPA","APOP","STLS","STARTTLS","RQUS","RQEX"});
 			if (Tok[0].compareTo("QUIT")==0)  {
 					Reply(true);
 					close();
@@ -114,7 +117,29 @@ public class SrvPop3Session extends Thread {
 				continue;
 				}
 			
+			if (Tok[0].compareTo("RQEX")==0) {
+				if (Tok.length==1) {
+						ExitRouterInfo[] LS = Mid.GetExitList().queryFLT(ExitRouteList.FLT_EXITVMAT);
+						int cx = LS.length;
+						String[] ls = new String[cx];
+						for (int ax=0;ax<cx;ax++) ls[ax] = LS[ax].domain;
+						ReplyA(true,"ELIST",ls);
+					} else {
+						Tok[1]=Tok[1].toLowerCase().trim();
+						ExitRouterInfo sel =  Mid.GetExitList().getByDomain(Tok[1]);
+						if (sel.canVMAT && sel.isExit && !sel.isDown && !sel.isBad) {
+								selectedRQUSExit = Tok[1];  
+								Reply(true,"Exit: "+selectedRQUSExit);
+								} else {
+									Reply(false,"Bad Exit");
+									Log("No exit: "+Tok[1]);
+									}
+					}
+				continue;
+				} 
+			
 			if (Mid.POP3CanRegister && Tok[0].compareTo("RQUS")==0) {
+				setTimeout(Config.MAXPOP3SessionTTL);
 				try { SA_REQUSR(); } catch(Exception E) {
 					String msg= E.getMessage();
 					if (msg==null) msg="NULL";
@@ -189,8 +214,6 @@ public class SrvPop3Session extends Thread {
 		
 		////////////////// mailbox /////////////////////////
 		
-		
-		
 		LoginHash=0;
 		int cx = Login.hashCode();
 			
@@ -203,7 +226,9 @@ public class SrvPop3Session extends Thread {
 			return;
 			}
 		LoginHash=cx;
-
+		
+		setTimeout(Config.MAXPOP3SessionTTL);
+		
 		BoxSize=0;
 		MB.UpdateIndex();
 		MsgNum = MB.Length();
@@ -256,6 +281,7 @@ public class SrvPop3Session extends Thread {
 			
 			
 			if (Tok[0].compareTo("STAT")==0) {
+				setTimeout(Config.MAXPOP3SessionTTL);
 				Reply(true,MsgNum+" "+BoxSize);
 				continue;
 				}
@@ -298,6 +324,7 @@ public class SrvPop3Session extends Thread {
 			
 			
 			if (Tok[0].compareTo("RETR")==0 && Tok.length==2) {
+				setTimeout(Config.MAXPOP3SessionTTL);
 				int sel = pIntPop(Tok[1]);
 				if (!CheckMessage(sel)) {
 					Reply(false,"no such message");
@@ -335,6 +362,7 @@ public class SrvPop3Session extends Thread {
 				}
 			
 			if (Tok[0].compareTo("RSET")==0 && Tok.length==1) {
+				setTimeout(Config.MAXPOP3SessionTTL);
 				BoxSize=BoxSizeo;
 				MsgNum=BoxLen;
 				Deleted=new boolean[BoxLen];
@@ -348,6 +376,8 @@ public class SrvPop3Session extends Thread {
 		
 		int errs=0;
 		int dels=0;
+		setTimeout(Config.MAXPOP3SessionTTL);
+		
 		if (Mid.AutoDeleteReadedMessages) {
 			cx=DeleteR.length;
 			for (int ax=0;ax<cx;ax++) Deleted[ax]|=DeleteR[ax];
@@ -444,7 +474,7 @@ public class SrvPop3Session extends Thread {
 				"UIDL\n";
 		
 		if (!TLSON) po+="STLS\nSTARTTLS\n";
-		if (Mid.POP3CanRegister) po+="RQUS\n";
+		if (Mid.POP3CanRegister) po+="RQUS\nRQEX\n";
 		po+="IMPLEMENTATION POP3";
 		po=po.trim();
 		
@@ -479,7 +509,7 @@ public class SrvPop3Session extends Thread {
 			if (isConnected()) {
 				String st = E.getMessage();
 				if (st==null) st="Exception "+E.toString();
-				
+				if (E instanceof InterruptedException) st="@-ERR Timeout, you are too slow!"; 
 				if (st.startsWith("@")) {
 					try {
 						String s = recmd(false,null,st.substring(1),null);
@@ -520,7 +550,7 @@ public class SrvPop3Session extends Thread {
 		in = new DataInputStream(sok.getInputStream());
 		br = new BufferedReader(new InputStreamReader(in));
 		O = sok.getOutputStream();
-		EndTime = System.currentTimeMillis() + Config.MaxSMTPSessionInitTTL;
+		EndTime = System.currentTimeMillis() + Config.MaxPOP3InitTTL;
 		start();
 		}
 	
@@ -549,7 +579,7 @@ public class SrvPop3Session extends Thread {
 		isDismissed=true;
 		close();
 		try {this.interrupt(); } catch(Exception I) {}
-	}
+		}
 	
 	private void Reply(boolean state) throws Exception { Reply(state, null); }
 	
@@ -559,7 +589,8 @@ public class SrvPop3Session extends Thread {
 		s=s.trim();
 		s+="\r\n";
 		O.write(s.getBytes());
-	}
+		}
+	
 	private void ReplyA(boolean state,String Msg, String[] data) throws Exception {
 		String s = state ? "+OK" : "-ERR";
 		int cx = data.length;
@@ -571,7 +602,7 @@ public class SrvPop3Session extends Thread {
 		s=s.trim();
 		s+="\r\n.\r\n";
 		O.write(s.getBytes());
-	}
+		}
 		
 	private int pIntPop(String st) { try { return Integer.parseInt(st)-1; } catch(Exception E) { return 0; }}
 	private String toIntPop(int a) { return Integer.toString(a+1); }
@@ -713,7 +744,9 @@ public class SrvPop3Session extends Thread {
 		boolean vca=false;
 		if (cod.length()>0) {
 			cod = cod.trim();
-			if (Mid.VoucherTest(cod, true)==1) vca=true;
+			int r =Mid.VoucherTest(cod, true);
+			if (r==1) vca=true;
+			Mid.VoucherLog(cod, r, "POP3/RQUS");
 			}
 		
 		if (!vca) Mid.CanAndCountCreateNewUser();
@@ -809,7 +842,23 @@ public class SrvPop3Session extends Thread {
 	ExitRouteList EL = Mid.GetExitList();
 	ExitRouterInfo SE = EL.selectBestExit();
 	
+	if (selectedRQUSExit!=null) {
+		ExitRouterInfo WE = EL.getByDomain(selectedRQUSExit);
+		if (WE!=null && WE.canVMAT) SE=WE;
+		}
+			
+	if (SE!=null) {
+			ExitRouterInfo ex = EL.selectExitByDomain(SE.domain, false);
+			String oni = ex.onion;
+			String dom = ex.domain;
+			HashMap <String,String> Ho = new HashMap <String,String>();
+			Ho.put("exitonion", oni);
+			Ho.put("exitdomain", dom);
+			Mid.UsrSetConfig(user,Ho);
+			}
+	
 	if (SE!=null && SE.canVMAT) try {
+		
 		VirtualRVMATEntry RVM = Mid.VMATRegister(user+"@"+SE.domain,user);
 		if (RVM!=null) {
 			rs+="vmat: 1\n";
@@ -839,7 +888,7 @@ public class SrvPop3Session extends Thread {
 	pop3p=null;
 	smtpp=null;
 	System.gc();
-	
+		
 	if (usePGP) {
 		rs+="\n.\n";
 		byte[] original = rs.getBytes();
@@ -929,6 +978,8 @@ public class SrvPop3Session extends Thread {
 			} 
 			
 		}
+		
+		public void setTimeout(long mAXPOP3SessionTTL) { EndTime = System.currentTimeMillis() + mAXPOP3SessionTTL; }
 		
 		public void Log(String st) { Config.GlobalLog(Config.GLOG_Server|Config.GLOG_Event, "POP3S "+Mid.Nick+   "/"+J.UserLog(Mid, Login) , st); 	}
 		public void Log(int flg,String st) { Config.GlobalLog(flg | Config.GLOG_Server|Config.GLOG_Event,"POP3S "+Mid.Nick+  "/"+J.UserLog(Mid, Login), st); 	}		

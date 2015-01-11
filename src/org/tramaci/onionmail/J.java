@@ -1505,14 +1505,6 @@ public class J {
 		return Double.toString(f);
 		}
 
-	public static String LogHash(SrvIdentity S,String address) throws Exception {
-		long a = System.currentTimeMillis()/3600000L;
-		a=a^a>>1;
-		int i = (int) (a&3);
-		String s = Stdio.Dump(S.Subs[i])+"#"+address+"#"+Long.toString(a,36);
-		return Long.toString(s.hashCode(),36);
-	}
-
 	public static String PrintStackTrace(Exception E) {
 			String rs="Exception: "+	E.toString()+"\n\t";
 			StackTraceElement[] st = E.getStackTrace();
@@ -1522,19 +1514,6 @@ public class J {
 				if (st[ax].isNativeMethod()) break;
 				}
 			return rs.trim();
-		}
-
-	public static String RemoveMailAddress(String i) {
-		int a = i.indexOf('<');
-		if (a<0) return i;
-		int b = i.indexOf('@');
-		if (b<0) return i;
-		int c = i.indexOf('>');
-		if (c<0) return i;
-		String i1  =i.substring(0,a);
-		String i2 = i.substring(a,c);
-		String i3 = i.substring(c);
-		return i1+"<"+Long.toString(i2.hashCode(),36)+">"+i3;
 		}
 
 	public static String fgets(InputStream I,int max) throws Exception {
@@ -1594,20 +1573,20 @@ public class J {
 		String pr="";
 		if (isLocal) {
 			pr="L";
-			if (usr.compareTo("sysop")==0 || usr.compareTo("server")==0) return usr;
+			if (usr.compareTo("sysop")==0 || usr.compareTo("server")==0) return usr.replace('@', '#');
 			if (usr.endsWith(".onion")) ff=".o";
 			if (usr.endsWith(".op")) ff=".op";
 			if (usr.endsWith(".list")) ff=".ls";
-			if (usr.endsWith(".app")) return usr;
+			if (usr.endsWith(".app")) return usr.replace('@', '#');
 			} else {
 			pr="C";
 			if (srv!=null && usr.contains("@"+srv.Onion)) ff+=".L";
 			if (srv!=null && srv.EnterRoute && usr.contains(".onion@"+srv.ExitRouteDomain)) ff+=".X";
 			if (usr.contains(".onion@")) ff=".o";
 			if (usr.contains(".list@")) ff=".ls";
-			if (usr.startsWith("server@")) return "srv@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
-			if (usr.startsWith("sysop@")) return "srv@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
-			if (usr.contains(".app@")) return J.getLocalPart(usr)+"@"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			if (usr.startsWith("server@")) return "srv#"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			if (usr.startsWith("sysop@")) return "srv#"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
+			if (usr.contains(".app@")) return J.getLocalPart(usr)+"#"+Long.toString(J.getDomain(usr).hashCode() % 1296,36)+ff;
 			}
 		
 		String dom="";
@@ -1631,8 +1610,74 @@ public class J {
 		String c = Long.toString(Main.RandLog)+"/"+Long.toString(a,36)+"/"+loc+"/"+Long.toString(b,36);
 		String d = Long.toString(e,36);
 		c = Long.toString(c.hashCode() ^ ((b&0x7FFF)<<31),36);
-		if (dom.length()>0) ff="@"+d+ff;
+		if (dom.length()>0) ff="#"+d+ff;
 		return pr+c+ff;
+		}
+
+	public static String scrubMail(String in)  {
+		try {
+			String VCA=new String( new char[] { 
+					0x51, 0x41, 0x5a, 0x58, 0x53, 0x57, 0x32, 0x33, 0x45, 0x44, 0x43, 0x56, 0x46, 0x52, 
+					0x34, 0x35, 0x54, 0x47, 0x42, 0x4e, 0x48, 0x59, 0x36, 0x37, 0x55, 0x4a, 0x4d, 0x4b, 
+					0x49, 0x38, 0x39, 0x4f, 0x4c, 0x50, 0x30, 0xd, 0xe, 0xb, 0x5f }) 
+					;
+			
+			char[] st = in.toCharArray();
+			int cx = st.length;
+			String[] scrubs = new String[cx];
+			int sc=0;
+			int[] sts = new int[cx];
+			int[] ste = new int[cx];
+			
+			for (int ax=0;ax<cx;ax++) {
+				if (st[ax]==255) st[ax]=32;
+				
+				String scrub="";
+				
+				char c = st[ax];
+				if (c==64) {
+					for (int al=ax-1;al>-1;al--) {
+						c = (char)(st[al]&223);
+						if (VCA.indexOf(c)==-1) break;
+						st[al]=c;
+						scrub=st[al]+scrub;
+						sts[sc]=al;
+						}
+					
+					scrub+='@';
+					
+					for (int al=ax+1;al<cx;al++) {
+						c = (char)(st[al]&223);
+						if (VCA.indexOf(c)==-1) break;
+						st[al]=c;
+						scrub+=st[al];
+						ste[sc]=al;
+						}
+					
+					if (scrub.length()>3) {
+						scrubs[sc]=scrub;
+						sc++;
+						}
+					}
+			}
+			
+		String out=new String(st);
+		
+		for (int ax=0;ax<sc;ax++) {
+			String scrub = J.UserLog(null, scrubs[ax].toLowerCase());
+			if (scrub==null) scrub ="[scrubbed]";
+			out=out.replace(scrubs[ax], '['+scrub+']');
+			}
+					
+		return out;
+		} catch(Exception E) {
+			E.printStackTrace();
+			return "[censored]";
+		}
+	}
+	
+	public static void RunCheck() throws Exception {
+		if (Thread.currentThread().isInterrupted()) throw new InterruptedException("Timeout");
 		}
 	
 	public static int setBit(int mask,int old,boolean value) { return value ? old|mask : old&(-1^mask) ; }

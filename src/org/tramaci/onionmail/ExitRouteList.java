@@ -50,6 +50,7 @@ public class ExitRouteList  {
 	public static final int FLT_MX = EFLT_BAD_N | EFLT_DOWN_N | EFLT_MX_Y;
 	public static final int FLT_VMAT = EFLT_BAD_N | EFLT_DOWN_N | EFLT_VMAT_Y;
 	public static final int FLT_EXIT = EFLT_BAD_N | EFLT_DOWN_N | EFLT_EXIT_Y;
+	public static final int FLT_EXITVMAT=EFLT_BAD_N | EFLT_DOWN_N | EFLT_EXIT_Y | EFLT_VMAT_Y;
 	
 	private HashMap <String,ExitRouterInfo> byOnion = new HashMap <String,ExitRouterInfo>();
 	private HashMap <String,ExitRouterInfo> byDomain = new HashMap <String,ExitRouterInfo>();

@@ -305,6 +305,22 @@ public class ControlSession extends Thread{
 			
 				if (cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
 				
+				if (cmd.compareTo("dofriends")==0) {
+					if (0!=( SRVS[CurSrv].Status & SrvIdentity.ST_FriendRun)) {
+						Reply(false,"DoFriends arleady in progress.");
+						continue;
+						}
+					
+					Log("DoFriends CLI Request start.");
+					SRVS[CurSrv].FriendOk=false; 
+					SRVS[CurSrv].LastFriend=0;
+					SRVS[CurSrv].DoFriends(); 
+					SRVS[CurSrv].SearchExit();
+					Log("DoFriends CLI Request end.");
+					Reply(true);
+					continue;
+				}
+				
 				if (cmd.compareTo("sslcheck")==0 && Tok.length>1) {
 					String host = Tok[1].toLowerCase().trim();
 					boolean t=true;
@@ -393,6 +409,8 @@ public class ControlSession extends Thread{
 				boolean save =  cmd.compareTo("voucher")==0;
 				
 				int ax= SRVS[CurSrv].VoucherTest(Tok[1],save);
+				if (save) SRVS[CurSrv].VoucherLog(Tok[1], ax, (Tok.length>2 ? Tok[2] :"CmdAction"));
+				
 				if (SRVS[CurSrv].LogVoucherTo!=null && ax==1 && save) try {
 						if (Config.Debug) Log("Voucher `"+(Tok.length>2 ? Tok[2] : "???")+"` V=`"+Tok[1]+"`");
 						Stdio.LogFile((Tok.length>2 ? Tok[2] : "???")+"\tcli\t"+Tok[1], SRVS[CurSrv].LogVoucherTo, Config);

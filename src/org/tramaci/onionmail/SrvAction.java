@@ -115,7 +115,7 @@ public class SrvAction {
 						
 			RO = RS.getOutputStream();
 			RI  =J.getLineReader(RS.getInputStream());
-			RS.setSoTimeout(Mid.Config.MaxSMTPSessionInitTTL);
+			RS.setSoTimeout(Mid.Config.MaxSMTPSessionTTL);
 			ActionPosition= APOX_HELLO;
 			Re = new SMTPReply(RI);
 			firstReply=Re;

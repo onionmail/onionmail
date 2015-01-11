@@ -1,0 +1,890 @@
+#!/bin/bash
+
+TOR_EXE="/usr/sbin/tor"
+JAVA_EXE="/usr/bin/java"
+CPU_EXE="/usr/bin/cpulimit"
+WIPE_EXE="/usr/bin/wipe"
+CAPP_EXE="/sbin/setcap"
+
+TORRC="/etc/tor/torrc"
+TOR_SRV="/etc/init.d/tor restart"
+TOR_STOP="/etc/init.d/tor stop"
+
+ONM_BAS="/var/lib/onionmail"
+ONM_SETUPKIT="/etc/onionmail/setupkit"
+ONM_HIDE="/var/lib/onionmail/HiddenServiceDir"
+ONM_HIDE_BAS="/var/lib/onionmail/HiddenServiceDir"
+ONM_COUNTER=0
+ONM_USR="debian-onionmail"
+TOR_USR="debian-tor"
+MAILBASE="/var/onionmail"
+LOGBASE="/var/log/onionmail"
+USEDPORTS=" 9100 10025 "
+
+APT_TOR="tor"
+APT_JAVA="openjdk-7-jre"
+APT_CPU="cpulimit"
+APT_WIPE="wipe"
+APT_CAPP="libcap2-bin"
+
+RET_PORTA=0
+PAR_NICK="onionmail"
+PAR_X="X"
+
+X_UNKNOWN=`gpg -a --gen-random 1 160 | tr '[:upper:]' '[:lower:]' | egrep -Eo '[^aeiouy]{1}[aeiouy]{1,2}' | egrep -m 4 -Eo '[a-z]{2,3}' | tr -d "\\n" | egrep -m 1 -Eo '[a-z]{4,16}'`
+X_UNKNOWN="unknown-${X_UNKNOWN}"
+PAR_SERVERCONF="/etc/onionmail/servers.d/${X_UNKNOWN}.conf"
+
+RAMDRIVE="/dev/shm/"
+__RAMPASS__="/dev/shm/onionmail"
+__CPULIMIT__="cpulimit -e java -b -l 10 -z > cpulimit.log"
+
+__ISHTTP__="yes"
+__HTTPMANF__="Public"
+__MSIZE__="8"
+__MNUMSG__="256"
+__POP3REG__="yes"
+__NUSRD__="100"
+__NUSRH__="4"
+__NLISTD__="100"
+__NLISTH__="5"
+__FRIENDLY__="yes"
+__EXITDOM__="example.org"
+__EXIT_IP__="127.0.0.1"
+__MX_DOMAIN__="example.org"
+__EXITALT__="10125"
+__HTTP__="18000"
+__DNS__="213.73.91.35"
+
+ISEXIT="0"
+NUMPAR=0;
+RYN="0";
+
+function reqNum() { #prompt #min #max
+ while true; do
+  read -p "$1? " NUMPAR
+  NUMPAR=`echo "$NUMPAR" | grep -m 1 -Eo '[0-9]{1,4}'`
+  if [ "$NUMPAR" = "" -o $NUMPAR -lt $2 -o $NUMPAR -gt $3 ] ; then
+		echo "Please select enter a number from $2 to $3"
+	else
+		return 0; break;
+	fi
+  done
+ }
+
+function RreqYN() { #prompt #y #n
+ while true; do
+  read -p "$1? " yn
+  case $yn in
+       [$2]* ) RYN=1; return 0; break;;
+       [$3]* ) RYN=0; return 0; break;;
+       * ) echo "Please answer correctly.";;
+  esac
+ done
+ }
+ 
+function RYNYES() {
+	if [ $RYN = "1" ]; then
+		RYN='yes';
+		else
+		RYN='no';
+		fi
+	}
+ 
+function reqYN() { #prompt
+ while true; do
+  read -p "$1? (y/n) " yn
+  case $yn in
+       [Yy]* ) return 0; break;;
+       [Nn]* ) exit;;
+       * ) echo "Please answer y or n.";;
+  esac
+ done
+ }
+
+function nickReq() {
+  for ((i=0;i<10;i++))
+   do
+   read -p "NickName> " PAR_NICK
+   PAR_NICK=`echo "$PAR_NICK" | egrep -i -o -m 1 -e "[a-zA-Z0-9]{5,32}" -o`
+   if [ "$PAR_NICK" = "" ]; then
+    echo "Invalid nick name!"
+    else
+    echo "Server's nickname: $PAR_NICK"
+    return 0
+    fi
+   done
+   echo "Too many errors"
+   exit
+ }
+
+function stReq() {
+  for ((i=0;i<10;i++))
+   do
+   read -p "Country code> " PAR_CC
+   PAR_CC=`echo "$PAR_CC" | egrep  -i -o -m 1 -e "^[a-zA-Z]{2}$" -o`
+   if [ "$PAR_CC" = "" ]; then
+    echo "Invalid country code! (Use XX to set Anonymous)"
+    else
+    return 0
+    fi
+   done
+   echo "Too many errors"
+   exit
+ }
+
+function parReq() { #prompt
+   read -p "$1> " PAR_X
+   if [ "$PAR_X" = "" ]; then
+    PAR_X="Anonymous"
+    fi
+   }
+
+function createUsr() {
+  x=`egrep -i "^$ONM_USR\:" /etc/passwd`
+  if [ "$x" = "" ]; then
+    echo "Create user $ONM_USR"
+    useradd -d $ONM_BAS -m $ONM_USR
+    x=`egrep -i "^$ONM_USR" /etc/passwd`
+       if [ "$x" = "" ]; then
+        echo "User creation failed"
+	exit
+       fi
+    fi
+  }
+
+function checkAndSetup() { # exe apt name
+ if [ ! -f $1 ]; then
+   echo "This program requires $3"
+   reqYN "Do you want install $3 now"
+   apt-get install $2
+   if [ ! -f $1 ]; then
+     echo "Can't find $3"
+     echo "Setup aborted"
+     exit;
+     fi
+   fi
+ echo -e "\tCheck $3 Ok"
+ }
+
+function scanPort() { #from to
+  NETW=`netstat -nWl4`
+  for ((p=$1;p<=$2;p++))
+    do
+    x=`echo $NETW | grep ":$p"`
+    if [ "$x" = "" ]; then
+    
+		if [[ $USEDPORTS != *" ${p} "* ]]
+			then
+			RET_PORTA=$p
+			return 0
+			fi
+     fi
+    done
+    RET_PORTA=0
+    echo "No free TCP ports in interval {$1}-{$2}"
+    exit
+  }
+
+function waitTorOnion() {
+  for ((wt=0;wt<60;wt++))
+    do
+    if [ -f $ONM_HIDE/hostname ]; then
+      PAR_ONION=`cat $ONM_HIDE/hostname`
+      if [ "$PAR_ONION" != "" ]; then
+       return 0;
+       fi
+     fi
+    sleep 1
+    done
+    echo "Can't find any onion route in hostname"
+    exit
+  }
+
+function configFile() { #file #o
+ if [ "$2" = "!" ]; then
+   orig="$ONM_SETUPKIT/$1" 
+   outp="/etc/onionmail/$1"
+ else
+   orig=$1
+   outp=$2
+   fi
+   
+ if [ ! -f $orig ]; then
+   echo "Can't find $orig"
+   exit
+   fi
+  
+  tmp=`cat $orig`
+ 
+  tmp=${tmp//__PATH__/$ONM_BAS}
+  tmp=${tmp//__SMTP__/$PAR_SMTP}
+  tmp=${tmp//__POP3__/$PAR_POP3}
+  tmp=${tmp//__CTRL__/$PAR_CTRL}
+  tmp=${tmp//__SOCKS__/$PAR_TORP}
+  tmp=${tmp//__ONION__/$PAR_ONION}
+  tmp=${tmp//__NICK__/$PAR_NICK}
+  tmp=${tmp//__PAR_PASSWD_ROOT__/$PAR_PASSWD_ROOT}
+  tmp=${tmp//__PAR_PASSWD_SERV__/$PAR_PASSWD_SERV}
+  tmp=${tmp//__PAR_PASSWD_BOOT__/$PAR_PASSWD_BOOT}
+  tmp=${tmp//__MAILDIR__/$PAR_MAILDIR}
+  tmp=${tmp//__SSL_CC__/$PAR_CC}
+  tmp=${tmp//__USER__/$ONM_USR}
+  tmp=${tmp//__SSL_ORG__/$SSL_ORG}
+  tmp=${tmp//__SSL_UNI__/$SSL_UNI}
+  tmp=${tmp//__SSL_STA__/$SSL_STA}
+  tmp=${tmp//__HTTP__/$PAR_HTTP}
+  tmp=${tmp//__ISHTTP__/$__ISHTTP__}
+  tmp=${tmp//__HTTPMANF__/$__HTTPMANF__}
+  tmp=${tmp//__MSIZE__/$__MSIZE__}
+  tmp=${tmp//__MNUMSG__/$__MNUMSG__}
+  tmp=${tmp//__POP3REG__/$__POP3REG__}
+  tmp=${tmp//__NUSRD__/$__NUSRD__}
+  tmp=${tmp//__NUSRH__/$__NUSRH__}
+  tmp=${tmp//__NLISTD__/$__NLISTD__}
+  tmp=${tmp//__NLISTH__/$__NLISTH__}
+  tmp=${tmp//__FRIENDLY__/$__FRIENDLY__}
+  tmp=${tmp//__EXITDOM__/$__EXITDOM__}
+  tmp=${tmp//__EXIT_IP__/$__EXIT_IP__}
+  tmp=${tmp//__EXITALT__/$__EXITALT__}
+  tmp=${tmp//__MX_DOMAIN__/$__MX_DOMAIN__}
+  tmp=${tmp//__DNS__/$__DNS__}
+  tmp=${tmp//__RAMPASS__/$__RAMPASS__}
+  tmp=${tmp//__CPULIMIT__/$__CPULIMIT__}
+  tmp=${tmp//__SERVERCONF__/$PAR_SERVERCONF}
+  tmp=${tmp//__PAR_ROOT__/$PAR_ROOT}
+  
+  echo "$tmp" > $outp
+  if [ ! -f $outp ]; then
+    echo "Can't write $outp"
+    exit
+    fi
+  }
+
+function genServer() {
+  $ONM_BAS/gen.sh
+  wipe -f -c -s $ONM_BAS/gen.sh
+  }
+
+cat << EOF
+
+-----------------------------------------------------
+OnionMail Debian server wizard ver. 1.8.0
+  (C) 2014-2015 by OnionMail Project
+  Some rights reserved
+-----------------------------------------------------
+
+This wizard will automatically add another 
+ OnionMail server.
+ All parameters will be configured easily.
+ 
+EOF
+
+if [ ! -f $__RAMPASS__ ] ; then
+	echo "Can't find password file: ${__RAMPASS__}"
+	exit
+	fi
+
+reqYN "Continue"
+
+clear
+
+cat << eof 
+Do you wish to create an EXIT/ENTER OnionMail server?
+
+  Choose X to create an EXIT OnionMail server:
+     An EXIT/ENTER server will be public and will NOT anonymous!
+     The .onion address is associated to the Internet address.
+     An Exit/Enter node of OnionMail is like a Tor exit node.
+     This server can used by community to share the address with the
+     TOR mail network.
+     Create this type of server only if you know what you are doing!
+
+   Choose N to create a NORMAL OnionMail server:
+     This server type is ANONYMOUS and it use a TOR hidden service.
+     Nonbody can know the Internet address of the server.
+     We suggest to create this type of server.
+     Choose N if you want to sleep soundly.
+
+eof
+RreqYN "X=Exit, N=Normal" "Xx" "Nn"
+ISEXIT=$RYN
+clear
+if [ "$ISEXIT" = "1" ] ; then
+	cat << eof
+
+To create an EXIT OnionMail server you MUST to set the DNS MX record
+before install OnionMail.
+The OnionMail EXIT/ENTER server needs the DNS MX record to forward 
+messages from Internet to Tor and viceversa.
+
+   Example:
+       A   example.org     (ip of this server)
+       MX  example.org 10  (ip of this server)
+       TXT v=spf1 mx a ip4:(ip of this server) ~all
+
+   If you've already done everything then continue, otherwise stop here.
+
+eof
+	reqYN "Continue"
+	clear
+	fi
+
+cat << eof
+Do you want to configure all server parameters?
+
+	Y = Yes: Change all parameters.
+	N = No:  Use the automatic configurations.
+
+eof
+RreqYN "" "Yy" "Nn"
+SETALL=$RYN
+
+clear
+cat << eof
+
+Enter server informations:
+  OnionMail use SSL and server's nickname.
+  You can set these parameters. If you want to stay anonymous
+  you can generate a preconfigured parameters to prevent some
+  "mental saws" of NSA!
+
+eof
+
+RreqYN "Do you want set NickName and SSL (Y/N)" "Yy" "Nn"
+MENTALSAW=$RYN
+if [ $MENTALSAW = "1" ]; then
+	nickReq
+	echo "Server's SSL informations:"
+	parReq "Organization"
+	SSL_ORG=$PAR_X
+	parReq "Org. Unit"
+	SSL_UNI=$PAR_X
+	parReq "State"
+	SSL_STA=$PAR_X
+	stReq
+	else
+	PAR_NICK=$X_UNKNOWN
+	SSL_ORG=$X_UNKNOWN
+	SSL_UNI=$X_UNKNOWN
+	SSL_STA=$X_UNKNOWN
+	PAR_CC='XX'
+	fi
+
+ONM_COUNTER=`ls /var/onionmail/*/server.bin 2>/dev/null | egrep -ic 'server\.bin'`	
+ONM_COUNTER=$(($ONM_COUNTER+1))
+
+PAR_SERVERCONF="/etc/onionmail/servers.d/${ONM_COUNTER}-${PAR_NICK}.conf"
+ONM_HIDE="${ONM_HIDE_BAS}-${ONM_COUNTER}-${PAR_NICK}"
+
+if [ $ISEXIT = "1" -a $SETALL = "0" ]; then
+	__EXIT_IP__=`ifconfig | egrep -Eo 'addr\:[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -v ":127." | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+	__EXITDOM__=`hostname -f`
+	__MX_DOMAIN__=$__EXITDOM__
+	LOOPNZ="1"
+	else
+	LOOPNZ="0"
+	fi
+
+if [ $ISEXIT = "1" ]; then
+	while true; do
+		if [ $LOOPNZ = "0" ]; then
+			clear
+			echo -e "Setting EXIT/ENTER informations:\n\n"
+			echo "Select the public IP address (interface) to use as source and listen to:"
+			ifconfig | egrep -Eo 'addr\:[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | grep -v ":127." | egrep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+			while true; do
+			  read -p "IPv4: " __EXIT_IP__
+			  __EXIT_IP__=`echo "$__EXIT_IP__" | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+			  if [ "$__EXIT_IP__" = "" ] ; then
+				echo "Invalid IPv4 address."
+				else
+				break
+				fi
+			  done
+
+			HN=`hostname -f`
+			echo -e "\nSet the domain name:\n\tEnter the domain name (after @ in mail addresses) of this server."
+			echo "If the domain is $HN leave a blank line."
+			while true; do
+				read -p "Domain: " __EXITDOM__
+				if [ "$__EXITDOM__" = "" ]; then
+					__EXITDOM__=$HN
+					fi
+
+				if [ "$__EXITDOM__" = "" ]; then
+					echo "Invalid domain name"
+					else
+					break;
+					fi
+				done
+
+			echo -e "\nSet the server domain name:\n\tEnter the same domain name in MX record\n"
+
+			echo "If is $HN leave a blank line."
+			read -p "MX Domain: " __MX_DOMAIN__
+			if [ "$__MX_DOMAIN__" = "" ] ; then
+				__MX_DOMAIN__=$HN
+				fi
+			fi
+
+		clear
+
+		if [ "$LOOPNZ" = "1" ]; then
+			echo -e "\nThe OnionMail EXIT/ENTER needs the DNS MX record set before install OnionMail"
+			echo "I try to detect all informations automatically then put all into the"
+			echo "configuration files."
+			fi
+
+		LOOPNZ="0"
+		echo -e "\nServer DNS settings:\n"
+		echo -e "\t A\t$__EXITDOM__\tIP = $__EXIT_IP__"
+		echo -e "\t MX\t$__MX_DOMAIN__\tIP = $__EXIT_IP__"
+		echo -e "\t TXT\tv=spf1 mx a ip4:$__EXIT_IP__ ~all\n"
+
+		yn=`dig ${__MX_DOMAIN__} a +short | grep "${__EXIT_IP__}"`
+		if [ "$yn" = "" ]; then
+			echo -e "  * Warning:\n    The A record of $__MX_DOMAIN__ is not $__EXIT_IP__"
+			yn=`host -t a ${__MX_DOMAIN__}`
+			echo "    $yn"
+			echo -e "   The record still needs to be updated?\n"
+			fi
+
+		yn=`dig ${__EXITDOM__} mx +short | grep '${__MX_DOMAIN__}'`
+		if [ "$yn" = "" ]; then
+			echo -e "  * Warning:\n    The MX record of $__EXITDOM__ is not $__MX_DOMAIN__"
+			yn=`host -t mx ${__EXITDOM__}`
+			echo "    $yn"
+			echo -e "   The record still needs to be updated?\n"
+			fi
+				
+		RreqYN "Is that all correct (Y/N)" "Yy" "Nn"
+		if [ "$RYN" = "1" ]; then
+			break;
+			fi
+		done
+	fi
+
+clear
+cat << eof
+
+    Do you want create an open OnionMail with free subscriptions or
+    you want it to be regulated via voucher codes?
+	
+        Choice O = Open Server with free subcriptions.
+        Choice V = The users can create one account only via
+                   voucher code.
+
+eof
+
+RreqYN "Select the subscription mode (O/V)" "Oo" "Vv"
+OPENSER=$RYN
+
+if [ $SETALL = "1" ]; then
+	clear
+	echo -e "\nUser subscription settings:"
+	echo -e "\n Can the users subscribe via TAILS, tablet or smartphone applications\n via POP3/RQUS?"
+	echo "  Default = Yes"
+	RreqYN "Enable the RQUS subscription? (Y/N) " "Yy" "Nn"
+	RYNYES
+	__POP3REG__=$RYN;
+
+	echo -e "\nHow many message can have the users into inbox?"
+	reqNum "Max. Messages: " 64 32767
+	__MNUMSG__="$NUMPAR"
+
+	echo -e "\nWhat is the maximum size of a message in megabytes?"
+	reqNum "Max. Message size (MB): " 1 1048576
+	__MSIZE__="$NUMPAR"
+
+	clear
+	echo -e "\nHTTP Web hidden service:"
+	
+	echo " Can the users subscribe via HTTP Hidden service web page?"
+	echo "  Default = Yes"
+	RreqYN "Enable the HTTP server? (Y/N) " "Yy" "Nn"
+	RYNYES
+	__ISHTTP__=$RYN;
+
+	if [ "$__ISHTTP__"="yes" ]; then
+		echo -e "\n Do you want to publicate the HTTP service via server's manifest?"
+		echo " If you enable this feature your server will appear on"
+		echo " http://onionmail.info/directory.html "
+		echo -e "\n  Default = Yes"
+		RreqYN "Publicate the HTTP service? (Y/N) " "Yy" "Nn"
+		if [ $RYN = "1" ]; then
+			__HTTPMANF__="Public"
+			else
+			__HTTPMANF__="Private"
+			fi
+		else
+		__HTTPMANF__="Private"
+		fi
+
+	clear
+	cat << eof
+
+Server firendship:
+
+  When the OnionMail server is running, it search for new friends to
+  create a federated network.
+  
+  These are two modes to do this:
+	Choice E = Extrovert:
+		The server go to know hit friends and the firends of friends,
+		then share the firends list to get more firendly links.
+		(More Exit/Enter server and more SSL verify).
+	
+	Choice I = Introvert:
+		The server go to know only "near" servers and do not share
+		the list of firends.
+		
+	The best mode is E = Extrovert.
+		
+eof
+	RreqYN "Friend mode (E/I)" "Ee" "Ii"
+	RYNYES
+	__FRIENDLY__=$RYN;
+	fi
+
+if [ $OPENSER = "0" ]; then
+	__NUSRD__="0"
+	__NUSRH__="0"
+	__NLISTD__="0"
+	__NLISTH__="0"
+	else
+		if [ $SETALL = "1" ]; then
+			clear
+			echo -e "\nExtended subscription settings:"
+			echo "How many users can create account in the same day?"
+			reqNum "Accounts x Day: " 0 2880
+			__NUSRD__=$NUMPAR
+			if [ "$NUMPAR" = "0" ]; then
+				__NUSRH__=$NUMPAR
+				else
+				echo "How many users can create account in the same hour?"
+				reqNum "Accounts x Hour: " 1 $NUMPAR
+				__NUSRH__=$NUMPAR
+				fi
+
+			echo "How many mailing lists users can create per day?"
+			reqNum "Mailing lists x Day: " 0 2880
+			__NLISTD__=$NUMPAR
+			if [ "$NUMPAR" = "0" ]; then
+				__NLISTH__=$NUMPAR
+				else
+				echo "How many mailing lists users can create per hour?"
+				reqNum "Mailing lists x Hour: " 1 $NUMPAR
+				__NLISTH__=$NUMPAR
+				fi
+		fi
+	fi
+
+if [ $ISEXIT = "1" ]; then
+	echo -e "\nGet a DNS server..."
+	yn=`cat /etc/resolv.conf | egrep -i -Eo 'nameserver[[:space:]]+[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+	if [ $yn = "" ]; then
+		while true; do
+			echo "Can't find a DNS server IP, set a DNS server for OnionMail Exit"
+			read -p "DNS Server ip: " yn
+			yn=`echo ${yn} | egrep -m 1 -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'`
+			if [ $yn = "" ]; then
+				echo "Invalid IPv4 Address"
+				else
+				__DNS__=$yn
+				echo -e "  DNSServer ${__DNS__}\n"
+				break;
+				fi
+		done
+		else
+		__DNS__=$yn
+		echo -e "  DNSServer ${__DNS__}\n"
+		fi
+	fi
+	
+clear
+
+echo "OnionMail's user check"
+createUsr
+
+if [ ! -d $ONM_BAS ]; then
+  mkdir -p $ONM_BAS
+  chown $OMN_USR:$ONM_USR -R $ONM_BAS
+  fi
+
+if [ ! -d $ONM_BAS ]; then
+  echo "Can't find OnionMail's home $ONM_BAS"
+  exit
+  fi
+
+chmod a+rwx -R $ONM_BAS
+
+if [ ! -d $ONM_SETUPKIT ]; then
+  echo "Can't find setupkit data in $ONM_SETUPKIT"
+  exit
+  fi
+
+echo "Create MailDir and OnionMail directory"
+
+chown $ONM_USR:$ONM_USR -R $ONM_BAS
+chown $TOR_USR:$TOR_USR -R $ONM_BAS/HiddenServiceDir* 2>/dev/null 
+chmod a-,u=rwx $ONM_BAS
+
+PAR_MAILDIR=$MAILBASE/$PAR_NICK
+mkdir -p $PAR_MAILDIR
+chown $ONM_USR:$ONM_USR -R $MAILBASE
+chmod a-,u=rwx $MAILBASE
+
+echo "Reading used ports"
+
+for srvc in `ls /etc/onionmail/servers.d/*.conf 2>/dev/null`
+do
+
+        X=`cat $srvc | egrep -Eio 'POP3Port\s+[0-9]{2,5}' | egrep -Eo '[0-9]{2,5}'`
+        USEDPORTS="${USEDPORTS} ${X} "
+        X=`cat $srvc | egrep -Eio 'ExitAltPort\s+[0-9]{2,5}' | egrep -Eo '[0-9]{2,5}'`
+        USEDPORTS="${USEDPORTS} ${X} "
+        X=`cat $srvc | egrep -Eio 'SMTPPort\s+[0-9]{2,5}' | egrep -Eo '[0-9]{2,5}'`
+        USEDPORTS="${USEDPORTS} ${X} "
+        X=`cat $srvc | egrep -Eio 'HTTPPort\s+[0-9]{2,5}' | egrep -Eo '[0-9]{2,5}'`
+        USEDPORTS="${USEDPORTS} ${X} "
+done
+
+echo -e "Used ports:\n\t${USEDPORTS}\n\n"
+
+echo "Scanning for OnionMail's SMTP port" 
+
+if [ "$ISEXIT" = "1" ] ; then
+        scanPort 25 25
+        PAR_SMTP=25
+else
+	scanPort 20025 20109
+	PAR_SMTP=$RET_PORTA
+fi
+
+echo "  Using: $PAR_SMTP"
+
+echo "Scanning for OnionMail's POP3 port"
+scanPort 20110 20210
+PAR_POP3=$RET_PORTA
+echo "  Using: $PAR_POP3"
+
+echo "Scanning for OnionMail's HTTP port"
+scanPort 8100 8200
+PAR_HTTP=$RET_PORTA
+echo "  Using: $PAR_HTTP"
+
+if [ $ISEXIT = "1" ]; then
+	echo "Scanning for OnionMail's SMTP Exit alternative port"
+	scanPort 10025 10125
+	__EXITALT__=$RET_PORTA
+	echo "  Using: $__EXITALT__"
+	fi
+
+echo "Reading torrc"
+
+if [ ! -f $TORRC ]; then
+  echo "Can't read $TORRC"
+  exit
+  fi
+
+PAR_TORP=`egrep -i -o -m 1 -e "^\s*SocksPort\s+[0-9]{4,5}\s*" $TORRC | egrep -o -m 1 -e "[0-9]{4,5}"`
+TEST=`egrep -i -o -m 1 -e "^\s*HiddenServiceDir\s+$ONM_HIDE" $TORRC`
+
+if [ "$TEST" != "" ]; then
+  echo "Warning: An hidden service to $ONM_HIDE is arleady set"
+  fi
+
+if [ "$PAR_TORP" = "" ]; then
+   echo " * SocksPort parameter not found in torrc"
+   echo "  Tor configuration"
+   $TOR_SRV
+   echo "  Scanning free port..."
+   scanPort 9050 9099
+   PAR_TORP=$RET_PORTA
+   echo "SocksPort $PAR_TORP ##OnionMailWizard##" >> $TORRC
+   echo "  Now Tor use another SocksPort $PAR_TORP"
+  else
+   echo "  Tor is now using $PAR_TORP port"
+  fi
+
+echo "Configure an HiddenService"
+if [ ! -d $ONM_HIDE ]; then 
+  mkdir $ONM_HIDE
+  fi
+  
+if [ ! -d $ONM_HIDE ]; then
+  echo "Can't create HiddenServiceDir"
+  exit
+  fi
+
+chown $TOR_USR:$TOR_USR -R $ONM_HIDE
+chmod a=-,u=rwx -R $ONM_HIDE
+rm $ONM_HIDE/hostname 2> /dev/null
+rm $ONM_HIDE/private_key 2>/dev/null
+
+echo "HiddenServiceDir $ONM_HIDE ##OnionMailWizard##">> $TORRC
+echo "HiddenServicePort 25 127.0.0.1:$PAR_SMTP ##OnionMailWizard##" >> $TORRC
+echo "HiddenServicePort 110 127.0.0.1:$PAR_POP3 ##OnionMailWizard##">> $TORRC
+echo "HiddenServicePort 80 127.0.0.1:$PAR_HTTP ##OnionMailWizard##">> $TORRC
+
+$TOR_SRV
+
+echo "Waiting for onion hidden service"
+waitTorOnion
+echo "Your hidden service is $PAR_ONION"
+
+echo "Stop OnionMail server, please wait..."
+$ONM_BAS/onionmail.sh stop
+
+echo "Configuring OnionMail"
+PAR_PASSWD_SERV=`gpg -a --gen-random 1 15`
+
+if [ ! -f $__RAMPASS__ ]; then
+	echo "Can't access to ${__RAMPASS__}"
+	exit
+	fi
+
+if [ $MENTALSAW = "0" ]; then
+	PAR_NICK=`echo ${PAR_ONION} | tr '[:upper:]' '[:lower:]' | egrep -m 1 -Eo '[a-z0-9]{16}' | egrep -Eo '[^aeiouy]{1}[aeiouy]{1,2}' | egrep -m 4 -Eo '[a-z]{2,3}' | tr -d "\\n" | egrep -m 1 -Eo '[a-z]{4,16}'`
+	if [ "$PAR_NICK" = "" ]; then
+			PAR_NICK=`gpg -a --gen-random 1 160 | tr '[:upper:]' '[:lower:]' | egrep -Eo '[^aeiouy]{1}[aeiouy]{1,2}' | egrep -m 4 -Eo '[a-z]{2,3}' | tr -d "\\n" | egrep -m 1 -Eo '[a-z]{4,16}'`
+			if [ "$PAR_NICK" = "" ]; then
+			PAR_NICK='onionmail'
+			fi
+		fi
+	
+	SSL_ORG="$PAR_NICK OnionMail server"
+	SSL_UNI="Mail"
+	SSL_STA='OnionLand'
+	PAR_CC='XX'
+	echo -e "\nGenerated OnionMail SSL and NickName infomrations:"
+	echo "   Mostname:      $PAR_ONION"
+	echo "   Nick:          $PAR_NICK"
+	echo "   Organization:  $SSL_ORG"
+	echo "   Org. Unit:     $SSL_UNI"
+	echo "   State:         $SSL_STA"
+	echo "   Country code:  $PAR_CC"
+	fi
+
+PAR_SERVERCONF="/etc/onionmail/servers.d/${ONM_COUNTER}-${PAR_NICK}.conf"
+
+if [ "$PAR_PASSWD_SERV" = "" ]; then
+ PAR_PASSWD_SERV="PleaseHackMe"
+ echo "Warning: Server default password"
+ fi
+
+PAR_ROOT=$ONM_BAS/root
+if [ ! -d $PAR_ROOT ]; then
+  mkdir $PAR_ROOT
+  fi
+  
+if [ ! -d $PAR_ROOT ]; then
+  echo "Can't create root info directory"
+  exit
+  fi
+
+echo "Waring: core.conf will be rewrited!"  
+configFile $ONM_SETUPKIT/core-gen.conf /etc/onionmail/core.conf
+
+if [ $ISEXIT = "1" ]; then
+	configFile $ONM_SETUPKIT/servers-exit.conf $PAR_SERVERCONF
+	else
+	configFile $ONM_SETUPKIT/servers.conf $PAR_SERVERCONF
+	fi
+	
+if [ ! -f $PAR_SERVERCONF ]; then
+		echo "Generated server file error!"
+		exit
+		fi
+
+configFile $ONM_SETUPKIT/root.txt $PAR_ROOT/root.txt
+configFile $ONM_SETUPKIT/gen-n.sh $ONM_BAS/gen.sh
+
+mkdir -p $LOGBASE
+touch $LOGBASE/server-gen.log
+touch $LOGBASE/http.log
+touch $LOGBASE/cpulimit.log
+touch $LOGBASE/onionmail.log
+touch $LOGBASE/start.log
+chown $ONM_USR:$ONM_USR -R $LOGBASE
+chmod a=-,u=rwx -R $LOGBASE
+
+chown root:root -R $PAR_ROOT
+chmod a=-,u=rwx -R $PAR_ROOT
+chown root:root $ONM_BAS/onionmail.sh
+chmod a=-,u=rwx $ONM_BAS/onionmail.sh
+chown root:root $ONM_BAS/gen.sh
+chmod a=-,u=rwx $ONM_BAS/gen.sh
+
+if [ $SETALL = "1" ]; then
+	echo -e "\n\nDo you want to edit the server configuration file?"
+	RreqYN "Edit servers.conf (Y/N)" "Yy" "Nn"
+	if [ $RYN = "1" ]; then
+		nano $PAR_SERVERCONF
+		fi
+	fi
+	
+clear
+read -p "Press return to generate the server now" yn
+clear
+echo -e "Please wait...\n"
+genServer
+
+if [ ! -d $PAR_MAILDIR ]; then
+  echo "The server is not generated correctly"
+  exit
+  fi
+
+configFile core.conf "!"
+
+echo "$PAR_NICK setup complete" > $PAR_ROOT/setupok
+chmod a=-,u=rw $PAR_ROOT/setupok
+
+## Chmod added.
+echo "Extentions and plugins: File's permissions (chmod/chown)"
+chown $ONM_USR:$ONM_USR -R /etc/onionmail
+chown root:root -R /etc/onionmail/setupkit
+chown $TOR_USR:$TOR_USR -R /var/lib/onionmail/HiddenServiceDir*
+chmod a=-,u=rwx -R /etc/onionmail 
+chmod a=-,u=rwx /var/lib/onionmail/www* 2>/dev/null
+chmod a=-,u=rw /var/lib/onionmail/TextCaptcha.ext 2>/dev/null
+chmod a=-,u=rwx /var/lib/onionmail/stats 2>/dev/null
+chmod a=-,u=rwx /var/lib/onionmail/apps 2>/dev/null
+chmod a=-,u=rwx /var/lib/onionmail/res 2>/dev/null
+chmod a=-,u=rwx -R /var/lib/onionmail/HiddenServiceDir*
+
+read -p "Press return to continue." yn
+clear
+echo "Remember to keep these files in a secure place:"
+echo -e "\t$PAR_MAILDIR/sysop.txt"
+echo -e "\t$PAR_MAILDIR/keyblock.txt"
+echo -e "\t$PAR_ROOT/root.txt"
+echo -e "\t$__RAMPASS__"
+echo " You can use the onm-cli tool to delete the original files with wipe."
+echo " Don't forget to delete the server's boot password in $__RAMPASS__"
+
+read -p "Press return to continue." yn
+clear
+more $PAR_ROOT/root.txt
+read -p "Press return to continue." yn
+clear
+echo "SysOp mail parameters:"
+cat $PAR_MAILDIR/sysop.txt
+read -p "Press return to continue." yn
+clear
+echo "OnionMail Setup complete"
+echo "To activate the server run"
+echo -e "\tonionmail-server start"
+echo "To see activation progress:"
+echo -e "\ttail -f $LOGBASE/start.log"
+echo "To see the logs:"
+echo -e "\ttail -f $LOGBASE/onionmail.log\n\n"
+
+reqYN "Do you wish to run OnionMail now"
+echo "Please wait..."
+$ONM_BAS/onionmail.sh start
+sleep 2
+
+echo -e "\n\nPlease remember to leave the program running in order to allow BOOT, PUSH, DERK, IAM operations.\n"
+echo -e "For any suggestion or question please contact us:\n\t partecipa@onionmail.info\n"

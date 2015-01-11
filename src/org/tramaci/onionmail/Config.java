@@ -20,16 +20,19 @@
 package org.tramaci.onionmail;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,7 +47,10 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int MaxQueueSize = 10;
 		public int QueueTimeOut = 120;
 		public int QueueThreads = 4;
-				
+		
+		public long MaxPOP3InitTTL = 15000;
+		public long MAXPOP3SessionTTL = 600000;
+		
 		public int MaxHTTPSession = 10; 
 		public long MaxHTTPReq=12000;
 		public long MaxHTTPRes=15000;
@@ -163,6 +169,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int ListThreadsMax=5;  
 		public long ListThreadsTTL = 600000L;
 		public long MessagesGarbageEvery=600000L;
+		public int manifestTTLS =43200; 
+		public int srvOpEvery = 28800;
 		
 		public String RootPathConfig=null;
 		public String RootPass=J.GenPassword(80, 80);
@@ -210,13 +218,14 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public boolean SSLSysopMessages=true;
 		public boolean SSLEDisabled = false;
 		public int TORCheckPolling = 0; //min
-		
+		private static HashMap <String, String> confVars = new HashMap <String, String>(); 
+		public boolean AddCertSAltNames = true;
 		public HashMap <String,String> DefaultUserConfig=null;
-		
 		public RSALog RLOG = null;
-		
 		private HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 		
+		private static final String VARS_TO_AVOID=" SCR SERVER NICK SOFTWARE DATE ENC ";
+			
 		public static void echo(String st) { System.out.print(st); }
 		
 		public static int parseInt(String st,String name) throws Exception {
@@ -336,6 +345,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						String[] tok = li.split("\\#",2);
 
 						li = tok[0];
+						
+						if (li.contains("${")) {
+									for (String k:Config.confVars.keySet())  li=li.replace("${"+k+"}", Config.confVars.get(k));
+									}
+						
 						li = li.trim();
 						if (li.length()==0) continue;
 						if (li.compareTo("}")==0) {
@@ -392,6 +406,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						String[] tok = li.split("\\#",2);
 
 						li = tok[0];
+						if (li.contains("${")) {
+									for (String k:Config.confVars.keySet())  li=li.replace("${"+k+"}", Config.confVars.get(k));
+									}
 						li = li.trim();
 						if (li.length()==0) continue;
 						tok = li.split("\\s+",2);
@@ -413,8 +430,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						if (cmd.compareTo("passwd")==0) {
 							C.SMPTServer[ne].PassWd = tok[1].trim();
 							continue;
-							
-						}
+							}
+						
+						if (cmd.compareTo("permitderkupdate")==0) {
+										C.SMPTServer[ne].permitDERKUpdate = Config.parseY(tok[1]);
+										continue;
+										}
 						
 						if (cmd.compareTo("identtextfile")==0) {
 							C.SMPTServer[ne].IdentText = J.MapPath(CPath, tok[1]);
@@ -486,6 +507,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										continue;
 										}
 						
+						if (cmd.compareTo("addcertsaltnames")==0) {
+										C.AddCertSAltNames = Config.parseY(tok[1]);
+										continue;
+										}
+						
 						if (cmd.compareTo("sslpermitautoupdate")==0) { 
 										C.SMPTServer[ne].SSLEIDPermitAutoChange  = Config.parseY(tok[1]);
 										continue;
@@ -533,8 +559,6 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										C.SMPTServer[ne].HTTPSServer = C.SMPTServer[ne].HasHTTP;
 										continue;
 										}
-						
-						
 						
 						if (cmd.compareTo("httpservername")==0) { 
 										C.SMPTServer[ne].HTTPServerName  =tok[1];
@@ -1126,7 +1150,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		}
 				
 		public static Config LoadFromFile(String filepath) throws Exception {
-
+			confVars = new HashMap <String, String>();
+			
 			BufferedReader br;
 			Config C = new Config();
 			C.TORIdentityNumber = 1;
@@ -1142,12 +1167,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			String SMTPS="\n";
 			String Friends="\n";
 			String PGPRnd=null;
-			FileInputStream F = new FileInputStream(filepath);
+			InputStream F = new FileInputStream(filepath);
 			int line=0;
 			String dnsbl=null;
 			C.RootPathConfig = J.GetPath(filepath);
 			
-			FileInputStream STKF[] = new FileInputStream[8];
+			InputStream STKF[] = new InputStream[8];
 			int[] STKLine = new int[8];
 			String[] Path = new String[8];
 			String[] CFile = new String[8];
@@ -1181,6 +1206,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								String[] tok = li.split("\\#",2);
 		
 								li = tok[0];
+								
+								if (li.contains("${")) {
+										for (String k:Config.confVars.keySet())  li=li.replace("${"+k+"}", Config.confVars.get(k));
+										}
+								
 								li = li.trim();
 								if (li.length()==0) continue;
 								tok = li.split("\\s+");
@@ -1189,22 +1219,53 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								
 								if (cmd.compareTo("@include")==0) {
 									tok[1] = J.MapPath(CPath, tok[1]);
-									Main.echo("\tInclude: `"+tok[1]+"`\n");
-									if (ConfList.contains("\n"+tok[1]+"\n")) throw new Exception("File `"+tok[1]+"` arleady included"); 
-									ConfList+=tok[1]+"\n";
 									
-									if (StackPoint==7) throw new Exception("Config Stack Overflow. Max=8");
-									Path[StackPoint] = J.GetPath(tok[1]);
-									STKLine[StackPoint]=line;
-									STKF[StackPoint]=F;
-									STKbr[StackPoint]=br;
-									StackPoint++;
-									CFile[StackPoint] = tok[1];
-									F = new FileInputStream(tok[1]);
-									br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
-									line=0;
-									CPath = J.GetPath(tok[1]);
-									continue;							
+									if (new File(tok[1]).isDirectory()) {
+										Main.echo("\tDirectory: `"+tok[1]+"`\n");
+										if (ConfList.contains("\n"+tok[1]+"\n")) throw new Exception("File `"+tok[1]+"` arleady included");
+										ConfList+=tok[1]+"\n";
+										if (StackPoint==7) throw new Exception("Config Stack Overflow. Max=8");
+										
+										String[] lst = Config.getListFile(tok[1]);
+										if (lst!=null && lst.length!=0) {
+											String vConf="";
+											for (String kv:lst) if (kv.length()>0) vConf+="@include "+kv+"\n";
+											lst=null;
+											F =(InputStream)  new ByteArrayInputStream(vConf.getBytes());
+											
+											Path[StackPoint] = J.GetPath(tok[1]);
+											STKLine[StackPoint]=line;
+											STKF[StackPoint]=F;
+											STKbr[StackPoint]=br;
+											StackPoint++;
+											CFile[StackPoint] = tok[1];
+											br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
+											line=0;
+											CPath = J.GetPath(tok[1]);
+											continue;
+											} else {
+												Main.echo("\tEmpty dir.\n");
+												continue;
+											}
+									} else {
+										
+										Main.echo("\tInclude: `"+tok[1]+"`\n");
+										if (ConfList.contains("\n"+tok[1]+"\n")) throw new Exception("File `"+tok[1]+"` arleady included"); 
+										ConfList+=tok[1]+"\n";
+										
+										if (StackPoint==7) throw new Exception("Config Stack Overflow. Max=8");
+										Path[StackPoint] = J.GetPath(tok[1]);
+										STKLine[StackPoint]=line;
+										STKF[StackPoint]=F;
+										STKbr[StackPoint]=br;
+										StackPoint++;
+										CFile[StackPoint] = tok[1];
+										F = new FileInputStream(tok[1]);
+										br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
+										line=0;
+										CPath = J.GetPath(tok[1]);
+										continue;		
+										}					
 								}
 								
 								if (cmd.compareTo("path")==0) {
@@ -1216,7 +1277,24 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									if (!x.exists() || !x.isDirectory() || !x.canRead()) throw new Exception("Path access error `"+CPath+"`");
 									}
 								
+								if (cmd.compareTo("confvar")==0 && tok.length>2) {
+									tok[1]=tok[1].trim();
+									if (Config.VARS_TO_AVOID.contains(tok[1])) throw new Exception("VARS_TO_AVOID: Invalid use of reserved keyword");
+									Config.confVars.put(tok[1], tok[2].trim());
+									fc=true;
+									}
+								
+								if (cmd.compareTo("confvardir")==0 && tok.length>2) {
+									tok[1]=tok[1].trim();
+									if (Config.VARS_TO_AVOID.contains(tok[1])) throw new Exception("VARS_TO_AVOID: Invalid use of reserved keyword");
+									Config.confVars.put(tok[1] ,J.MapPath(CPath,  tok[2].trim()));
+									fc=true;
+									}
+																
 								if (cmd.compareTo("ssletrefreshrate")==0) { fc=true; C.SSLETRefreshRate = Config.parseInt(tok[1], "minutes", 5, 1440); }
+								
+								if (cmd.compareTo("maxpop3initttl")==0) { fc=true; C.MaxPOP3InitTTL = Config.parseInt(tok[1], "seconds", 5, 3600)*1000L; }
+								if (cmd.compareTo("maxpop3sessionttl")==0) { fc=true; C.MAXPOP3SessionTTL = Config.parseInt(tok[1], "minutes", 1, 1440)*60000L; }
 								
 								if (cmd.compareTo("torcheckpolling")==0) { 
 										fc=true; 
@@ -1240,6 +1318,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										}
 																
 								if (cmd.compareTo("sslsysopmessages")==0) { fc=true; C.SSLSysopMessages=Config.parseY(tok[1]); }
+								if (cmd.compareTo("sslcheckvaliditydate")==0) { fc=true; LibSTLS.CheckValidityDate=Config.parseY(tok[1]); }
 								if (cmd.compareTo("disablessle")==0) { fc=true; C.SSLEDisabled=Config.parseY(tok[1]); }
 								
 								if (cmd.compareTo("ssltolerance")==0 && tok.length==3) {
@@ -1283,6 +1362,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 										}
 									fc=true;
 									}
+								
+								if (cmd.compareTo("addcertsaltnames")==0) {
+										C.AddCertSAltNames = Config.parseY(tok[1]);
+										fc=true;
+										}
+								
+								if (cmd.compareTo("manifestttl")==0) { 
+										C.manifestTTLS  = Config.parseInt(tok[1], "Minutes", 10, 1440)*60;
+										fc=true; 
+										}								
+								
+								if (cmd.compareTo("srvopevery")==0) { 
+										C.srvOpEvery  = Config.parseInt(tok[1], "Minutes", 10, 1440)*60;
+										fc=true; 
+										}	
 								
 								if (cmd.compareTo("smtpserver")==0) {
 									fc=true;
@@ -1418,7 +1512,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									fc=true; 
 									}
 						
-						if (cmd.compareTo("httpncache")==0) {
+							if (cmd.compareTo("httpncache")==0) {
 										C.HTTPCached.put(tok[1], false);
 										fc=true; 
 										}
@@ -1733,7 +1827,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									fc=true;
 									C.PGPRootUserPKeyFile = J.MapPath(CPath, tok[1]);
 									if (!new File (C.PGPRootUserPKeyFile).exists()) throw new Exception("Public PGP key file not found `"+C.PGPRootUserPKeyFile+"`");
-								}
+									Main.PGPRootMessages=true;
+									}
 								
 								if (cmd.compareTo("respath")==0) { 
 										fc=true; 
@@ -1930,6 +2025,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 					} //while
 					
 				///	try {	br.close(); } catch(Exception FQ) {}
+				confVars = null;
 				
 				Friends=Friends.trim();
 				C.FriendServer = Friends.split("\\n+");
@@ -2254,9 +2350,48 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				
 				String p0 = J.GenPassword(PasswordSize,PasswordMaxStrangerChars);
 				String p1 = J.GenPassword(PasswordSize,PasswordMaxStrangerChars);
-				String p3 = J.GenPassword(80, 64);
+				String p3 = J.GenPassword(80, 80);
+				
+				if ((Main.cmdFlags & Main.CF_BIGPWL)!=0) {
+						p3 = J.GenPassword(256,256);
+						p0 = J.GenPassword(PasswordSize*2,PasswordMaxStrangerChars*2);
+						p1 = J.GenPassword(PasswordSize*2,PasswordMaxStrangerChars*2);
+						}
 				
 				BufferedReader In = J.getLineReader(System.in);
+				
+				if ((Main.cmdFlags & Main.CF_R_ROOTPGPPOX)!=0) {
+					Main.echo("\nAlternative SysOp's operations:\n");
+					Main.echo("Enter a secure position to put the SysOp's files:\n\t> ");
+					String pox = In.readLine();
+					if (pox!=null) {
+						pox=pox.trim();
+						File F = new File(pox);
+						if (!F.exists() && !F.isDirectory()) F.delete();
+						if (!F.exists()) { F.mkdirs(); F.mkdir(); }
+						if (F.exists() && F.isDirectory()) {
+							F.setExecutable(true, true);
+							F.setReadable(true, true);
+							F.setWritable(true, true);
+							pox+="/";
+							C.AlternateKeyBlock=true;
+							C.AlternatePositionSysOpTxt=pox;
+							
+							String[] lst = F.list();
+							int cx = lst.length;
+							for (int ax=0;ax<cx;ax++) {
+								if (lst[ax].endsWith(".asc")) {
+									Main.echo("Find PGP Key file:\t"+lst[ax]+"\n");
+									Main.echo("SysOp's files will encrypted.\n");
+									C.PGPRootUserPKeyFile = pox+lst[ax];
+									Main.PGPRootMessages=true;
+									break;	
+								}
+							}
+							
+						} else Main.echo("Path error\n");
+					}
+				}
 				
 				if (bm) bm = Main.ConfVars.containsKey(NewServer.Nick+"-pass");
 				
@@ -2306,6 +2441,10 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								p1=In.readLine();
 								if (p1==null) System.exit(2);
 								p1=p1.trim();
+								if (p1.compareToIgnoreCase(p0)==0) {
+									Main.echo("\nInvalid password. Passwords must be different.\n");
+									continue;
+									}
 								if (p1.length()>7) break;
 								Main.echo("\nInvalid password. Min 7 chars.\n");
 								}
@@ -2317,21 +2456,30 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				HashMap <String,String> P = new HashMap <String,String>();
 				P.put("lang", NewServer.DefaultLang);
 				P.put("flag", Const.USR_FLG_ADMIN);
-				NewServer.UsrCreate("sysop", p0, p1, 0,P);
+				NewServer.UsrCreate("sysop", p1, p0, 0,P);
+				
+				if ((Main.cmdFlags & Main.CF_U_NOSYSOPPWL)!=0 ) {
+					p0 = J.RandomString(160);
+					p1 = J.RandomString(160);
+					System.gc();
+					p0=null;
+					p1=null;
+					System.gc();
+					p0 = p1 = "(Absent here)";
+					}
 				
 				String p2= NewServer.Maildir+"/sysop.txt";
 				p0 = "Mail address: sysop@"+NewServer.Onion+"\r\n"+
 						"SMTP Login: sysop\r\n"+
 						"SMTP Password: "+p0+"\r\n"+
-						"SMTP Base64 encoded Password: "+J.Base64Encode(p0.getBytes())+"\r\n"+
-						"SMTP Base64 encoded Login: "+J.Base64Encode("sysop".getBytes())+"\r\n"+
 						"--\r\nPOP3 Login: sysop\r\n"+
 						"POP3 Password: "+p1+"\r\n"+
 						"--\r\nServer "+NewServer.Nick+":\r\n"+
 						"SMTP SERVER LISTEN ADDRESS: "+J.IP2String(NewServer.LocalIP)+" port "+NewServer.LocalPort+"\r\n"+
 						"POP3 SERVER LISTEN ADDRESS: "+J.IP2String(NewServer.LocalIP)+" port "+NewServer.LocalPOP3Port+"\r\n"+
 						"Tor address: "+NewServer.Onion+"\r\n";
-				 p0+="KeyBlock password: "+p3+"\r\n";
+				
+				if ((Main.cmdFlags & Main.CF_B_NOBOOTPWL)==0 ) p0+="KeyBlock password: "+p3+"\r\n";
 
 				if (bm && (!Main.PGPRootMessages || NewServer.Config.PGPRootUserPKeyFile==null)) {
 					if (Main.ConfVars.containsKey(NewServer.Nick+"-pgp-root")) {
@@ -2397,6 +2545,12 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 					String tok[]=li.split("\\#",2);
 					tok[0]=tok[0].trim();
 					if (tok[0].length()==0) continue;
+					
+					if (tok[0].contains("${")) {
+									for (String k:Config.confVars.keySet())  tok[0]=tok[0].replace("${"+k+"}", Config.confVars.get(k));
+									tok[0]=tok[0].trim();
+									}
+															
 					tok=tok[0].split("\\s+",2);
 					String cmd = tok[0].toLowerCase();
 					line++;
@@ -2564,6 +2718,8 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				Main.echo("RSALog Error: "+E.toString()+"\n");	
 				}
 			
+			if (st.contains("@")) st=J.scrubMail(st);
+			
 			String[] stl=st.split("\\n+");
 			int cx= stl.length;
 			st="";
@@ -2680,6 +2836,21 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				}
 			return false;
 		}
+
+		private static String[] getListFile(String path) throws Exception {
+				File D = new File(path);
+				if (!D.exists() || !D.isDirectory()) return null;
+				String[] tm =D.list();
+				Arrays.sort(tm);
+				String to="";
+				for (String f:tm) {
+					String tf = path+"/"+f;
+					if (f.endsWith(".conf") && !f.startsWith(".") && !new File(tf).isDirectory()) to+=tf+"\n"; 
+					}
+				to=to.trim();
+				if (to.length()==0) return null;
+				return to.split("\\n+");
+			}
 		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

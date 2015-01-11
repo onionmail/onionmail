@@ -360,8 +360,24 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 		}
 		
 		return re;
-		
 	}
+
+
+public  static int Stosxmp(byte[] re,long[] dta,int[] sz,int bp) {
+			
+		for (int w=0;w<dta.length;w++)	{
+			long dd = dta[w];
+			
+			for (int al=0;al<sz[w];al++) {
+				re[bp++] = (byte)(dd&255);
+				dd>>=8;
+			}
+		}
+		
+		return bp;
+	}
+
+
 	public static byte[] Stosxmb(long[] dta,int[] sz) {
 		int mx =0;
 		for (int ax=0;ax<sz.length;ax++) mx+=sz[ax];
@@ -381,6 +397,54 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 		return re;
 		
 	}
+	
+	public static long[][] Lodsxma(byte[] dta,int[] sz) {
+		int cx = sz.length;
+		int bx = 0;
+		for (int ax=0;ax<cx;ax++) bx+=sz[ax];
+		cx = (int) Math.floor(dta.length/bx);
+		long[][] rs = new long[cx][];
+		int ptr=0;
+		for (int ax=0;ax<cx;ax++) {
+				rs[ax] = Stdio.Lodsxmp(dta, sz,ptr);
+				ptr+=bx;
+				}
+		return rs;
+	}
+	
+	public static long[] Lodsxmp(byte[] dta,int[] sz,int ptr) {
+		int mx =sz.length;
+		
+		long[] re = new long[mx];
+		int bp=0;
+		long dd=0;
+		int ebp=0;
+		for (int ax=0;ax<mx;ax++) {
+			bp=sz[ax]-1;
+			dd=0;
+			for (int al=0;al<sz[ax];al++) {
+				dd<<=8;
+				dd^=(long)(dta[ebp+(bp--)+ptr]&255);
+				
+			}
+			ebp+=sz[ax];
+			
+			re[ax] = dd;
+		}
+		return re;		
+	}
+	
+	public static byte[] Stosxma(long[][] in,int sz[]) {
+		int bx=0;
+		int cx = sz.length;
+		for (int ax=0;ax<cx;ax++) bx+=sz[ax];
+		cx = in.length;
+		byte[] rs = new byte[bx * cx];
+		int bp=0;
+		for (int ax=0;ax<cx;ax++) bp = Stdio.Stosxmp(rs, in[ax], sz, bp);
+		return rs;
+	}
+	
 	public static long[] Lodsxm(byte[] dta,int[] sz) {
 		int mx =sz.length;
 		
@@ -402,6 +466,7 @@ public  static byte[] Stosxm(long[] dta,int[] sz) {
 		}
 		return re;		
 	}
+		
 	public static byte[] StosxNP(long[] dta,int sz) {
 		int mx =dta.length*sz;
 		int bp=0;
@@ -1340,6 +1405,24 @@ public static byte[] sha1a(byte[][] data) throws Exception{
 		return (Integer.toString((int) Math.floor(t/60))+":" +Integer.toString((int) (t%60))+" "+sign).trim();
 		} 
 		
+	public static void SFileSave(SrvIdentity srv,byte[][] data,int absId) throws Exception {
+		
+		boolean ServerArea = (absId & 0x10000000)!=0;
+		String FileIntName = "@"+Integer.toString(absId)+"/"+srv.Onion;
+		int Magic = FileIntName.hashCode() ^ (absId&0x7FFF);
+		SFileSave(srv,FileIntName, data, Magic,ServerArea);
+		
+	}
+	
+	public static byte[][] SFileLoad(SrvIdentity srv,int absId) throws Exception {
+		
+		boolean ServerArea = (absId & 0x10000000)!=0;
+		String FileIntName = "@"+Integer.toString(absId)+"/"+srv.Onion;
+		int Magic = FileIntName.hashCode() ^ (absId&0x7FFF);
+		
+		return  SFileLoad(srv,FileIntName,Magic,ServerArea);
+	}
+	
 	public static void SFileSave(SrvIdentity srv,String FileIntName,byte[][] data,int Magic,boolean ServerArea) throws Exception {
 		byte[] key = Stdio.sha256a(new byte[][] { srv.Sale , FileIntName.getBytes() ,srv.Subs[13],Integer.toString(Magic,ServerArea ? 36 : 35).getBytes() } );
 		byte[] iv = Stdio.md5a(new byte[][] { key , Integer.toString(Magic,ServerArea ? 33 : 32).getBytes(), srv.Subs[ 15& key[0]] , FileIntName.getBytes() , srv.Subs [15& key[15&key[1]]]});

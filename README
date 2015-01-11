@@ -1,8 +1,8 @@
 
   OnionMail
-	Copyright (C) 2013-2014 OnionMail Project ( http://onionmail.info )
-	Copyright (C) 2013-2014 by Tramaci.org ( http://tramaci.org )
-	Copyright (C) 2013-2014 EPTO (A) ( epto [at] tramaci [dot] org )
+	Copyright (C) 2013-2015 OnionMail Project ( http://onionmail.info )
+	Copyright (C) 2013-2015 by Tramaci.org ( http://tramaci.org )
+	Copyright (C) 2013-2015 EPTO (A) ( epto [at] tramaci [dot] org )
 		
   ################################################
   #  WEB:       http://onionmail.info            #
@@ -19,4 +19,9 @@ network without losing the ability to communicate with the Internet.
         Today, only OnionMail ;) »
 
 	See http://onionmail.info/manual.html to get more informations.
+
+The root directory of project is:
+	/mnt/sdcard/ONM/
+	Change it in etc/onionmail/config.conf
 	
+          

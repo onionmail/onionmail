@@ -116,7 +116,11 @@ public class RemoteDerK {
 		Srv=srv;
 		Oni=Oni.toLowerCase().trim();
 		fileName = getFileName(srv, Oni);
-		if (new File(fileName).exists()) throw new PException("@503 DERK_KEY Arleady exists");
+		if (Srv.permitDERKUpdate==false) {
+				if (new File(fileName).exists()) throw new PException("@503 DERK_KEY Arleady exists");
+				} else {
+					if (new File(fileName).exists()) Srv.Log("DERK Update for `"+Oni+"`");
+				}
 		status=RemoteDerK.ST_Enabled;
 		Password = J.GenPassword(16, 0);
 		InternalData = new byte[16];

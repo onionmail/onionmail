@@ -279,6 +279,7 @@ public class MailingList {
 		MailBoxFile TM = new MailBoxFile();
 		TM.OpenTMP(Tmp);
 		while(true) {
+			J.RunCheck();
 			String li = M.readLine();
 			if (li==null)  {
 				TM.Destroy(true);

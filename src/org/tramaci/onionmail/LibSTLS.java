@@ -50,13 +50,18 @@ import javax.net.ssl.X509TrustManager;
 import javax.security.auth.x500.X500Principal;
 
 import org.bouncycastle.x509.X509V3CertificateGenerator;
+import org.bouncycastle.asn1.DERIA5String;
+import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.x509.X509Extensions;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 @SuppressWarnings("deprecation")
 public class LibSTLS {
 
 	public static final String BC = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
-	public static final String Version = "LibSTLS V 1.3"; 
+	public static final String Version = "LibSTLS V 1.4"; 
 	private static final String openJBugAlgo=" TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384 ";
 	public static boolean noEDC = false;
 	public static boolean noDSDSA = false;
@@ -70,6 +75,7 @@ public class LibSTLS {
 	public static boolean openJBug = false;
 	public static boolean Debug=false;
 	public static boolean useBC = true;
+	public static boolean CheckValidityDate=false;
 	
 	public static void setDisabledChipers(String[] arr) {
 		String st="\n";
@@ -94,30 +100,28 @@ public class LibSTLS {
 	public static void setCiphers(SSLSocket ssl) throws Exception {
 		String[] lst;
 		
-		if (j7regression) {
+	/*	if (j7regression) { UNUSED!
 			lst=new String[] {
-					"SSL_RSA_WITH_RC4_128_MD5",
-					"SSL_RSA_WITH_RC4_128_SHA",
 					"TLS_RSA_WITH_AES_128_CBC_SHA",
-					"TLS_DHE_RSA_WITH_AES_128_CBC_SHA",
-					"TLS_DHE_DSS_WITH_AES_128_CBC_SHA",
-					"SSL_RSA_WITH_3DES_EDE_CBC_SHA",
 					"SSL_DHE_RSA_WITH_3DES_EDE_CBC_SHA",
-					"SSL_DHE_DSS_WITH_3DES_EDE_CBC_SHA",
-					"SSL_RSA_WITH_DES_CBC_SHA",
-					"SSL_DHE_RSA_WITH_DES_CBC_SHA",
-					"SSL_DHE_DSS_WITH_DES_CBC_SHA",
-					"SSL_RSA_EXPORT_WITH_RC4_40_MD5",
-					"SSL_RSA_EXPORT_WITH_DES40_CBC_SHA",
-					"SSL_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
-					"SSL_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA",
-					"TLS_EMPTY_RENEGOTIATION_INFO_SCSV"};
-			} else  lst = ssl.getSupportedCipherSuites();
+					"SSL_DHE_DSS_WITH_3DES_EDE_CBC_SHA"}
+					;
+			} else */  
+		
+		lst = ssl.getSupportedCipherSuites();
 		
 		String tmp="";
 		int cx = lst.length;
 		for (int ax=0;ax<cx;ax++) {
 			if (lst[ax].contains("_anon_")) continue;
+			if (lst[ax].contains("_NULL_")) continue;
+			if (lst[ax].contains("_RC4_")) continue;
+			if (lst[ax].contains("_DES40_")) continue;
+			if (lst[ax].contains("_DES_")) continue;
+			if (lst[ax].contains("_RC2_")) continue;
+			if (lst[ax].contains("_3DES_")) continue;
+			if (lst[ax].contains("_DES_")) continue;
+			if (lst[ax].startsWith("TLS_DHE_")) continue;
 			
 			if (
 						noEDC && (
@@ -134,12 +138,13 @@ public class LibSTLS {
 			
 			if (openJBug && openJBugAlgo.contains(lst[ax].toUpperCase())) continue;
 			if (disabledCiphers!=null) {
-				String t = lst[ax].toUpperCase();
-        	  	if (disabledCiphers.contains("\n"+t+"\n")) continue;
+				String t = lst[ax];
+        	  	if (disabledCiphers.contains("\n"+t.toUpperCase()+"\n")) continue;
 				}
 			tmp+=lst[ax]+"\n";
 			}
 		tmp=tmp.trim();
+		
 		lst=tmp.split("\\n+");
 		tmp=null;
 		ssl.setEnabledCipherSuites(lst);
@@ -149,8 +154,8 @@ public class LibSTLS {
 			tmp="";
 			cx = lst.length;
 			for (int ax=0;ax<cx;ax++) {
-				String p = lst[ax].toUpperCase();
-				if (disabledProtocols.contains("\n"+p+"\n")) continue;
+				String p = lst[ax];
+				if (disabledProtocols.contains("\n"+p.toUpperCase()+"\n")) continue;
 				tmp+=lst[ax]+"\n";
 				}
 			tmp=tmp.trim();
@@ -290,7 +295,8 @@ public class LibSTLS {
             	} catch(Exception E) {
             		if (Debug) E.printStackTrace();
             		if (E.getMessage().toLowerCase().contains("could not generate dh keypair")) {
-            				throw new PException("JAVA SSL BUG: JDK-7044060 Update your JAVA!"); 
+            				if (LibSTLS.j7regression) LibSTLS.openJBug=true;
+            				throw new PException("JAVA SSL BUG: JDK-7044060 Update your JAVA!" + (LibSTLS.j7regression ? " (openJBug enabled)." : "")); 
             		} else throw E;
             	}
             return sslSocket;
@@ -425,7 +431,7 @@ public class LibSTLS {
 		return true;
 	}
 	
-	public static X509Certificate CreateCert(KeyPair KP,String onion,long Dfrom, long Dto, String info) throws Exception { //OK
+	public static X509Certificate CreateCert(KeyPair KP,String onion,long Dfrom, long Dto, String info,String[] AltName) throws Exception { //OK
 	        
         byte[] bi  = Stdio.md5(onion.getBytes());
         byte[] bx = new byte[bi.length+9];
@@ -443,15 +449,23 @@ public class LibSTLS {
 			X509V3CertificateGenerator certGen = new X509V3CertificateGenerator();
 			if (info!=null && info.length()>0) info=", "+info; else info="";
 			X500Principal dnName = new X500Principal("CN="+onion+info);
-			
 			certGen.setSerialNumber(serialNumber);
 			certGen.setIssuerDN(dnName);
 			certGen.setNotBefore(startDate);
 			certGen.setNotAfter(expiryDate);
 			certGen.setSubjectDN(dnName);                       // note: same as issuer
 			certGen.setPublicKey(KP.getPublic());
-			certGen.setSignatureAlgorithm("SHA256WithRSAEncryption"); //SHA1withRSA");
+			certGen.setSignatureAlgorithm("SHA256WithRSAEncryption");
 			
+			if (AltName!=null) {
+				int cx = AltName.length;
+				for (int ax=0;ax<cx;ax++) {
+					GeneralName generalName = new GeneralName(GeneralName.dNSName, new DERIA5String(AltName[ax].toLowerCase().trim()));
+					GeneralNames subjectAltNames = new GeneralNames(generalName);
+					certGen.addExtension(X509Extensions.SubjectAlternativeName, false,new DEROctetString(subjectAltNames));
+					}
+				}
+						
 			X509Certificate cert = certGen.generate(keyPair.getPrivate(),"BC");
 		
 			return cert;
@@ -556,7 +570,7 @@ public class LibSTLS {
 					C[ax].verify(P,"BC");
 					}
 				stat=2;
-				C[ax].checkValidity();
+				if (CheckValidityDate) C[ax].checkValidity();
 				stat=3;
 				crt[ax]=Stdio.Public2Arr(P);		
 				} catch(Exception E) {

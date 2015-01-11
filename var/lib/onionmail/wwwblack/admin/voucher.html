@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="us">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<title><!--#NICK#--> Vouchers</title>
+	<link href="/css/global.css" rel="stylesheet">
+	<script src="/js/global.js"></script>
+<script>
+function Create() {
+	var v = document.getElementById('days');
+	v=v.value;
+	var e = document.getElementById('extrainfo');
+	e.innerHTML='<div style="text-align: center;"><img src="/img/ajax.gif" alt="Loading..."></div>';
+	AJAXService("voucher.api?day="+encodeURIComponent(v),{},function (js) {
+	        var e = document.getElementById('extrainfo');
+		e.innerHTML="<p>Voucher</p>"+toHTML(js.voucher); 
+		}) ;
+	return false;
+	}
+
+function Edit() {
+	var v = document.getElementById('vouchers');
+	v=v.value;
+	var s = document.getElementById('actions');
+	var i = s.selectedIndex;
+	if (i==-1) s=0;
+	s=s.options[i].value;
+	var e = document.getElementById('extrainfo');
+	e.innerHTML='<div style="text-align: center;"><img src="/img/ajax.gif" alt="Loading..."></div>';
+	AJAXService("voucher-test.api?save="+encodeURIComponent(s)+"&voucher="+encodeURIComponent(v),{},function (js) {
+	        var e = document.getElementById('extrainfo');
+		e.innerHTML="<p>Voucher</p><br>Status: "+toHTML(js.stats); 
+		}) ;
+	return false;
+	}
+</script>
+	
+<style>
+.cappa {
+        position: relative;
+	width: 400px; margin: auto; padding: 10px; border-radius: 10px; border: #f84 1px solid;
+	overflow: hidden;
+        }
+.cappa pre {
+	border: #f84 1px solid;
+	padding: 10px;
+	border-radius: 8px;
+	}
+
+.cappa div {
+	border: #f84 1px solid;
+	padding: 10px;
+	border-radius: 8px;
+	}
+		
+.cappa p { text-align: center; font-weight: bold;}
+.cappa p:before { content: "< "; color: #f48; }
+.cappa p:after { content: " >"; color: #f48; }
+
+.posta { width: 100%; height: 100%; margin: 0px; padding: 0px;}
+.posta td { font-size: 9pt; font-family: verdana; text-align: right;}
+.posta td:nth-child(1) { width: 150px; }
+.posta input { border: #f84 1px solid; padding: 4px; border-radius: 4px; }
+.posta select { border: #f84 1px solid; padding: 4px; border-radius: 4px; }
+.posta input[type=submit] { background-color: #840; }
+#minfo { font-size: 8pt !important; color: #4f8 !important; } 
+.perro { color: #0ff; text-align: center; } 
+#aspetta {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	text-align: center;
+	display: none;
+	background-color: #000;
+	border: none;
+	}
+	
+#disclaim {
+	color: #4f8;
+	font-size: 8px;
+	font-weight: bold;
+	text-align: center;
+	padding: 10px;
+	}		 
+</style>	
+</head>
+<body>
+<div id="textpage">
+<div id="mmpreback">
+<div id="mmenucont">
+
+<table id="toptable">
+<tr>
+<td id="toplogo"><a href="/"><img src="<!--@lefttop@-->" alt="OnionMail"></a></td>
+<td id="topsez" class="topsez">
+<$inc[menu.denied.conf]$inc>		
+<div class="cli"></div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+
+<div class="oline"></div>
+<div class="pagetit"><!--#NICK#--> Vouchers</div><div class="mytext" id="maintext">
+<div class="cappa">
+<p>Create Voucher</p>
+
+<form method="POST">
+<table class="posta" onsubmit="return Create()">
+	<tr><td>Day lenght:</td><td><input type="text" name="day" size="4" id="days"></td></tr>
+	<tr><td colspan="2"><input type="submit" name="ok" value="Create" onclick="return Create()"></td></tr>		
+</table>
+</form>
+<br>
+<p>View/Delete Voucher</p>
+
+<table class="posta" onsubmit="return Edit()">
+	<tr><td>Voucher:</td><td><input type="text" name="voucher" size="40" id="vouchers"></td></tr>
+	<tr><td>Action:</td><td><select name="save" id="actions">
+	<option value="no">Read</option>
+	<option value="yes">Delete</option>
+	</select>&nbsp;<input type="submit" name="ok" value="Send" onclick="return Edit()"></td></tr>
+		
+</table>
+</form>
+        
+	<div id="extrainfo">
+<br><br>
+	</div>
+</div>	
+<br><br></div>
+</div>          
+	<div id="bottomoline"></div>
+	<div id="bottompage">
+		<div style="font-family: ocr; color: #048; text-align: center;">
+		<!--#NICK#--> OnionMail Server at <!--#ONION#-->
+		</div>	
+	</div>
+
+	
+</body>
+</html>

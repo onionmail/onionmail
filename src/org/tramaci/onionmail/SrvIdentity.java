@@ -73,6 +73,10 @@ public class SrvIdentity {
 	public boolean Friendly = true;
 	public boolean HTTPSServer=false;
 	
+	public String friendsForceAdd=null;
+	
+	public boolean permitDERKUpdate=true;
+	
 	public boolean HasHTTP=false;
 	public int LocalHTTPPort = 80;		
 	public String HTTPServerName=null;
@@ -137,7 +141,7 @@ public class SrvIdentity {
 	private ScheduledExecutorService StatRun=null;
 	
 	public boolean FriendOk=false;
-	private int LastFriend=0;
+	int LastFriend=0;
 	public String DefaultLang="en-en";
 	
 	public String CVMF380TMP = null;
@@ -424,13 +428,7 @@ public class SrvIdentity {
 			RefreshRulezList();
 			SaveRulezList();
 			} catch(Exception E) { Config.EXC(E, "RfShRules."+Nick); }
-	
-		
-		//TODO LEVARE!!!
-		//if (Main.Oper==0) return;  //TODO LEVARE!!!
-		//TODO LEVARE!!!
-		
-		
+			
 		if (Main.Oper!=0) return;
 		if (executor!=null) {
 			Log("Hops: Can't run StartProcs with executor!=null!");
@@ -470,7 +468,7 @@ public class SrvIdentity {
 					}
 				};
 
-			executor.scheduleAtFixedRate(ServerOp,15/* 60 + (7&Stdio.NewRndLong())*/ ,Config.MessagesGarbageEvery, TimeUnit.SECONDS); //TODO Ripiazzare!
+			executor.scheduleAtFixedRate(ServerOp,15/* 60 + (7&Stdio.NewRndLong())*/ ,Config.srvOpEvery, TimeUnit.SECONDS); //TODO Ripiazzare!
 		
 			StatRun = Executors.newSingleThreadScheduledExecutor();
 			Runnable StatOp = new Runnable() {
@@ -649,12 +647,28 @@ public class SrvIdentity {
 		if (TimeFrom<1) TimeFrom = System.currentTimeMillis() - (86400000L * Math.abs(Stdio.NewRndLong() % 365)+86400000L);
 		if (TimeTo<1) TimeTo =  System.currentTimeMillis() + (86400000L * Math.abs(Stdio.NewRndLong() % 365)+315360000000L);
 	
-		MyCert = LibSTLS.CreateCert(new KeyPair(SPK,SSK), Onion, TimeFrom, TimeTo, at);
+		String[] AltName = null;
+		
+		if (EnterRoute && Config.AddCertSAltNames) {
+			String t0 = Onion + "\n" + ExitRouteDomain ;
+			if ((Main.cmdFlags & Main.CF_W_SSLNOWILC)==0) t0+="\n*."+ExitRouteDomain;
+			if (MXDomain!=null) t0+="\n"+MXDomain;
+			t0=t0.toLowerCase().trim();
+			AltName = t0.split("\\n+");
+			}
+		
+		MyCert = LibSTLS.CreateCert(new KeyPair(SPK,SSK), Onion, TimeFrom, TimeTo, at,AltName);
 		LibSTLS.SaveCert(Maildir+"/head/data", Sale, MyCert);
 		
 		Main.echo("\n\t"+J.Spaced("New Cert:", 16)+"`"+J.Limited(Onion, 40)+"`");
 		Main.echo("\n\t"+J.Spaced("From:", 16)+"`"+J.Limited(new Date(TimeFrom).toString(),40)+"`");
 		Main.echo("\n\t"+J.Spaced("To:", 16)+"`"+J.Limited(new Date(TimeTo).toString(), 40)+"`");
+		
+		if (AltName!=null) {
+			int cx = AltName.length;
+			Main.echo("\n\tAlt Names:");
+			for (int ax=0;ax<cx;ax++) Main.echo("\n\t\t"+AltName[ax]);
+			}
 		
 		for (String K:SSlInfo.keySet()) {
 			Main.echo("\n\t"+J.Spaced(K+":", 16)+"`"+J.Limited(SSlInfo.get(K), 40)+"`");
@@ -1068,7 +1082,7 @@ public class SrvIdentity {
 		Log("User destroyed `"+local+"`");
 	}
 	
-	
+	//															pop3		smtp
 	public void UsrCreate(String local,String pws,String pwlwr,int ttl,HashMap <String,String> Prop) throws Exception {
 		KeyPair GPG = Stdio.RSAKeyGen(2048);
 		byte[] rnd = new byte[64];
@@ -1470,7 +1484,7 @@ public class SrvIdentity {
 							String fdo = J.getDomain(MailFrom);
 							t0 = flp+"."+fdo+"@"+ExitRouteDomain;
 							
-							for (String k:Hldr.keySet()) { //TODO Controllare il from qui !FROM!
+							for (String k:Hldr.keySet()) { //XXX TODO Controllare il from qui !FROM!
 							String a = Hldr.get(k);
 							if (a.contains(MailFrom)) {
 								a=a.replace(MailFrom, t0);
@@ -1478,7 +1492,7 @@ public class SrvIdentity {
 								}
 							}
 							
-							Hldr.put("from", t0); //TODO Controllare il from qui !FROM!
+							Hldr.put("from", t0); //XXX TODO Controllare il from qui !FROM!
 							Hldr.put("x-mat-from", MailFrom);
 							putNotice=ExitNoticeE;
 							MailFrom = t0;
@@ -1954,7 +1968,7 @@ public class SrvIdentity {
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, remo,25);
 					RO = RS.getOutputStream();
 					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 					Re = new SMTPReply(RI);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
@@ -1980,7 +1994,7 @@ public class SrvIdentity {
 						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)");
 						
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM iam.onion" +( mf2 ? "V2.0" : ""));
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM iam.onion" +( mf2 ? "V2.0" : "V2"));
 						if (Re.Code>199 &&  Re.Code<300) ReceiveManifest(Re,remo);
 						
 						try { Re = SrvSMTPSession.RemoteCmd(RO,RI,"QUIT"); } catch(Exception Ii) {}
@@ -2010,7 +2024,7 @@ public class SrvIdentity {
 			if (F.exists()) {
 					try { 
 							long T= F.lastModified();
-							if (T==0 || Math.abs(System.currentTimeMillis() - T) > 86400000) return false;
+							if (T==0 || Math.abs(System.currentTimeMillis() - T) > (Config.manifestTTLS*1000L)) return false;
 							} catch(Exception I) { return false; }
 					return true;
 					}
@@ -2028,7 +2042,7 @@ public class SrvIdentity {
 			dta = Stdio.AESEnc(K, iv, dta);
 			String mf = GetFNName(remo)+".mf";
 			Stdio.file_put_bytes(mf, dta);
-			Log("Manifest: `"+remo+"`");	
+			Log("Manifest: `"+remo+"`" + (m.Friends!=null ? Integer.toString(m.Friends.length)+" Friends": ""));	
 			return m;
 		}
 
@@ -2091,7 +2105,7 @@ public class SrvIdentity {
 				
 				RO = RS.getOutputStream();
 				RI  =J.getLineReader(RS.getInputStream());
-				RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+				RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 				Re = new SMTPReply(RI);
 				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" `"+e.onion+"`"); 
 			
@@ -2173,7 +2187,7 @@ public class SrvIdentity {
 					 }
 				RO = RS.getOutputStream();
 				RI  =J.getLineReader(RS.getInputStream());
-				RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+				RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 				Re = new SMTPReply(RI);
 				if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" `"+oni+"`"); 
 						
@@ -2224,7 +2238,7 @@ public class SrvIdentity {
 		public SrvManifest DoFriend(String FriendServer) throws Exception {
 			SrvManifest M=null;
 			if (FriendServer.compareToIgnoreCase(Onion)==0) return null;
-			if (HaveManifest(FriendServer)) {
+			if ((Main.cmdFlags & Main.CF_F_NOSKIPFRIEND)==0 && HaveManifest(FriendServer)) {
 						Log("DoFriends Skip `"+FriendServer+"`");
 						return null;
 						}
@@ -2241,7 +2255,7 @@ public class SrvIdentity {
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, FriendServer,25);
 					RO = RS.getOutputStream();
 					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 					Re = new SMTPReply(RI);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
@@ -2266,7 +2280,7 @@ public class SrvIdentity {
 						Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 					
-						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM "+Onion+ (newManifest ? " V2.0":""));
+						Re = SrvSMTPSession.RemoteCmd(RO,RI,"TORM IAM "+Onion+ (newManifest ? " V2.0":" V2"));
 						if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+ " (remote)");
 						M = ReceiveManifest(Re,FriendServer);
 						} else  throw new Exception("@"+Re.toString().trim()+ " (remote)");
@@ -2285,12 +2299,18 @@ public class SrvIdentity {
 				return M;
 		}
 		
-		private void DoFriends() throws Exception {
+		void DoFriends() throws Exception {
 		SrvManifest M=null;	
 		Status |= SrvIdentity.ST_FriendRun;
 		Log("Begin DoFriends\n");
 		HashMap <String,String> net = new HashMap <String,String>();
 		String[] FriendServer = RequildFriendsList();
+		if (friendsForceAdd!=null) {
+			String t0 = J.Implode("\n", FriendServer);
+			t0+="\n"+friendsForceAdd;
+			friendsForceAdd=null;
+			FriendServer=t0.split("\\n+");
+			}
 		String known = "\n"+J.Implode("\n", FriendServer)+"\n";
 		String friendlyList="";
 		known=known.toLowerCase();
@@ -2363,7 +2383,7 @@ public class SrvIdentity {
 		Status |= SrvIdentity.ST_FriendOk;
 		}
 	
-		private void SearchExit() throws Exception {
+		void SearchExit() throws Exception {
 			String inb = Maildir+"/feed/";
 			SrvManifest M=null;	
 			File ib = new File(inb);
@@ -3051,6 +3071,7 @@ public class SrvIdentity {
 				msg+=SSLEtoString();
 				msg=msg.replace("\n", "\r\n");
 				HashMap <String,String> Hldr= SrvSMTPSession.ClassicHeaders("server@"+Onion, "sysop@"+Onion);
+				Hldr.put("subject", "SSLEID Server's message");
 				SendLocalMessage("sysop", Hldr, msg);
 				msg=null;
 				} catch(Exception I) { Config.EXC(I,Nick+": Can't send sysop SSL message!"); }
@@ -3236,7 +3257,7 @@ public class SrvIdentity {
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
 					RO = RS.getOutputStream();
 					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 					Re = new SMTPReply(RI);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (VERFSSL)"); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
@@ -3806,7 +3827,7 @@ byte[][] Cobj = new byte[][] {
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
 					RO = RS.getOutputStream();
 					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 					Re = new SMTPReply(RI);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (remote)"); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
@@ -3911,7 +3932,7 @@ byte[][] Cobj = new byte[][] {
 					RS = J.IncapsulateSOCKS(Config.TorIP, Config.TorPort, oni,25);
 					RO = RS.getOutputStream();
 					RI  =J.getLineReader(RS.getInputStream());
-					RS.setSoTimeout(Config.MaxSMTPSessionInitTTL);
+					RS.setSoTimeout(Config.MaxSMTPSessionTTL);
 					Re = new SMTPReply(RI);
 					if (Re.Code<200 || Re.Code>299) throw new Exception("@"+Re.toString().trim()+" (DERK)"); 
 					Re = SrvSMTPSession.RemoteCmd(RO,RI,"EHLO "+Onion);
@@ -4654,6 +4675,146 @@ byte[][] Cobj = new byte[][] {
 		public static final int VOUCHER_USED=-1;
 		public static final int VOUCHER_OLD=-2;
 		
+		public void VoucherLogClear() {
+			try {
+				HashMap<String,String> x = new HashMap<String,String>();
+				byte[] e =J.HashMapPack(x);
+				x=null;
+				byte[][] in = new byte[][] { e ,e };
+				Stdio.SFileSave(this, in,  Const.SFS_VOUCHER);
+				} catch(Exception E) { Config.EXC(E, "VoucherLogClear"); }
+			}
+		
+		public String VoucherLogGet(String vc) throws Exception {
+			
+			HashMap <String,String> vs= null;
+			HashMap <String,String> vl= null;
+			
+			try {
+				byte[][] in = Stdio.SFileLoad(this, Const.SFS_VOUCHER);
+				vs = J.HashMapUnPack(in[0]);
+				vl = J.HashMapUnPack(in[1]);
+			} catch (Exception E) {
+					 vs= new HashMap <String,String> ();
+					 vl= new HashMap <String,String> ();
+				}
+			
+			if (vc==null) {
+				String st="";
+				for(String k:vl.keySet()) {
+					st+="Voucher: "+k+"\n";
+					st+="\tStatus: "+vs.get(k)+"\n";
+					st+="\tLog:\n\t";
+					st+=vl.get(k).replace("\n", "\n\t");
+					st+="--------\n\n";
+					}
+				return st;
+				} else {
+				if (!vl.containsKey(vc)) return null;
+				return "Voucher: "+vc+"\nStatus: "+vs.get(vc)+"\nLog:\n"+vl.get(vc)+"\n";
+				}
+			
+		}
+		
+		public void VoucherLogDel(String vc)  {
+			try {
+				HashMap <String,String> vs= null;
+				HashMap <String,String> vl= null;
+				
+				try {
+					byte[][] in = Stdio.SFileLoad(this, Const.SFS_VOUCHER);
+					vs = J.HashMapUnPack(in[0]);
+					vl = J.HashMapUnPack(in[1]);
+				} catch (Exception E) {
+					 vs= new HashMap <String,String> ();
+					 vl= new HashMap <String,String> ();
+				}
+				
+				vs.remove(vc);
+				vl.remove(vc);
+
+				byte[][] in = new byte[][] { J.HashMapPack(vs) , J.HashMapPack(vl) };
+				Stdio.SFileSave(this, in,  Const.SFS_VOUCHER);
+			} catch(Exception EV) { Config.EXC(EV, "VoucherLogDel"); }
+		}
+		
+		public void VoucherLog(String vc,int st,String msg)  {
+			try {
+				HashMap <String,String> vs= null;
+				HashMap <String,String> vl= null;
+				
+				try {
+					byte[][] in = Stdio.SFileLoad(this, Const.SFS_VOUCHER);
+					vs = J.HashMapUnPack(in[0]);
+					vl = J.HashMapUnPack(in[1]);
+				} catch (Exception E) {
+					 vs= new HashMap <String,String> ();
+					 vl= new HashMap <String,String> ();
+				}
+				
+				long tcr = this.Time();
+				vs.put(vc, Integer.toString(15+st,36)+" "+Integer.toString((int)(tcr/1000L)));
+				String l=null;
+				if (vl.containsKey(vc)) l = vl.get(vc); else l="";
+				msg=msg.replace('\n', ' ');
+				l+=Integer.toString(15+st,36)+" "+J.TimeStandard(tcr)+"\t"+msg.trim()+"\n";
+				String[] t0 = l.split("\\n+");
+				int cx = t0.length;
+				
+				if (cx>3) {
+					l="";
+					for (int ax=1;ax<cx;ax++) l+=t0[ax]+"\n";
+					}
+				
+				t0=null;
+				vl.put(vc, l.trim());
+				byte[][] in = new byte[][] { J.HashMapPack(vs) , J.HashMapPack(vl) };
+				Stdio.SFileSave(this, in,  Const.SFS_VOUCHER);
+			} catch(Exception EV) { Config.EXC(EV, "VoucherLogSC"); }
+		}
+		
+		public void VoucherLogGarbage() {
+			long tcr = (int)(System.currentTimeMillis()/1000L);
+			
+			try {
+				HashMap <String,String> vs= null;
+				HashMap <String,String> vl= null;
+				
+				try {
+					byte[][] in = Stdio.SFileLoad(this, Const.SFS_VOUCHER);
+					vs = J.HashMapUnPack(in[0]);
+					vl = J.HashMapUnPack(in[1]);
+				} catch (Exception E) {
+					 vs= new HashMap <String,String> ();
+					 vl= new HashMap <String,String> ();
+				}
+				
+				String rm="";
+				for(String k:vs.keySet()) {
+					String s = vs.get(k);
+					if (s.length()<2) continue;
+					s=s.substring(2);
+					long t = J.parseLong(s.trim());
+					if ( tcr - t > 864000) rm+=k+"\n";
+				}
+				
+				rm=rm.trim();
+				int cx=0;
+				if (rm.length()>0) {
+					String[] rma=rm.split("\\n+");
+					cx = rma.length;
+					for (int ax=0;ax<cx;ax++) {
+						vs.remove(rma[ax]);
+						vl.remove(rma[ax]);
+						}
+					}
+				if (cx>0) 	Log("VoucherLogGarbage: "+cx+" records removed");
+				
+				byte[][] in = new byte[][] { J.HashMapPack(vs) , J.HashMapPack(vl) };
+				Stdio.SFileSave(this, in,  Const.SFS_VOUCHER);
+			} catch(Exception EV) { Config.EXC(EV, "VoucherLogGarb"); }
+		}
+						
 		public synchronized int VoucherTest(String vc,boolean save) throws Exception {
 			byte[] c = J.Base64Decode(vc);
 			if (c.length!=30) return 0;

@@ -3,8 +3,9 @@
 	
 	See http://onionmail.info for more info
 	
-	Copyright (C) 2013-2014 by Tramaci.org ( http://tramaci.org )
-	Copyright (C) 2013-2014 EPTO (A) (epto@tramaci.org)
+	Copyright (C) 2013-2015 Tramaci.org ( http://tramaci.org )
+	Copyright (C) 2013-2015 OnionMail Project  ( http://onionmail.info )
+	Copyright (C) 2013-2015 mes3hacklab ( http://mes3hacklab.org )
 		
 	This file is part of OnionMail ( http://onionmail.info )
 	

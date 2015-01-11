@@ -2,7 +2,7 @@
 Use:
 	onionmail [-q] [-f <config file>] [-v] [-p <password>] [-ndk] 
 		[-pf <global_slat_keyfile>] [-d] [--reboot] [--pgp] [-pi]
-		[-rpf <remotePasswdFile>] [-bm]
+		[-rpf <remotePasswdFile>] [-bm] [-F:<flags>]
 		[--gen-rpass] [-sp] [-rc <file> ]
 		[--rpass-server] [-ntx] [-dr <outfile> ]
 		
@@ -51,7 +51,21 @@ Use:
 					Der2048(passw1, file2) , 
 					pass2), 
 				file2)
-			
+	
+	-F:<flags>	Enable special flags:
+			u = Do not put all sysop's password in sysop.txt
+			b = Do not put the boot's password in sysop.txt
+			z = Generates double size passwords for sysop and
+			    boot.
+			r = Allow user interaction to change the sysop's
+			    files position and files encryption.
+			    Create a directory before generate the servers
+			    with an ASCII armor PGP public key file of
+			    SysOp / root user.
+
+			Recommended settings:
+			--gen-servers -F:zur
+
 	Special commands:
 
 	--gen-password	Require an input line and generate an encrypted 

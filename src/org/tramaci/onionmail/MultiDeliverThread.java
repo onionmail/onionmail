@@ -17,7 +17,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-//TODO Bug fix: From header in VMAT mode!
+//XXX TODO  Bug fix: From header in VMAT mode!
 
 package org.tramaci.onionmail;
 
@@ -84,6 +84,7 @@ public class MultiDeliverThread extends Thread {
 										if (E instanceof java.net.ConnectException) ms2="Connection error "+Integer.toHexString((""+E.getMessage()).hashCode());
 										}
 								
+								if (E instanceof InterruptedException) ms2="Operation Timeout";
 								if (E instanceof java.net.SocketException) ms2="Network Socket error "+Integer.toHexString((""+E.getMessage()).hashCode());
 								if (E instanceof java.net.NoRouteToHostException) ms2="No route to host";
 								if (E instanceof java.net.SocketTimeoutException) ms2="Network timeout";
@@ -232,6 +233,7 @@ public class MultiDeliverThread extends Thread {
 		MailBoxFile TM = new MailBoxFile();
 		TM.OpenTMP(Tmp);
 		while(true) {
+			J.RunCheck();
 			String li = M.readLine();
 			if (li==null)  {
 				TM.Destroy(true);

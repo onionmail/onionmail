@@ -63,5 +63,7 @@ public class Const {
 		public static final String ASC_KB_KCTL = "KCTL";
 		public static final String SRV_PRIV="#Server/Private#";
 		
+		public static final int SFS_VOUCHER = 0x8C011ACD;
+		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify	
 }
