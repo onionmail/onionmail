@@ -26,6 +26,8 @@ import java.net.Socket;
 import java.util.Date;
 import java.util.HashMap;
 
+import javax.net.ssl.SSLSocket;
+
 public class HTTPServer extends Thread {
 	public Config Config;
 	public SrvIdentity Identity = null;
@@ -101,7 +103,8 @@ public class HTTPServer extends Thread {
 		MaxReqBuf=C.HTTPMaxBuffer;
 		CAPTCHAMode = C.TextCaptchaMode;
 		CAPTCHASize = C.TextCaptchaSize;
-		
+		HTTPSServer = serv.HTTPSServer;
+				
 		String lf=null;
 		if (serv.HTTPLogFile!=null) {
 			LogMultiServer=false;
@@ -381,6 +384,12 @@ public class HTTPServer extends Thread {
 			
 			try {
 					con = srv.accept();
+					
+					if (HTTPSServer) {
+						SSLSocket SL = LibSTLS.AcceptSSL(con, Identity.SSLServer, Identity.Onion);
+						con = (Socket) SL;
+						}
+					
 					Connection[si] = new SrvHTTPRequest(Identity,con,this);
 					long d = System.currentTimeMillis() - LastClear;
 					if (d>SessionTimeOut) CleanupSession();

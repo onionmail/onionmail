@@ -48,7 +48,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int QueueTimeOut = 120;
 		public int QueueThreads = 4;
 		
-		public long MaxPOP3InitTTL = 15000;
+		public long MaxPOP3InitTTL = 120000;
 		public long MAXPOP3SessionTTL = 600000;
 		
 		public int MaxHTTPSession = 10; 
@@ -151,10 +151,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int PasswordMaxStrangerChars=4;
 				
 		public int MaxUsrBlackListEntry=16;
-		
-	//	public String ServerBlackList = "server.bl"; //T\ODO dddd
-	//	public byte[] BlackSale=new byte[16];			//T\ODO sale
-		
+	
 		public PublicKey SK = null;
 		public boolean BlackFlg = false;
 	

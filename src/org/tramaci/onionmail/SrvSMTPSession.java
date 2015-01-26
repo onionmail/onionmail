@@ -2016,8 +2016,8 @@ public class SrvSMTPSession extends Thread {
 				 }
 		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
 		H.put("subject", "Add Friend request");
-		String ml="Server `"+oni+"` "+ ( added ? " is " : " is not ")+"added to the firend list.\r\n";
-		if (orgoni.compareTo(oni)!=0) ml+="Hostame of server: `"+orgoni+"`\r\n";
+		String ml="Server `"+oni+"` "+ ( added ? " is " : " is not ")+"added to the firend list.\n";
+		if (orgoni.compareTo(oni)!=0) ml+="Hostame of server: `"+orgoni+"`\n";
 		
 		if (0==( Mid.Status & SrvIdentity.ST_FriendRun)) {
 			try {
@@ -2034,17 +2034,17 @@ public class SrvSMTPSession extends Thread {
 							HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, (String) this.VAR[0]);
 							H.put("subject", "Add Friend request (Search Exit)");
 							H.put("to", (String) this.VAR[0]);
-							String ml="End of search exit:\r\n";
-							ml+="Friend server: `"+(String)this.VAR[1]+"`\r\n";
-							ml+="Server Hostname: `"+(String)this.VAR[2]+"`\r\n";
-							ml+="Search start at: `"+(String)this.VAR[3]+"`\r\n";
-							ml+="Complente.\r\nExit list:\r\n";
+							String ml="End of search exit:\n";
+							ml+="Friend server: `"+(String)this.VAR[1]+"`\n";
+							ml+="Server Hostname: `"+(String)this.VAR[2]+"`\n";
+							ml+="Search start at: `"+(String)this.VAR[3]+"`\n";
+							ml+="Complete.\nExit list:\n";
 							
 							ExitRouteList RL = Mid.GetExitList();
 							ExitRouterInfo[] el = RL.getAll();
 							int cx=el.length;
-							for (int ax=0;ax<cx;ax++) ml+=el[ax].toInfoString()+"\r\n";
-							ml+="\r\n\t"+this.Server.Nick+"\r\n";
+							for (int ax=0;ax<cx;ax++) ml+=el[ax].toInfoString()+"\n";
+							ml+="\n\t"+this.Server.Nick+"\n";
 							Server.SendMessage((String) VAR[0],H,ml);
 							ml=null;
 							} catch(Exception E) {
@@ -2067,16 +2067,16 @@ public class SrvSMTPSession extends Thread {
 				ETH.start();
 				
 				} catch(Exception E) {
-					ml+="Error starting DoFriends: "+E.getMessage()+"\r\n";
+					ml+="Error starting DoFriends: "+E.getMessage()+"\n";
 					 if (Config.Debug) E.printStackTrace();
 				}			
-			} else ml+="Exit list will be update to the next server refresh time\r\n";
+			} else ml+="Exit list will be update to the next server refresh time\n";
 		
-		ml+="List of firends to add:\r\n\t";
+		ml+="List of firends to add:\n\t";
 		String[] t0 = Mid.friendsForceAdd.split("\\n+");
-		ml+=J.Implode("\r\n\t", t0);
+		ml+=J.Implode("\n\t", t0);
 		t0=null;
-		ml+="\r\n\r\n\t"+Mid.Nick+"\r\n";
+		ml+="\n\n\t"+Mid.Nick+"\n";
 		if (PGPSession) ml=Mid.SrvPGPMessage(MailFrom,H,ml);	
 		Mid.SendMessage(MailFrom, H, ml);
 		Send("250 Id=nothing");
@@ -2281,7 +2281,7 @@ public class SrvSMTPSession extends Thread {
 			
 			HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
 			H.put("subject", "Voucher Log request");
-			ml=ml.replace("\n", "\r\n");
+			ml=ml.replace("\n", "\n");
 			ml=ml.trim();
 			ml+="\r\n";
 			if (PGPSession) ml=Mid.SrvPGPMessage(MailFrom,H,ml);	

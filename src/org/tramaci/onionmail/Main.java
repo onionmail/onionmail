@@ -47,8 +47,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0008_0000_0567L;
-	public static String Version="1.8.0.1383";
+	public static long VersionID = 0x0001_0008_0000_056CL;
+	public static String Version="1.8.0.1388";
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;

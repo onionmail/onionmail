@@ -116,6 +116,7 @@ public class MailQueue {
 		Ms.OpenAES(ent.FileName(ParentServer),ent.Key,true);
 		int MessageBytes=0;
 		while(true) {
+			J.RunCheck();
 			String li = I.readLine();
 		
 			MessageBytes+=li.length()+2;

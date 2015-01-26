@@ -61,6 +61,7 @@ public class SrvHTTPRequest extends Thread{
 	protected byte[] Reply=null;
 	protected boolean rsNoLen=false;
 	protected InputStream RF = null;
+	protected int RFLength = 0;
 	
 	private HTTPServer Parent = null;
 	
@@ -106,6 +107,7 @@ public class SrvHTTPRequest extends Thread{
 		rsNoLen=false;
 		if (RF!=null) try { RF.close(); } catch(Exception I) {}
 		RF = null;
+		RFLength=0;
 		dismissed=false;
 		stat=SrvHTTPRequest.ST_WaitRequest;
 		Ltcr=System.currentTimeMillis();
@@ -277,13 +279,15 @@ public class SrvHTTPRequest extends Thread{
 			}
 		
 		RF = new FileInputStream(ReqFile);
-				
+		RFLength = (int) new File(ReqFile).length();
+		
 		}
 		
 	public void run() {
 		try {
 			isCurKeep=Parent.KeepAlive!=0;
 			for(pipelN=1;pipelN<=Parent.Pipelining;pipelN++) {
+					J.RunCheck();	
 					isCurKeep=pipelN!=Parent.Pipelining;
 					
 					Ltcr=System.currentTimeMillis();
@@ -356,8 +360,10 @@ public class SrvHTTPRequest extends Thread{
 						if (pl<0) throw new Exception("Invalid POST E3"); 
 						if (pl>8192) throw new Exception("Invalid POST E4");
 						PostRaw = new byte[pl];
-						for (int ax=0;ax<pl;ax++) PostRaw[ax]=(byte) I.read();
-						
+						for (int ax=0;ax<pl;ax++) {
+							PostRaw[ax]=(byte) I.read();
+							if (0==(ax&31)) J.RunCheck();
+							}
 						
 						li = QHead.get("content-type");
 						if (li==null) li="text/plain";
@@ -407,7 +413,7 @@ public class SrvHTTPRequest extends Thread{
 					//WebLog(null);
 							
 					if (Reply!=null) RHead.put("content-length", Integer.toString(Reply.length));
-					if (!rsNoLen && RF!=null) RHead.put("content-length", Integer.toString(RF.available()));
+					if (!rsNoLen && RF!=null) RHead.put("content-length", Integer.toString(RFLength));
 					if (Session!=null) saveSession();
 					
 					boolean kal;
@@ -435,23 +441,26 @@ public class SrvHTTPRequest extends Thread{
 					if (Reply!=null) {
 						O.write(Reply);
 						} else {
-						long sz = RF.available();
+						long sz = RFLength; //RF.available(); <-- This is make a JAVA BUG!
 						int blo =(int)(sz>>9);
 						Reply = new byte[512];
 						for (int ax=0;ax<blo;ax++) {
 							Ltcr=System.currentTimeMillis();
 							RF.read(Reply);
 							O.write(Reply);
+							J.RunCheck();
 							}
-						blo = RF.available();
+						blo = RFLength; //RF.available();
 						if (blo>0) {
 							Reply = new byte[blo];
 							Ltcr=System.currentTimeMillis();
 							RF.read(Reply);
 							O.write(Reply);
+							J.RunCheck();
 							}
 						RF.close();
 						RF=null;
+						RFLength=0;
 						}
 					Reply=null;
 					if (isCurKeep) KAReset(); else break;
@@ -607,7 +616,7 @@ public class SrvHTTPRequest extends Thread{
 				return true;
 
 		if (stat==SrvHTTPRequest.ST_Reply && d>Mid.Config.MaxHTTPRes) return true;
-		if (stat==SrvHTTPRequest.ST_End && d>1000) return true; 
+		if (stat==SrvHTTPRequest.ST_End && d>2000) return true; //1000 
 	
 		if (!con.isConnected()) return true;
 		if (con.isClosed()) return true;
@@ -654,6 +663,7 @@ public class SrvHTTPRequest extends Thread{
 		if (RF!=null) {
 			RF.close();
 			RF=null;
+			RFLength=0;
 			}
 		return;
 	}
@@ -823,6 +833,21 @@ public class SrvHTTPRequest extends Thread{
 				
 				}
 		
+		if (li.contains("<!--#ELIST_OPTION#-->")) {
+			ExitRouteList ER = Mid.GetExitList();
+			ExitRouterInfo[] LS = ER.queryFLT(ER.FLT_EXITVMAT);
+			String t0="<option value=\"\">(Default)</option>\n";
+			int cx = LS.length;
+			for (int ax=0;ax<cx;ax++) {
+				String t1=toHtml(LS[ax].domain);
+				t0+="<option value=\""+t1+"\">"+t1+"</option>\n";
+				}
+			LS=null;
+			ER=null;
+			li=li.replace("<!--#ELIST_OPTION#-->", t0);
+			t0=null;
+			}
+		
 		if (li.contains("<!-- SESSION -->")) { 
 				createSession(); 
 				}
@@ -957,6 +982,7 @@ public class SrvHTTPRequest extends Thread{
 		if (li.contains("<!--$") || li.contains("<!--(")) {
 			if (Session==null) {
 				WebLog("Session lost");
+				deleteSession();
 				redirect(Parent.ErrorPage+"?e=se");
 				return;
 				}
@@ -998,6 +1024,9 @@ public class SrvHTTPRequest extends Thread{
 		String voucher = Session.get("om-voucher");
 		String cap0 = Session.get("cap");
 		String cap1 = Session.get("om-cap");
+		String wantExitTo = Session.get("om-exit");
+		if (wantExitTo!=null && wantExitTo.length()==0) wantExitTo=null;
+		
 		Session.put("erro", "");
 		if (
 					local==null 		||
@@ -1047,7 +1076,9 @@ public class SrvHTTPRequest extends Thread{
 		boolean vca=false;
 		if (voucher.length()>0) try {
 			voucher = voucher.trim();
-			if (Mid.VoucherTest(voucher, true)==1) vca=true;
+			int vr = Mid.VoucherTest(voucher, true);
+			if (vr==1) vca=true;
+			Mid.VoucherLog(voucher, vr,"WebAction/Subscribe");
 			} catch(Exception E) {
 				WebLog("Voucer "+E.getMessage());
 				Session.put("erro", "Voucher error");
@@ -1087,6 +1118,24 @@ public class SrvHTTPRequest extends Thread{
 		
 		ExitRouteList EL = Mid.GetExitList();
 		ExitRouterInfo SE = EL.selectBestExit();
+		if (wantExitTo!=null) {
+			wantExitTo=wantExitTo.toLowerCase().trim();
+			ExitRouterInfo WE = EL.getByDomain(wantExitTo);
+			if (WE!=null) {
+				if (WE.canVMAT && WE.isExit && !WE.isBad && !WE.isDown) SE=WE;
+				}
+			}
+		
+		if (SE!=null) {
+			ExitRouterInfo ex = EL.selectExitByDomain(SE.domain, false);
+			String oni = ex.onion;
+			String dom = ex.domain;
+			HashMap <String,String> Ho = new HashMap <String,String>();
+			Ho.put("exitonion", oni);
+			Ho.put("exitdomain", dom);
+			Mid.UsrSetConfig(local,Ho);
+			}
+		
 		Session.put("kvmat", "0");
 		Session.put("vmat","");
 		Session.put("vmatpass","");
@@ -1116,6 +1165,8 @@ public class SrvHTTPRequest extends Thread{
 		rul+=Mid.Maildir+"/rulez/rulez.rul\n";
 		rul+=Mid.Maildir+"/rulez.txt\n";
 		rul+=Mid.Maildir+"/rulez.rul\n";
+		rul+=Mid.Maildir+"/rulez/rulez.txt\n";
+		rul+=Mid.Maildir+"/rulez/rulez.rul\n";
 		rul+=Mid.Config.RootPathConfig+"rulez.rul\n";
 		rul+=Mid.Config.RootPathConfig+"rulez.txt";
 		rul=rul.trim();
@@ -1151,7 +1202,6 @@ public class SrvHTTPRequest extends Thread{
 							H = J.FilterHeader(H);
 							}
 						
-
 						if (!H.containsKey("subject")) H.put("subject", Mid.Nick+" RULEZ ("+Mid.Onion+")");
 						if (H.containsKey("content-type")) RHead.put("content-type", H.get("content-type"));
 						
@@ -1213,6 +1263,7 @@ public class SrvHTTPRequest extends Thread{
 					String vo = Get.get("voucher");
 					boolean sv = Config.parseY(Get.get("save"));
 					int r = Mid.VoucherTest(vo, sv);
+					if (sv) Mid.VoucherLog(vo, r, "WebAction/AJAX");
 					rs+="\"stat\":"+Integer.toString(r)+",\n";
 					if (sv && r == Mid.VOUCHER_OK) { 
 						rs+="\"stats\":\"BAD_DELETED\",\n";
