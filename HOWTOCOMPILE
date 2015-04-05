@@ -16,9 +16,18 @@
 Extract all in this path:	 
 /mnt/sdcard/ONM/
 
-If you whant to change it modify the file:
+If you want to change it modify the file:
 /etc/onionmail/config.conf
 
 To run onionmail with jar:
 
 java -jar onionmail.jar -f /mns/sdcard/ONM/etc/onionmail/config.conf
+
+----
+To test all package use our repository and use these commands:
+# apt-get source onionmail
+then update the package, jat etc...
+# debuild -us -uc
+# dpkg -i  packagefile.deb
+
+

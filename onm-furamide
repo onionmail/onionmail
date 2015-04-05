@@ -1,0 +1,38 @@
+#!/bin/bash
+
+furaTemplate=/etc/onionmail/setupkit/furamide-template
+furaOut=/etc/onionmail/preconf.d/01-furamide.conf
+
+cat << EOF
+ONM-Furamide is an OnionMail's ferature that fill unused memory with
+false secret data like RSA keys, password and RAM artifacts.
+This operation prevent:
+ * Dump the secret keys into the swap area.
+ * Retrieve the secret key by RAM dump.
+ * Retrieve any data by RAM dump.
+
+Some configuration of this feature can cause a waste usage of RAM.
+Evaluate how many you want to hide the data into the RAM.
+If you afraid the server can be sequestred or stealed use this feature.
+If your server is in a trusted place you don't need this feature.
+
+Select an option:
+EOF
+egrep -vE '\#' "$furaTemplate"
+echo -n " > "
+read selChar
+echo ""
+selChar="#c$selChar"
+furaData=$(egrep -Ei "${selChar}" "$furaTemplate")
+
+if [[ $furaData == "" ]]; then
+	echo "ONM-Furamide disabled"
+	rm -f ${furaOut}
+else
+	echo "${furaData}" > ${furaOut}
+	echo "ONM-Furamide enabled"
+fi
+echo "Restart OnionMail to change settings."
+
+
+

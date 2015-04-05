@@ -1,0 +1,63 @@
+ (0) Don't use Furamide (Default).
+ (1) Prevent key in swap only.
+ (2) Minimal furamide activity.
+ (3) More data in RAM.
+ (4) Minimal activity and more data.
+ (5) More data in RAM.
+ (6) Continuous changes in RAM.
+ (7) More changes in RAM.
+ (8) Big confusion in RAM and more CPU usage.
+furamide {			#c1
+	Size		0	#c1
+	TTL		60	#c1
+	Interval	60	#c1
+	Heavy		no	#c1
+	max		no	#c1
+	}			#c1
+furamide {			#c2
+	Size		1       #c2
+	TTL		120     #c2
+	Interval	60      #c2
+	Heavy		yes     #c2
+	max		no      #c2
+	}	                #c2
+furamide {			#c3
+	Size		128     #c3
+	TTL		10      #c3
+	Interval	5       #c3
+	Heavy		yes     #c3
+	}			#c3	
+furamide {			#c4
+	Size		256     #c4
+	TTL		60      #c4
+	Interval	10      #c4
+	Heavy		yes     #c4
+	max		no      #c4
+	}                       #c4
+furamide {			#c5
+	Size		128     #c5
+	TTL		10      #c5
+	Interval	5       #c5
+	Heavy		yes     #c5
+	}			#c5
+furamide { 			#c6
+	Size		128     #c6
+	TTL		1       #c6
+	Interval	1       #c6
+	Heavy		yes     #c6
+	max		no      #c6
+	}                       #c6
+furamide {			#c7
+	Size		128     #c7
+	TTL		10      #c7
+	Interval	5       #c7
+	Heavy		yes     #c7
+	max		yes     #c7
+	}                       #c7
+furamide {			#c8
+	Size		128	#c8
+	TTL		1	#c8
+	Interval	1	#c8
+	Heavy		yes	#c8
+	max		yes	#c8
+	}			#c8

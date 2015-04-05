@@ -1,0 +1,644 @@
+Subject: Onion Mail SysOp Rulez
+Content-Type: text/plain; charset=UTF-8
+
+
+                                                          `                         
+                                                         ,                          
+                                                        .`                          
+                                                        +     `'                    
+                                                       +`    ''                     
+                                                      +;    ''                      
+                                                     .+.  `'';                      
+                                                     +;  ,''+                       
+                                                    ++' .'''                        
+                                                    ++  '''+                        
+                                                `  ++' +''+                         
+                                                +  ++;+''+:                         
+                                  `,:;;''++'';;:+.,+; +''+                          
+                           `:@#+@#''''''''''''''+'++'+''+`                          
+                       :#@'##@''''''''''''''''''+'++'+''+'@#;                       
+                    +@+'##++''''''@@@@@@@@@@@@@@+;++'+'+++#+'+@+`                   
+                 +##''#+++'''''@@@@@@@@@@@@@@@@@+++;++'+''+++#''+##`                
+              .##+''#++#''''@@@@@@@@@@@@@@@@@@@@+++'+++'''''#++@'''##,              
+            :++'''@+++'''''@@@@@@@@@@@@@@@@@@@@@+++'+++@@'''''+++@'''#++            
+          `#++''++++@''''@@@@@@@@@@''''''''''''';++'++#@@@'''''@++#''''++:          
+         #+#'''@+++@''''@@@@@@@@@''''+++++++++'''++'++@@@@@'''''#+++#'''#+#         
+       ,++#'''#+++@''''@@@@@@@@'''++++++'''++++++++'++@@@@@@'''''#+++@'''+++:       
+      @++''''++++#''''@@@@@@@'''+++'''''''''''''+++'+'@@@@@@@'''''@+++@''''++@      
+     @++''''+++++''''@@@@@@@''+++''+++++++++++++'+''+''@@@@@@@'''''++++@''''++#     
+    @++''''@+++++'''@@@@@@@''++''+++@@@@@@@@''+@''''++''@@@@@@''''''++++#''''++#    
+   #+++'''+++++@''''@@@@@@''++''++@@@@@@@@@@@@@@@@@@@++''@@@@@@'''''@++++'''''++@   
+  `++@''''+++++''''@@@@@@''++''+@@@@@@@@@@@@@@@@@@@@@'++''@@@@@''''''+++++''''@++,  
+  +++''''@++++#''''@@@@@@'++''+@@@@@@@@@@@@@@@@@@@@@@'++''@@@@@@'''''@+++++''''+++  
+ ;++@''''++++++'''@@@@@@''++'+@@@@@@@@@@@@@@@@@@@@@@@''++'@@@@@@''''''++++#''''#++# 
+ +++'''''+++++''''@@@@@@''+'++@@@@@@@@'++++'@@@@@@@@++'++''@@@@@''''''+++++'''''+++ 
+ +++''''@+++++''''@@@@@@'++'+@@@@@@@'+'++++''@@@@@@@++'++''@@@@@''''''#+++++''''#++ 
+ ++#''''+++++#''''@@@@@@'++'+@@@@@@@+++---++''@@@@@@'+'++''@@@@@''''''@++++@''''@++;
+'++@''''+++++@'''@@@@@@''+''+@@@@@@'''| @ |++'@@@@@@'+'++''@@@@@''''''@++++#''''#++@
++++@''''+++++@'''@@@@@@''+''+@@@@@@''+|  @|++'@@@@@@'+'++'@@@@@@''''''#++++#''''#++@
+.++@''''+++++@''''@@@@@''+''+@@@@@@'++|@@@|+''@@@@@@++'+''@@@@@@''''''@++++#''''@+++
+ +++''''#+++++''''@@@@@@'++'+@@@@@@''++---+++@@@@@@'+'++'@@@@@@'''''''@++++@''''@++`
+ +++''''@+++++''''@@@@@@'++'+@@@@@@@++++++++'@@@@@@+'++''@@@@@@'''''''++++++''''+++ 
+ @+++''''+++++''''@@@@@@''+'+@@@@@@@'++++++'@@@@@@@'++''@@@@@@''''''''+++++'''''++# 
+  +++''''+++++@'''@@@@@@''++'+@@@@@@@@'''@@@@@@@@@@++''@@@@@@''''''''#++++#''''#++  
+  @+++'''#+++++''''@@@@@@''+''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@''''''''+++++'''''++@  
+   +++''''+++++#'''@@@@@@@'++''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'''''''''++++@''''+++   
+    ++#''''+++++''''@@@@@@''++''+@@@@@@@@@@@@@+@@@@@@@@@@@''''''''''+++++''''@++    
+     ++@'''#++++@'''@@@@@@@''+++'+@@@@@@@@@@''''@@@@@@@@'''''''''''#+++++'''#++`    
+      ++@'''@+++++'''@@@@@@@'''++'''++@@@+++++++'''@++'''''''''''''++++#'''#++      
+       #+#'''@++++''''@@@@@@@@'''+++''''''''''''++++''''''''''''''++++@'''@++       
+        ;++'''@++++''''@@@@@@@@''''++++++++++++++'''''@@@''''''''+++++'''#+#        
+          #+#''++++++'''@@@@@@@@@@'''''''''''''''''@@@@@@'''''''+++++''++#          
+           .#++''#+++#''''@@@@@@@@@@@@@'''''''@@@@@@@@@@@@''''++++#''+##,           
+              ++''++++@''''@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'''@+++'''#+`             
+               `@##'#+++#''''@@@@@@@@@@@@@@@@@@@@@@@@@@@'''#++++'+#@`               
+                  ,##++#++#'''''@@@@@@@@@@@@@@@@@@@@@''''+#+#+'##:                  
+                     `'@+#++#'''''''@@@@@@@@@@@@@''''''#+##+@'.                     
+                          @@@++#''''''''''''''''''''#+##@@                          
+                               `:@#@#''''''''''#@@@;`                               
+                     @@                                           @@             
+      @@@                                        @    @                 @@@@        
+     @@ @@  @@@@@   @@@     @@@@  @@@@@          @@  @@   @@@@   @@@      @@        
+     @@ @@  @@@@@@  @@@    @@  @@ @@@@@@         @@@@@@      @@  @@@      @@        
+     @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@   @@@@@   @@      @@        
+     @@ @@  @@  @@   @@    @@  @@ @@  @@         @@  @@  @@  @@   @@      @@        
+      @@@   @@  @@  @@@@    @@@@  @@  @@         @@  @@  @@@@@@  @@@@@  @@@@@@      
+
+                           .: OnionMail SysOp's Guide :.
+                                     Ver 1.8
+
+  INDEX:
+  [1.0] Obtain Network information.
+  [2.0] Vouchers menagement.
+  [3.0] Create a new user.
+  [4.0] SSL Operations.
+  [4.1] Test/Dump SSL certificate of a server.
+  [4.2] Obtain all SSL situation of the server.
+  [4.3] Update all SSL situation of the server.
+  [4.4] Change SSL behaviour for a single host.
+  [5.0] How to set a RULEZ file.
+  [6.0] Delete a rulez file.
+  [7.0] Obtain a list of rulez files.
+  [8.0] Correlate the log to a mail address.
+  [9.0] Update and test all exit server.
+  [10.0] Add another exit server manually.
+  [11.0] Friend add/remove check.
+  [12.0] IP BLACKLIST (Only exit/enter server).
+  [13.0] Control port extended functions.
+    [13.1] Server informations.
+    [13.2] Global anti spam lists.
+    [13.3] Users operations.
+    [13.4] Vouchers.
+    [13.5] Mailing lists.
+    [13.6] Aliases.
+    [13.7] SSLEID SSL error records and TorID.
+    [13.8] Other operations.
+         
+----------------------------------------------------------------------------
+
+[1.0] Obtain Network informations:
+
+Server command: NETWORK
+
+The server will reply with full information message.
+
+Flags:
+	X = Is an Exit/Enter server.
+	V = Can host VMAT/RVMAT address.
+	M = Can do MX query.
+	T = Is in server's trust network.
+	B = Is a bad server.
+	D = Is down.
+	L = Is an old OnionMail server (Ver. < 1.4)
+
+----------------------------------------------------------------------------
+
+[2.0] Vouchers menagement:
+
+	To obtain the vouchers.log the command is:
+	VOCHER LIST
+	
+	To delete vouchers.log the command is:
+	VOUCHER DELETE
+	
+	To delete a voucher:
+	VOUCHER DELETE <voucherCode>
+	
+	To create a voucher the command is:
+	VOUCHER <length>
+	Where <lenght> is a number followed by a charatter that set the
+	unit of measure.
+	
+		M = Minutes.
+		H = Hours.
+		D = Days.
+		O = Month.
+	Example:
+	VOUCHER 12H
+	Create a voucher valid for 12 hours.
+
+----------------------------------------------------------------------------
+	
+[3.0] Create a new user:
+
+	The command in the subject is:
+	NEWUSER TO <userName> <mailAddress>
+	This command requires the PGP public key into the body of the message.
+	
+	The server genereates the use <username> then sends a message to 
+	<mailaddress> encrypted in PGP with the public key.
+
+----------------------------------------------------------------------------
+	
+[4.0] SSL Operations:
+
+From OnionMail 1.6.8 there are the SSLEID extension that manage some SSL
+errors. The sysop will receive a message when an SSL certificate may be 
+corrupted or forged.
+	
+The SSLEID options are availables into the file ssl.conf
+
+WARNING:
+The assessments made automatically by the server may be incorrect.
+Check SSL ceriticates always manually before doing anything.
+
+These functions are mirrored into the control port. See [13.7].
+
+----------------------------------------------------------------------------
+
+[4.1] Test/Dump SSL certificate of a server:
+
+The command is:
+	SSL TEST <hostname>
+
+	Or:
+	SSL TEST <hostname> NOTKIM
+	
+This command perform an SMTP connection to the server and one TKIM session. 
+Get the SSL cerfiticate then reply a message with full data.
+	
+----------------------------------------------------------------------------
+
+[4.2] Obtain all SSL situation of the server:
+
+The command is:
+	SSL STATUS
+
+This command will reply with a message with full dump of SSLEID records.
+Fields:
+ Host:	 The server Hostname.
+ T.Id:	 The TOR Identity ID. (OnionMail can ask Tor to change identity).
+ ECrt:	 Number of SSL certificate errors.
+ Err.:	 Number of other SSL error.
+ Sok.:	 Number of SSL socket error.
+ Ok:	 Number of sood sessions.
+ Hits:	 Number of usage of this record.
+ Date:	 Date of creation.
+ Expiry: Date of expiry.
+ Flags:	 SSLEID Flags:
+ 	P = This record will not expire.
+ 	I = SSL protocol incompatibility.
+ 	B = Bad server with SSL cerificate forged.
+ 	C = Don't use SSL for this server.
+ 	F = SSL certificate fixed.
+
+----------------------------------------------------------------------------
+
+[4.3] Update all SSL situation of the server:		   	 	
+
+Ths command is:
+	SSL CHECK
+	
+This command check all SSLEID record and try to request Tor to change 
+identity.
+
+----------------------------------------------------------------------------
+
+[4.4] Change SSL behaviour for a single host:
+
+ * Don't use SSL. 
+   The command is:
+	SSL NO <hostname>
+	
+ * Delete an SSELID record. 
+   The command is:
+   	SSL CLEAR <hostname>
+
+ * Delete an SSL certificate and reset its SSLEID record:
+   The command is:
+   	SSL RESET <hotname>
+
+ * Delete all SSLEID records:
+   The command is: 
+        SSL EMPTY
+  	    		
+ * Edit an SSLEID record manually:
+   The command is:
+   	SSL CHG <hostname>
+   	
+   The parameters must be inserted one per line into the body of the message.
+   The form of each parameter line must be:
+   parameter=value
+   Without any spaces.
+  
+Parameters:
+  Numerics:
+	tor	Tor identity ID.
+	chg	Change number.
+	ecrt	Certificate errors.
+  	err	Errors.
+	hit	Number of usage of this record.
+	ok	Good sessions.
+	sok	SSL Socket errors.  
+
+   Boolean:
+   	b	The server is bad (ceritificate forged).
+   	c	The SSL certificate is changed.
+   	i	Incompatible SSL protocol.
+   	n	Don't use SSL.
+   	p	This record will not expire.
+   	f	SSL certificate fixed.
+
+   The boolean values can be yes or no.
+   Example:
+   c=yes or c=no
+
+----------------------------------------------------------------------------
+
+[5.0] How to set a RULEZ file:
+
+  The command is:
+	SET RULEZ <name>
+  
+  If you want tho set a subject (only ASCII chars.) the command is:
+  	SET RULEZ <name> : <subject>
+
+  The spaces after and before the colon ":" are required.
+  
+  The body of the message is the rulez file.
+  Some variables are expanded only by RULEZ command (not by news rulez).
+  
+  Variables:
+  	\%\%ONOIN\%\%	Server's hidden service address.
+  	\%\%NICK\%\%	Server's nick name.
+  	\%\%EXIT\%\%	Exit server's address (if available).
+  	\%\%LIST\%\%	List of RULEZ files (only for RULEZ LIST).
+  	
+  Special RULEZ files:
+  RULEZ		OnionMail Rulez file (defined by rulez.txt).
+  RULEZ SYSOP	SysOp rulez file (defined by rulez-sysop.txt).
+  RULEZ LIST	List of rulez files (defined by rulez-list.txt).
+  RULEZ MOTD	Message of the day (use only by SET RULEZ).
+                This is used to inform users about the maintenance of 
+		the server.
+		
+----------------------------------------------------------------------------
+
+[6.0] Delete a rulez file:
+
+  The command is:
+	DELETE RULEZ <name>
+
+----------------------------------------------------------------------------
+
+[7.0] Obtain a list of rulez files:
+
+  The command is:
+  	RULEZ LIST
+  
+----------------------------------------------------------------------------
+
+[8.0] Correlate the log to a mail address:
+
+Often the logs are stored in the clear. To avoid giving too much 
+informations, all the addresses are stored in the hash form, which change 
+every 24 hours randomly.
+
+  To get an hash of address the command is:
+  LOGID <address>
+  
+  You can use @iam.onion to specify your OnionMail server.
+  
+This command will store a message into the log file and reply with a message
+like this:
+	
+	Log id:             rrrrrrrrrrrr
+	Mail:               mail@abcdefghjiklnopq.onion
+	Exit Local Part                  L-xxxxxx@aa.o
+	Full Address                     C-yyyyyy@aa.L
+	Exit Full Address                C-xxxxxx@e.o
+	N/S Local Part                   L-yyyyyy@bb
+	Local Part                       L-yyyyyy@aa
+	N/S Address                      C-yyyyyy@aa
+	Exit N/S Local Part              L-xxxxxx@bb.o
+	Exit N/S Address                 C-xxxxxx@e.o
+
+The log id is a random string code to find your request into the log file.
+Then you can identify the mail address by two strings "yyyyyy" and "yyyyyy" 
+(as localpart of address) and a string "aa" as domain part.
+Other suffix "bb" or "e" depends by address format.
+
+The prefix "L-" refers to an user name.
+The prefix "C-" refers to a full mail address.
+The suffix ".o" refers to a MAT mail address.
+The suffix ".L" refers to a MAT mail address of this server.
+The suffix ".X" refers to a MAT mail address of this server (exit format).
+
+Another prefix can inserted before the code in the SMTPS section:
+
+	SMTPS/<mode> <server>/_A<logid>
+	
+	Mode:
+	I = SMTP Session as Internet exit/enter node.
+	A = SMTP Session as Internet alternative port.
+	T = SMTP Session in TOR network.
+	
+	Server: This is the nickname of the server.
+	
+Warning: There may be collisions, the localpart identical on different 
+localdomain. These strings are not indicative effectively.
+
+The log file format is string length separated.
+There are 6 parts per line:
+
+2014-01-01 00:00:00.0000 1a       -S--- POP3 Nick      Connection: 127.0.0.1
+ \-- Date   \-- Time     \-Thread  \-Flags |             \-- Log event.
+yyyy-mm-dd hh:mm:ss.cccc                   \-- Section/server
+
+Flags: 
+	A = Global log event.
+	S = Server log event.
+	E = Local event.
+	B = Bad event (Exception).
+	S = Spam / attack event.
+
+Main sections:
+	MAIN	= Main thread.
+	SMTP	= SMTP Daemon.
+	SMTPS	= SMTP Session.
+	POP3	= POP3 Daemon.
+	POP3S	= POP3 Session.
+	MAIN.TEST = Self Onion service test.
+	KERNEL	= Main OnionMail operations.
+	
+	Other section are referred by source code.
+
+----------------------------------------------------------------------------
+
+[9.0] Update and test all exit server:
+
+This command force OnionMail to rebuild/scan all connections to the 
+exit/enter servers and verify all exit mail servers keys.
+
+ The command is:
+ 	EXIT UPDATE 
+
+The message reply of this command is not immediate. OnionMail will send a
+reply message when the ExitScan routine is completed.
+
+----------------------------------------------------------------------------
+
+[10.0] Add another exit server manually.
+
+This command force OnionMail to scan the manifest of a new server, then add
+it to the firends list. This command can be used to add a new exit server
+directly to the exit list.
+
+ The command is:
+ 	FRIEND (server)
+ 	
+Where (server) can be the hostsname or the hidden service of an OnionMail
+exit/enter server.
+This command san all firends of selected server. 
+
+The message reply of this command is not immediate. OnionMail will send a
+reply message when the DoFriends and ExitScan routines are completed.
+
+----------------------------------------------------------------------------
+ 
+[11.0] Friend add/remove check. 
+
+These commands (subject strings) are used to check and modify the friends
+list of the server.
+
+  List of commands:
+  FRIEND ERROR				Reply with the firends error list.
+  FRIEND CLEAR ERROR			Delete the friends error list.
+  SHOW MANIFEST (server)		Reply with the (server)'s manifest.
+  DELETE MANIFEST (server)		Delete the (server)'s manifest.
+  FRIEND (server)			Add a new (server) to friends.
+  
+  The (server) filed must be changed to an hidden service address.
+
+----------------------------------------------------------------------------
+ 
+[12.0] IP BLACKLIST (Only exit/enter server).
+
+This command reply with the server's IP blacklist. 
+When a SMTP session terminates with an error or it do a suspect action, the
+sender's server IP is blacklisted automatically.
+
+To see the blacklist use the command (subject) SHOW BLACKLIST.
+
+----------------------------------------------------------------------------
+
+[13.0] Control port extended functions.
+
+To access to the control port's function the SysOp user can use the command
+CONTROL.
+This command connects a mail message to the control port, then run commands
+by the control port session and return the output as reply message.
+The subject of the message must be the word CONTROL.
+(The message can be in PGP encrypted format with subject PGP and first line 
+CONTROL).
+
+The first line of the body must be an authentication command.
+Example:
+	server nick password
+	user localpart SMTPpassword
+
+The control port works like a POP3 protocol.
+The reply starts with +OK or -ERR:
++OK = Success.
++ERR = Error.
+When some data are requested you can put some text ended by a line 
+containing a dot.
+When the server's reply is a multi line reply, the server end the message 
+with a line containing a dot.
+
+Example:
+> stat
++OK Statistics
+Messages-In: 10
+Messages-Out: 10
+Messages-Inet: 10
+POP3-Sessions: 10
+.
+
+Your command lines will insert into the reply message with symbol ">" 
+(like a message reply).
+The logon operation will appear as "<LOGON>" string.
+
+Warning:
+  Any long operation can cause a timeout.
+  Any incomplete operation cause a timeout.
+  The server put the command QUIT at the end of message automatically.	
+  To use control port correctly see http://onionmail.info/api.html
+  The allowed access type is KESIA.
+  Can't access as KERSIA (root access).
+
+Example:
+From: sysop@....
+To: server@iam.onion
+Subject: CONTROL
+
+server nick password
+ver
+elist
+.
+
+The server will reply:
++OK ControlPort 1.0 ...
+<LOGON>
++OK KESIA [nick] `nick`
+> ver  
++OK 1.8.0.2000 100080000ffff
+> elist  
++OK ELIST/S 2.0
+onionmail.info: louhlbgyupgktsw7.onion:10125 VMTX 0%
+.
+> QUIT  
+
+----------------------------------------------------------------------------
+  [13.1] Server informations:
+  Command				Action
+  
+  access				Access informations.
+  getkey				Reply with RSA public key.
+  bestexit				Get the best exit server.
+  ver					OnionMail's version.
+  vers					OnionMail's version and hash.
+  stat					Server's statistics.
+  status				Server status.
+  firends				Reply the firends list.
+  frienderr				Reply the firend error list.
+  sslcert				Dump SSL certificate.
+  
+----------------------------------------------------------------------------  
+  [13.2] Global anti spam lists.
+  Command				Action
+  
+  spam create				Create a new spam list.
+  spam list				Dump the spam list.
+  spam del <entry>			Delete a spam list entry.
+  spam add <address>			Add an address to spam list.			
+  spam check <address>			Check if an address is spam.
+  (The spam commands are related to current access).
+  
+  dnsbl <ipaddress>			Check ip address by DNSBL.
+  					(Only exit/enter server).
+  iplist				Dump IP black list.
+  					(Only exit/enter server).
+  					
+----------------------------------------------------------------------------  
+  [13.3] Users operations.
+  Command				Action
+  
+  vmatreg <address>			Register a new VMAT address.
+  addusr <localpart>			Create a new user.
+  ovrusr <localpart>			Stolen, Overwrite or create an user.
+  deluser <localpart>			Delete an user.
+  vrfy <localpart>			Check if user exists.
+  addpgpusr <localpart>			Create a new user and reply the data
+  	<PGP-Key>			as PGP message.
+  	.
+
+----------------------------------------------------------------------------  
+  [13.4] Vouchers.
+  Command				Action
+  
+  vouchermk <len>			Create a new voucher.
+  voucherchk <voucher>			Check a voucher code.
+  voucher <voucher>			Use a voucher code (invalidate).
+  
+----------------------------------------------------------------------------  
+  [13.5] Mailing lists.
+  Command				Action
+  
+  list <addr.list> <user> [<password>]	List logon.
+  mklist <addr.list> <owner> <title> 	Create a new mailing list.
+  
+  All list command are in a separate container. Remember to exit with another
+  EXIT command.
+  
+  Command				Action
+  
+  unsubscribe				Remove current user from mailing list.
+  passwd <password>			Change password.
+  getrulez				Reply with rulez message.
+  mode <user> admin			Set new administrator.
+  mode <user> user			Set as normal user.
+  invite <address>			Invite an user to the mailing list.			
+  remove <address>			Remove from mailing list.
+  list					Dump the list.
+  delete				Destroy this mailing list (and exit).
+  setrulez 				Set the rulez message.
+	<headers>
+	
+  	<message>			(Headers and mail message).
+	.
+  exit					Exit from list mode.
+
+----------------------------------------------------------------------------  
+  [13.6] Aliases.
+  Command				Action
+  
+  addalias <alias> <localpart>		Create a new alias.
+  delalias <alias>			Delete an alias.
+  alias <alias>				Get the real address.
+
+----------------------------------------------------------------------------  
+  [13.7] SSLEID SSL error records and TorID.
+  Command 				Action
+  
+  ssleid				Dump SSL error messages.
+  ssleid clear				Clear all SSL errors.
+  ssleid no <host>			Don't use SSL form host.
+  ssleid del <host>			Delete SSL error record.
+  ssleid chg <host> <name> <value>	Change SSL error record manually.
+  sslclear <host>			Forget an SSL record/ceritificate.
+  sslcheck <host> [{Y | N}]		Check SSL connection. 
+  					Y = Use TKIM.
+  			                N = Don't use TKIM.
+  toridf				Change TorID
+  torid					Request to TOR to change identity.
+  
+----------------------------------------------------------------------------  
+  [13.8] Other operations.
+  Command				Action
+  
+  captcha				Test the captcha.
+  rmmanifest <address>			Forget a server.
+  
+  fsave <name>				Save an application file.
+  	<data>
+  	.
+  
+  fload <fname>				Dump an application file.
+  	<data>
+	.
+	
+  fdel <fname>				Delete an application file.
+  send <address>			Send a message.
+  	<header>
+
+	<message>
+	.                                   
+
+  rsetcnt				Reset all limits conter.
+  exit					Exit from current mode.
+  quit					Close session.
+      
+----------------------------------------------------------------------------
+						    OnionMail Project 2015 
+----------------------------------------------------------------------------

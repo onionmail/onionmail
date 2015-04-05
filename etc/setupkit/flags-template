@@ -1,0 +1,19 @@
+ (0) Don't change any cmdFlag.
+
+ (1) Disable PUSH/DERK: Don't use remote keys F(X).
+     This mode uses only the local passphrase. The server can't
+     restart without the local passphrase. 
+     Can't use autodestruction certificate KCTL.
+
+     This is the best way with correct use of sysop.txt and boot
+     passphrase.
+
+ (2) Enable PUSH/DERK: Enable remote keys F(X).
+     This mude uses the remote F(X) keys. The server can be
+     restarted. The control of F(X) is menaged by KCTL certificate.
+     You can use the autodestruction certificate KCTL.
+OptFlag hideboot	#c1
+OptFlag hidesysop	#c1
+OptFlag noderk 		#c2
+OptFlag hideboot 	#c2
+OptFlag hidesysop	#c2

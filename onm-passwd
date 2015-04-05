@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [ "$1" == "-d" ]; then
+	if [ "$2" == "" ]; then
+		echo "Missing parameter -d <mailDir>"
+		exit 1
+	fi
+	if [ -f /dev/shm/onionmail ]; then
+		java -jar /bin/onionmail.jar --srv-passwd "$2" -bf /dev/shm/onionmail -q
+	else
+		java -jar /bin/onionmail.jar --srv-passwd "$2" -q
+	fi
+exit 0
+fi
+
+if [ "$1" == "-a" ]; then
+	if [ -f /dev/shm/onionmail ]; then
+		for D in /var/onionmail/*; do [ -d "${D}" ] && onm-passwd -d "$D"; done
+		exit 0
+	else
+		echo "Missing ram password in: /dev/shm/onionmail"
+		exit 1
+	fi
+fi
+
+echo "Use onm-passwd -d mailDir to change the boot password for one server."
+echo "Use onm-passwd -a to change all boot password of all servers."
+
+
+

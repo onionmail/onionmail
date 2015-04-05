@@ -1,0 +1,350 @@
+ The following organisations and people have contributed to the Bouncy Castle Cryptography Package.
+ Thanks, may your castles never deflate!
+ Donors
+ The following people and organisations donated financially to help with the release of 1.51:
+ Gup & Boz @ Alki Seattle, Bytemine Gmbh, Ted Pennings, Atanas Krachev, PrimeKey Solutions AB, Martin Paljak, CorseraFri19980116, CPU Terminator, Lindsay Bradford, kares, Philius, and Aaron Anderson.
+ Organisations
+Holders of Crypto Workshop Support Contracts. Currently 40 hours of consulting time left over from these has been contributed back to working on the Bouncy Castle APIs. You know who you are!
+Atlassian Software Systems donation of Confluence and JIRA licences.
+TU-Darmstadt, Computer Science Department, RBG, for the initial
+lightweight client side TLS implementation, which is based on MicroTLS. MicroTLS was developed
+by Erik Tews under the supervision of Dipl.-Ing.
+Henning Baer and Prof. Max Muehlhaeuser.
+TU-Darmstadt, Computer Science Department, RBG, for the initial
+Post Quantum provider, which was based on the FlexiProvider. The FlexiProvider was developed
+by the Theoretical Computer Science Research Group at TU-Darmstadt, Computer Science Department, RBG under the supervision of Prof. Dr. Johannes Buchmann. More information on the history of FlexiProvider can be found at:
+http://www.flexiprovider.de/
+Voxeo Labs - sponsorship of the initial development of APIs for DTLS 1.0 (RFC 4347), DTLS-SRTP key negotiation (RFC 5764),
+and server side TLS 1.1 (RFC 4346) and tested WebRTC compatibility. More information on Voxeo Labs can be found
+at http://voxeolabs.com
+ People
+Tito Pena Fortunato.PenaAdNovum.CH - initial RC5 implementation
+Michael Lee yflmira.net - initial RC6 implementation, MD2 implementation
+Nuno Santos nsantosstudent.dei.uc.pt - finding toString bug in certificate object.
+Brett Sealey brettsmortbay.com - fixing the missing return problem in JDKKeyFactory (affected SSLeay private keys).
+Victor A. Salaman salamanteknos.com - fixing the bug in Cipher.java which caused it to ignore specified providers, fixing the bug in RSAKeyGenerator which caused keys to be occasionally produced 1 bit too small.
+Eran Librach eranlvalicert.com - spotting and fixing the classLoader bug that occurs if javax.crypto and the provider aren't sharing the same classpath  (occurs in JDK 1.3 and greater).
+Jonathan Knudsen jonathanLearningPatterns.com - porting
+information and restrictions when using the lightweight library with the
+MIDP environment.
+Markus Niedermann markus.niedermannsoftwired-inc.com - porting
+information and restrictions when using the lightweight library with the
+MIDP environment.
+Mike Benham moxiethoughtcrime.org - detection and fixing of an
+incorrect weak key in the DES key generation support classes. Suggestions
+for simplifying DESedeParameter objects. Optimisations for the Blowfish engine
+and BufferedBlockCipher class.
+Soren Hilmer hilmermail.tele.dk - initial implementation of
+netscape certificate request classes.
+Uwe Guenther uwecscc.de - detection and fixing of 3 incorrect semi-weak keys in the DES key generation support classes.
+Markus Bradtke mabinformatik.uni-kiel.de - fixing of a logic
+error in the JDKKeyStore class.
+Waclaw Sierek waclaw.sierektpg.pl - fix to setOddParity in
+the DESParameter class. Assistance with adding ordering to X509 names for
+certificate generation, proper processing of byte strings in the ASN1
+package, further simplifications and additional classes to improve pkcs7
+support, bug fixes in CertPath API.
+Ly-Na Phu lyna.phuinit-consulting.de - assistance in the
+addition of ISO 9796-1 padding.
+Stefan Kpsell sk13mail.inf.tu-dresden.de - making the jdk 1.1
+version of the collections API available. For further details see
+http://sourceforge.net/projects/jcf/
+Carmen Bastiaans cbastiaamicrobits.com.au - fixing the improper
+null pointer problem in the setting of certificates in the PKCS12 key store.
+Tomas Gustavsson tomasgprimekey.se - initial implementation of the AuthorityInformationAccess, SubjectKeyIdentifier, AuthorityKeyIdentifier, CRLNumber, CRLReason, CertificatePolicies, V2TBSCertListGenerator, and X509V2CRLGenerator classes in the ASN.1 library. Additions to GeneralName class, other bug fixes in the X.509 package. Initial implementation of the CertificationRequest classes. getRevocationReason() patch for OCSP. Patch to SemanticsInformation to prevent ClassCastException.
+Eugen Kuleshov euxxhotmail.com - optimisations for Blowfish, assistance with PKCS12/keytool interoperability.
+Megan Woods meganwoodssekurafile.com - initial implementation of
+ECIES.
+Christian Geuer-Pollmann geuerpapache.org -
+adding IV's to the AESWrap implementations. Initial implementation of
+DESedeWrap.
+Michael Mhle michaelmouling.de - contributing the initial CertPath implementation and compatibility classes, fixing provider bug in JDK 1.1 java.security.cert.CertificateFactory compatibilty class.
+Michael Mansell  memichaelmansell.com - fixing the parsing of the empty DER set in the ASN.1 library.
+Eike Recker eike.reckergmx.de - fixing misspelling of provider reference for RSA/1 and RSA/2.
+Chris Southern CSouthernbaltimore.com - fixing misuse of specified provider in the PKCS10 certification request class.
+Sidney Markowitz sidneysidney.com - fixing null pointed exception on unknown OID in X509Name class, initial implementation of the three AES engines.
+Chris Kerr ckerrfilonet.ca - initial implementation of the cms,
+asn1.cms, and the mail/smime packages,
+assistance in simplifying the ASN.1 package, miscellaneous other optimisations,
+NIST CertPath certification test, PKIXPolicyNode class, CertPath subtree validation and policy tree construction. We also
+wish to acknowledge the generosity of Filonet
+Corporation for allowing Chris to make the initial cms and mail/smime packages available to us.
+Mike Bean mbeanlucentradius.com - fixing the fall through bug
+in the IV algorithm parameters class.
+Martin Petraschek e9526225student.tuwien.ac.at - fixing ASN1
+tagging so tag values up to 30 are now supported.
+Jess Garms jgarmsyahoo.com - fixing 112/168 key size bug for
+DESede key generation.
+Mike Bremford mikebig.faceless.org - contributing the inital PKCS7 implementation.
+Shankar Srinivasan ssr002yahoo.com - S/Mime interoperability testing and debugging.
+Stef Hoeben ilsestefskynet.be - adding Montgomery multiplication to the BigInteger class.
+Klaudiusz Ciosk kcioskmax.com.pl - improving the compatibility of
+the SMIME package with the Sun JCE.
+Thomas Houtekier Thomas.Houtekiertectrade.net - S/Mime testing and debugging. Interoperability with
+Biztalk.
+Don Hillsberry hillsberdialcorp.com - S/Mime testing and debugging.
+Kazuo Furuya kfuruyainfoteria.co.jp - fixing root certificate chaining bug in PKCS12 key store.
+Jason Novotny jdnovotnylbl.gov - initial work on the openSSL PEM processing.
+Joel Hockey joel.hockeyqsipayments.com - initial work on the openSSL PEM processing.
+John Steenbruggen JohnSgeotrust.com - fixing CertificationRequestInfo to handle cert request info objects without attribute blocks.
+Justin Chapweske justinchapweske.com - ordering patch for Tiger message digest.
+John Serock jserockhotmail.com - fixing null pointer exception
+in constructor for ExtendedKeyUsage. Fixing of base OID bug in KeyPurposeId.
+Compliance of KeyUsage extension return value with security API.
+Sascha Weinreuter Sascha.Weinreutercit.de - fixed SMIME saveChanges() bug.
+Andre Wehnert aw5mail.inf.tu-dresden.de - fixing key schedule problem in RC5-64, fixing buffer cleaning issue in buffered block cipher.
+Luigi Lo Iacono lo_iacononue.et-inf.uni-siegen.de - adding SIC
+mode to the blockciphers in the provider.
+Tim Sakach tsakachcertivo.net - SMIME v2 compatibility patches.
+Marcus Povey mpoveybrookes.ac.uk - adding the PGP mode to the lightweight API and the provider.
+Sebastian Clau sc2inf.tu-dresden.de - adding randomness setting
+to the certificate and CRL generators.
+Nicolas Bielza nicolas.bielzaalligacom.com - isolating the tagging bug in the ASN.1 library that was misrepresenting some ASN.1 constructed data types. Contributions to the streaming S/MIME classes.
+Casey Marshall rsdiometastatic.org - fixing the clone problem with Macs in the clean room JCE.
+Rick Zeldes rick.zeldeseds.com - initial code for CMS/SMIME CompressedData.
+Jarek Gawor gawormcs.anl.gov - fixing ASN.1 sequence unpacking in BasicConstraints constructor.
+Brett Neumeier randomrnd.cx - patch to OriginatorIdentifierOrKey object, improvements to encoders package, introduction of UrlBase64.
+Graham Coles graham.colesretail-logic.com - patch to isParityAdjusted in DESKeySpec.
+Jrn von Kattche J.Kattcheeseeburger.de - patch to SMIMEGenerator for preventing class cast exceptions with BodyParts containing Multipart objects.
+Matteo Artuso matartusolibero.it - picking up the possible overead in ASN1InputStream.
+Julian Morrison julianextropy.demon.co.uk - spotting the slow down
+in Diffie-Hellman key generation.
+Elmar Sonnenschein esoesomail.de - fix to long conversion in clean room
+SecureRandom.
+Jrn Schwarze JSchwarzeulc.de - Locale fix for the clean room JCE.
+Bryan Lovquist bklcps.com.au - Other provider compatibility fixes for CMS signing.
+Artem Portnoy Artem_Portnoyibi.com - generalisations for CMSProcessableBodyPart in S/MIME. Header fix for mime messages.
+Michael Husler haeusler&#064ponton-consulting.de - missing OID update for SHA1 with RSA Signature.
+Johan Seland johans&#064netfonds.no - general toString for BigInteger class.
+Johannes Nicolai johannes.nicolai&#064novosec.com - further enhancements to OCSP response generation, fix to CertificateID issuer.
+Marc Doberva marc.doberva&#064ilex-si.com - help in isolating the JSSE/BC RSA key issue.
+Jan Dvorak jan.dvorak&#064mathan.cz - initial implementation of the light weight Null block cipher.
+Joe Cohen jcohen&#064forumsys.com - converting the ArrayOutOfBoundsException in DERInputStream into what it should have been.
+Chris Longaclong&#064ece.cmu.edu - adding public key decoding to PEMReader.
+Hes Siemelinkhes&#064izecom.com - findIssuer fix for CertPathBuilder, toMimeMessage converter for Mail API, getSize() fix for zero length messages in SMIMEMessage.
+Stefan Puiustefanpuiuro&#064yahoo.com - initial implementation V3 policy mapping, policy qualifier objects in ASN.1 X.509 package.
+Kaiser Yang kaiseryangyahoo.com - Finding BigInteger loop problem in prime generation.
+Jiri Urbanec jiri.urbanec&#064logicacmg.com - patch to fix defect in DERBMPString.equals().
+Justin Kolb jkolb&#064pristx.com - patch to DSA signature generation in OpenPGP. Fix for the unexpected "Unexpected end of ZLIB input stream" exception.
+Ralf Hauser ralfhauser&#064gmx.ch - patch to exception handling in PublicKeyRing, PEMReader, 1.4 build script, X509 Certificate Factory, CertPathValidatorUtilities, fromAddress null check in SignedMailValidator.
+Michal Dvorak M_Dvorak&#064kb.cz - getNextUpdate patch for OCSP SingleResp.
+Klaus Greve Fiorentini Klaus&#064cpqd.com.br - array fix in PGP PublickKeyEncSessionPacket.
+Olivier Refalo Olivier_Refalo&#064fpl.com - null pointer exception fix for JDK 1.3 CMSSignedData objects.
+Mariusz Bandola mariusz.bandola&#064cryptotech.com.pl - patch to DERGeneralizedTime. Compliance patch for OCSP TBSRequest class. Patch to X509Name for delaing with general objects in sequences.
+Brien Oberstein brien.oberstein&#064transacttools.net - patch to S2K algorithm in OpenPGP, initial PGP version 3 secret key support, initial PGP version 3 signature generation, RIPEMD160 addition to PGPUtil.
+Ian Haywood ian&#064haywood.bpa.nu - addition of getSignatureType to PGPSignature.
+Jonathan Edwards s34gull&#064mac.com - initial support for reading multiple rings from a PGP key file.
+Andrew Thornton andrew&#064caret.cam.ac.uk - patch for RSA PUBLIC KEY in PEMReader.
+Gregor Leander gl&#064bos-bremen.de - initial parsing of multiple sequence entries in an X.500 Name.
+Antoon Bosselaers Antoon.Bosselaers&#064esat.kuleuven.ac.be - help with RipeMD320 implementation.
+Peter Sylvester Peter.Sylvester&#064edelweb.fr - improvements to the ASN.1 BasicConstraints object.
+Doug ummmmm&#064myrealbox.com - addition of isEncryptionKey method to OpenPGP public keys.
+Francois Staes fstaes&#064netconsult.be - improvements to DEBitString, DERGeneralizedTime and initial implimentation of DERGeneralString, addition of settable signed content info to CMSSignedDataGenerator, patch to DH key agreement.
+W.R. Dittmer wdittmer&#064cs.vu.nl - patch to decoding of SignatureCreationTime in BCPG. Patch to PGPKeyPair to fix nullpointer exception.
+Perez Paz Luis Alberto laperez&#064banxico.org.mx - patch to use of BitString in X.500 name.
+James Wright James_Wright&#064harte-hanks.com - patches for dealing with "odd" ArmoredInputStreams.
+Jim Ford jim&#064muirford.com - patch to PGPSecretKey to avoid null pointer exception on encoding secret keys, comments on KeyExpirationTime, getBitStrength for ElGamal keys. Signature creation time patch for newly created v4 signatures.
+Michael Hausler haeusler&#064ponton-consulting.de - extra aliases for provider.
+Sai Pullabhotla psai&#064linoma.com - fix to PGP compressed data generator to improve compression levels. Performance improvements for KeyBasedLargeFileProcessor.
+Joseph Miller joseph&#064digiweb.net.nz - addition of ZeroBytePadding.
+Lars xyz&#064sagemdenmark.dk - patch to explicit padded mode for CBC block cipher MAC.
+Jeroen van Vianen jeroen&#064vanvianen.nl - the Signed and Encrypted mail example.
+Jun Sun JSun&#064diversinet.com - patch to SecureRandom to work around problem in wtk 1.0.4 and wtk 2.1.
+Petr Dukem pdukem&#064email.cz - patch to CMSSignedDataGenerator to allow it to work with PKCS11 providers.
+Filipe Silva filipe.silva&#064wedoconsulting.com - patch to fix overead issue in BCPGInputStream.
+Alpesh Parmar alps&#064linuxmail.org - patch for class cast problem in PGPPublicKey.getSignatures().
+Jay Gengelbach jgengelbach&#064webmethods.com - patch to fix isSigningKey in PGPSecretKey class, patch to hashedPackets in PGP signatureGenerator, initial cut for indefinite length output.
+Doug doug&#064tigerprivacy.com - public key ring patches for ElGamal Signatures, problem key ring data.
+Matthew Mundy mmundy1&#064umbc.edu - infinite loop prevention patch to PKCS5S2ParametersGenerator.
+Tom Cargill cargill&#064profcon.com - spelling patch in provider.
+Breitenstrom Christian C.Breitenstrom&#064t-systems.com - compatibility patch to SignaturePacket, DetachedSignatureProcessor.
+Zanotti Mirko zanotti&#064cad.it - patch to ordered equality test for X509Name.
+Nicola Scendoni nscendoni&#064babelps.it - patch to add sorting to CertPath validation.
+Ville Skytt ville.skytta&#064iki.fi - patch to CRLDistPoint for cRLIssuer field. KeyStore compliance on add patches. DiffieHellman patch for provider compliance. Support for PEM object "TRUSTED CERTIFICATE". Exception handling patch in PEMReader. JavaDoc clean up.
+Bruce Gordon bruce.gordon&#064savvis.net - patch to secret key creation encoding NullPointerException in OpenPGP, speed up for BCPGInputStream.
+Miles Whiteley Miles.Whiteley&#064savvis.net - "223" fix for BCPGInputStream new packets.
+Albert Moliner amoliner&#064evintia.com - initial TSP implementation.
+Carlos Lozano carlos&#064evintia.com - initial TSP implementation, patch to SignerInformation for supporting repeated signers, initial updates for supporting repeated attributes in CMS.
+Javier Delgadillo javi&#064javi.codewarp.org - initial Mozilla PublicKeyAndChallenge classes.
+Joni Hahkala joni.hahkala&#064cern.ch - initial implementations of VOMS Attribute Certificate Validation, IetfAttrSyntax, and ObjectDigestInfo. We also wish to thank the EGEE project for making the work available.
+Rolf Schillingerrolf&#064sir-wum.de - initial implementation of Attribute Certificate generation.
+Sergey Bahtin Sergey_Bahtin&#064yahoo.com - fix for recovering certificate aliases in BKS and UBER key stores. Initial implementations of GOST-28147, GOST-3410, EC GOST-3410, GOST OFB mode (GOFB) and GOST-3411.
+Franck Leroy Franck.Leroy&#064keynectis.com - ANS.1 set sorting. Contributions to TSP implementation. Test vectors for Bleichenbacher's forgery attack.
+Atsuhiko Yamanaka ymnk&#064jcraft.com - patch for improving use of Montgomery numbers in BigInteger library. Patch to use size of private exponent in DH parameters.
+Nickolay Bolshackov tyrex&#064reksoft.ru - patch for class cast exception in AuthorityInformationAccess class.
+Soren Hilmer soren.hilmer&#064tietoenator.com - patches for CertID with issuerSerial set in TSP implementation, additional compliance testing.
+Steve Mitchell mitchell&#064intertrust.com - patch for stateful path validator fix. Patch to allow BigInteger class to create negative numbers from byte arrays. Additions to allow different providers to be used for asymmetric/symmetric encryption in OpenPGP.
+Optimisation to avoid redundant verification in path validator. Suggestion to use PKIXParameters.getSigProvider() correctly.
+Dirk Eisner D.Eisner&#064seeburger.de - initial implementation of ISO 78164-4 padding.
+Julien Pasquier julienpasquier&#064free.fr - initial implementation of attribute classes from RFC 3126. Fix to KEKIdentifier, OtherKeyAttribute parsing. Initial ContentHints class.
+Matteo matartuso&#064libero.it - sequence patch to ASN1Dump.
+Andrew Paterson andrew.paterson&#064burnsecs.com - patches to PGP tools, isRevoked method on PGPPublicKey.
+Vladimir Molotkov vladimir.n.molotkov&#064intel.com - extensive provider exception handling compliance testing.
+Florin Kollan adlocflo&#064web.de - fix to ElGamalKeyParameters equality testing.
+Pavel Vassiliev paulvas&#064gmail.com - Initial GOST28147Mac implementation.
+Tom Pesman tom&#064tnux.net - addition of DES-EDE encryption for RSAPrivate keys to PEMWriter.
+Lukasz Kowalczyk lukasz.b.kowalczyk&#064gmail.com - patch to fix parsing issue with OpenSSL PEM based certificate requests.
+Arndt Hasch Arndt.Hasch&#064maxence.de - additional fix for partial reading with new style PGP packets.
+Fix Bernd (KCDP 11) bernd.fix&#064credit-suisse.com - fix for 31 byte issue and exception throwing by Whirlpool.
+David M. Lee dmlee&#064Crossroads.com - code for add and remove secret key in the PGPSecretKeyRing class. Additions to S/MIME and CMS unit tests.
+Mike Dillon md5&#064embody.org - additional checks for PGP secret and public key construction, patches to copyWithNewPassword.
+tu-vi cung t2cung&#064hotmail.com - patch for out of bounds problem in getDecoderStream method.
+Chris Schultz cschultz&#064gmail.com - fix for InputStream constructor for X509V2AttributeCertificate.
+David M. Lee dmlee&#064Crossroads.com - implementation assistance with streaming CMS classes.
+Joel Rees rees&#064ddcom.co.jp - fix to correct getOID methods from returning same set on X.509 attribute certificates.
+Francesc Sau francesc.sau&#064partners.netfocus.es - micro fix for tsp Accuracy class.
+Larry Bugbee bugbee&#064mac.com - initial ECNR implementation.
+Remi Blancher Remi.Blancher&#064keynectis.com - Contributions to TSP implementation. Initial implementation of RFC 3739 and ICAO ASN.1 classes.
+Brian O'Rourke brianorourke&#064gmail.com - patch for signature creation time override in OpenPGP.
+Andreas Schwier andreas.schwier&#064cardcontact.de - initial implementation of ISO9797 MAC Algorithm 3, addition of DES-EDE 64 MAC to the provider, fix to EC point encoding, addition of EC and RSA-PSS OIDs to CMS, addition of AES-CMAC and DESede-CMAC to JCE provider.
+David Josse david.josse&#064transacttools.net - Patch for trailer function in version 2 signature packets.
+Kishimoto Kazuhiko kazu-k&#064hi-ho.ne.jp - RFC 3280 updates to policy processing in the CertPath validator. Additional test data not covered by NIST.
+Lawrence Tan lwrnctan&#064gmail.com&gt - Large field OID sample test data. Missing key types in JDKKeyFactory.
+Carlos Valiente superdupont&#064gmail.com - Addition of CRL writing to the PEMWriter class.
+Keyon AG, Martin Christinat, http://www.keyon.ch - fixing incorrect
+ASN.1 encoding of field elements in X9FieldElement class.
+Olaf Keller, olaf.keller.bc&#064bluewin.ch - initial implementation of the elliptic curves over binary fields F2m. Additional tests and modifications to elliptic curve support for both F2m and Fp. Performance improvements to F2m multiplication. Initial implementation of WNAF/WTNAF point multiplication. Improvement to k value generation in ECDSA.
+Jrg Eichhorn eichhorn&#064ponton-consulting.de - patch to fix EOF read on SharedFileInputStream, support for F2m compression.
+Karsten Ohme widerstand&#064t-online.de - initial check against for out of range data on non byte aligned RSA keys. Addition of equals/hashCode on ECCurve.Fp. Additional curve type support for Fp, contributions to F2m compression. F2m decoding for ECPointUtil. Infinity fix and prime192v2 fix for Fp. Extra validation for RSA key creation. Fix to name typos for some OpenSSL key generators. RFC-1779 table, improved RFC 2253 compliance for X509Name. Additional constructor validation for X.509/ESS ASN.1 classes. Validation for Printable, IA5, and Numeric Strings.
+Support for surrogate pairs in DERUTF8String, DER UTF8 test. Additional X.509 name attributes for ISIS-MTT, RFC 3039, addition of indirect CRL support, initial X509 LDAP CertStore implementation, CertificatePair class, and X509CertificatePair class. Contributions to X509Store/Parser infrastructure and design.
+CertPath support for implicit DSA parameters and a range of NameConstraints. Addition of support for V1 attribute certificates and attribute certificate path validation. Initial classes for ASN.1 ISIS-MTT support. Enhancements for improving compliance with the NIST CertPath tests.
+Carlos Lozano Ruiz carlos&#064tradise.com - patch for ctrlm only handling in CRLFOutputStream.
+John Alfred Prufrock j.a.prufrock&#064gmail.com - mods to GOST-3411 and MD2 to support ExtendedDigest.
+Stefan Neusatz Guilhen sneusatz&#064gmail.com - initial version of RoleSyntax, improvements to AttributeCertificateHolder and AttributeCertificateIssuer.
+Marzio Lo Giudice marzio.logiudice&#064gmail.com - fix to endianess in KDF2BytesGenerator, additional KDF2 tests.
+Georg Lippold georg.lippold&#064gmx.de - initial implementation of NaccacheStern cipher.
+Chris Viles chris_viles&#064yahoo.com - fix to SignatureSubpacket critical bit setting.
+Pasi Eronen Pasi.Eronen&#064nokia.com - extra toString() support for ASN.1 library. Initial patch for large OID components.
+Lijun Liao lijun.liao&#064rub.de - performance enhancements for SHA family of digests. Bug report and patch for blank line handling in ArmoredInputStream.
+Maria Ivanova maria.ivanova&#064gmail.com - support for tags > 30 in ASN.1 parsing.
+Armin Hberling arminha&#064student.ethz.ch - first cut of internationalisation, initial PKIX validation classes.
+Marius Schilder mschilder&#064google.com - main set of test vectors for Bleichenbacher's forgery attack.
+Xavier Le Vourch xavier&#064brittanysoftware.com - general code clean ups.
+Erik Tews e_tews&#064cdc.informatik.tu-darmstadt.de - initial threaded random seed generator, constant-time PKCS#1.5 decoding
+Thomas Dixon reikomusha&#064gmail.com - initial implementations of TEA/XTEA, Salsa20, ISAAC, and Noekeon. XTEA enhancements.
+Frank Cornelis info&#064frankcornelis.be- addition of crlAccessMethod in X509ObjectIdentifiers.
+Rui Joaquim rjoaquim&#064cc.isel.ipl.pt - initial implementation of RSA blinding for signatures.
+David Stacey DStacey&#064allantgroup.com - addition of trust packet checking on revocation signatures in PGPSecretKeyRing.
+Martijn Brinkers list&#064mitm.nl - better exception handling in CMS enveloping, "just in time" modifications for CRL and Sequence evaluation.
+Julius Davies juliusdavies&#064gmail.com - additional modes and algorithm support in PEMReader
+Matthias g&#064rtner.de - GnuPG compatibility changes for PBEFileProcessor.
+Olga Kthler olga.kaethler&#064hjp-consulting.com - initial implementation of TeleTrusT EC curves, additional ISO 9797 MACs, contributions to EAC OIDs, addition of EAC algorithms to CMS Signing.
+Germano Rizzo germano.rizzo&#064gmail.com - initial implementation of CMac, EAX, HC-128, and HC-256, optimisations for Salsa20.
+Nria Mar numaa&#064hotmail.com - patch for alternate data type recoginition in CMSSignedDataParser.
+Janis Schuller js&#064tzi.de - addition of NotationData packets for OpenPGP.
+Michael Samblanet mike&#064samblanet.com - patches towards improved Sun/default provider support in CMS.
+Mike StJohns mstjohns&#064comcast.net - patches for supporting empty subject in X.509 certificate generation, noneWithECDSA.
+Ramon Keller ramon.keller&#064gmx.ch - patch to deal with null revocations return from other CRL in X509V2CRLGenerator.
+Mark Nelson mark&#064nbr.com - correction to excluded DN in name constraints processing for PKIX processing.
+Eugene Golushkov eugene_gff&#064ukr.net - mask fix to single byte read in TlsInputStream.
+Julien Pasquier julienpasquier&#064free.fr - additional classes for supporting signature policy and signer certificates in the ASN.1 esf and ess libraries.
+Peter Knopp pknopp&#064mtg.de - fix for named curve recognition in ECGOST key generation.
+Jakub Gwozdz gwozdziu&#064rpg.pl - addition of getTsa() to TimeStampTokenInfo.
+Bartosz Malkowski bmalkow&#064tigase.org - initial implementation of VMPC cipher, VMPCRandomGenerator, VMPCMac.
+Tal Yacobi tal.yacobi&#064octavian-tech.com - fix for issue in OpenPGP examples [#BJA-55].
+Massimiliano Ziccardi massimiliano.ziccardi&#064gmail.comt - support for counter signature reading in CMS API, update for multiple counter signature attributes.
+Andrey Pavlenko andrey.a.pavlenko&#064gmail.com - security manager patch for PKCS1Encoding property check.
+Mike StJohns mstjohns&#064comcast.net - updates to KeyPurposeId
+J Ross Nicoll jrn&#064jrn.me.uk - improved exception handling for getInstance() in ASN.1 library.
+Matthew Stevenson mavricknz&#064yahoo.com - patch to construtor for CRMF CertSequence.
+Gabriele Contini gcontini&#064hotpop.com - identified a bug in ASN.1 library with handling of unterminated NDEF's.
+Roelof Naude roelof.naude&#064epiuse.com - patch for TLS client to send empty client certs in response to HP_CERTIFICATE_REQUEST.
+Patrick Peck peck&#064signaturen.at - identified problem with DERApplicationSpecific and high tag numbers in ASN.1 library.
+Michael LeMay lemaymd&#064lemaymd.com - identified problem with EAX [#BJA-93].
+Alex Dupre ale&#064FreeBSD.org - fix to use of Signature rather than SignatureSpi in provider [#BJA-90]. Addition of null provider use to SignedPublicKeyAndChallenge and PKCS10CertificationRequest [#BJA-102]
+Michael Schoene michael&#064sigrid-und-michael.de - fix of improper handling of null in ExtendedPKIXParameters.setTrustedACIssuers(), check for V2 signingCertificate attribute in TimeStampResponse.validate().
+Ion Larraaga ilarra&#064s21sec.com fix to default partial packet generation in BCPGOutputStream.
+Bob Kerns bob.kerns&#064positscience.com fix to hashCode for X509CertificateObject.
+Stefan Meyer stefan.meyer&#064ewe.de backport for PKIXCertPathValidotor and SMIMESignedMailReviewer.
+Robert J. Moore Robert.J.Moore&#064allanbank.com speedups for OpenPGPCFB mode, clean room JCE patches.
+Rui Hodai rui&#064po.ntts.co.jp speed ups for Camellia implementation, CamelliaLightEngine.
+Emir Bucalovic emir.bucalovic@&#064mail.com initial implementation of Grain-v1 and Grain-128.
+Torbjorn Svensson tobbe79&#064gmail.com initial implementation of Grain-v1 and Grain-128.
+Paul FitzPatrick bouncycastle_pfitz&#064fitzpatrick.cc error message fix to X509LDAPCertStoreSpi, comparison fix to BCStrictStyle.
+Henrik Andersson k.henrik.andersson&#064gmail.com addition of UniqueIssuerID to certificate generation.
+Cagdas Cirit cagdascirit&#064gmail.com subjectAlternativeName fix for x509CertStoreSelector.
+Harakiri harakiri_23&#064yahoo.com datahandler patch for attached parts in SMIME signatures.
+Pedro Henriques pmahenriques&#064gmail.com explicit bounds checking for DESKeyGenerator, code simplification for OAEPEncoding.
+Lothar Kimmeringer job&#064kimmeringer.de verbose mode for ASN1Dump, support for DERExternal.
+Richard Farr rfarr.se&#064gmail.com initial SRP-6a implementation.
+Thomas Castiglione castiglione&#064au.ibm.com patch to encoding for CRMF OptionalValidity.
+Elisabetta Romani eromani&#064sogei.it patch for recognising multiple counter signatures.
+Robin Lundgren r737lundgren&#064gmail.com CMPCertificate constructor from X509CertificateStructure fix.
+Petr Kadlec mormegil&#064centrum.cz fix to sign extension key and IV problem in HC-128, HC-256.
+Andreas Antener antener_a&#064gmx.ch fix to buffer reset in AsymmetricBufferedBlockCipher.
+Harendra Rawat hsrawat&#064yahoo.com fix for BERConstructedOctetString.
+Rolf Lindemann lindemann&#064trustcenter.de patch for PKCS12 key store to support more flexible attribute specifications [#BMA-42].
+Alex Artamonov alexart.home&#064gmail.com name look up patch for GOST-2001 parameters.
+Mike Lyons mlyons&#064layer7tech.com work arounds for EC JDK bug 6738532 and JSSE EC naming conventions.
+Chris Cole chris_h_cole&#064yahoo.com identified a problem handling null passwords when loading a BKS keystore.
+Tomas Krivanek tom&#064atack.cz added checking of Sender header to SignedMailValidator.
+Michael emfau&#064t-online.de correction of field error in getResponse method in CertRepMessage.
+Trevor Perrin trevor&#064cryptography.com addition of constant time equals to avoid possible timing attacks.
+Markus Kils markus&#064primekey.se several enhancements to TimeStampResponseGenerator.
+Dario Novakovic darionis&#064yahoo.com fix for NPE when checking revocation reason on CRL without extensions.
+Michael Smith msmith&#064cbnco.com bug fixes and enhancements to the CMP and CRMF classes, initial Master List classes.
+Andrea Zilio andrea.zilio&#064gmail.com fix for PEM password encryption of private keys.
+Alex Birkett alex&#064birkett.co.uk added support for EC cipher suites in TLS client (RFC 4492) [#BJA-291].
+Wayne Grant waynedgrant&#064gmail.com additional OIDs for PCKS10 and certificate generation support.
+Frank Cornelis info&#064frankcornelis.be additional support classes for CAdES, enhancements to OCSP classes.
+Jan Dittberner jan&#064dittberner.info addHeader patch for SMIME generator.
+Bob McGowan boab.mcgoo&#064btinternet.com patch to support different content and mgf digests in PSS signing.
+Ivo Matheis i.matheis&#064seeburger.de fix to padding verification in ISO-9796-1.
+Marco Sandrini nessche&#064gmail.com patch to add IV to ISO9797Alg3Mac.
+Alf Malf alfilmalf&#064hotmail.com removal of unnecessary limit in CMSContentInfoParser.
+Alfonso Massa alfonso.massa&#064insiel.it contributions to CMS time stamp classes.
+Giacomo Boccardo gboccardo&#064unimaticaspa.it initial work on CMSTimeStampedDataParser.
+Arnis Tartu arnis&#064ut.ee patches for dealing with OIDs with specific key sizes associated in CMS.
+Janusz SikociÅ„ski J.Sikocinski&#064gdzie.pl addition of Features subpacket support to OpenPGP API.
+Juri Hudolejev jhudolejev&#064gmail.com JavaDoc fix to CMSSignedDataParser.
+Liane Velten liane.velten&#064hjp-consulting.com fine tuning of code for DHParameters validation.
+Shawn Willden swillden&#064google.com additional functionality to PGPKeyRing.
+Atanas Krachev akrachev&#064gmail.com added support for revocation signatures in OpenPGP.
+Mickael Laiking mickael.laiking&#064keynectis.com initial cut of EAC classes.
+Tim Buktu tbuktu&#064hotmail.com Initial implementation of NTRU signing and encryption.
+Bernd rbernd&#064gmail.com Fix for open of PGP literal data stream with UTF-8 naming.
+Steing Inge Morisbak stein.inge.morisbak&#064BEKK.no Test code for lower case Hex data in PEM headers.
+Andreas Schmid andreas.schmid&#064tngtech.com Additional expiry time check in PGPPublicKeys.
+Phil Steitz phil.steitz&#064gmail.com Final patch eliminating JCE dependencies in the OpenPGP BC classes.
+Ignat Korchagin ignat.korchagin&#064gmail.com Initial implementation of DSTU-4145-2002, long hash fix for DSTU-4145-2002.
+Petar Petrov p.petrov&#064bers-soft.com Testing and debugging of UTF-8 OpenPGP passwords.
+Daniel Fitzpatrick daniel.f.nwr&#064gmail.com Initial implementation of ephemeral key support for IES, initial implementions of RSA-KEM and ECIES-KEM, initial implementation of homogeneous projective coordinates for EC.
+Andy Neilson Andy.Neilson&#064quest.coma further patches to deal with multiple providers and PEMReader.
+Ted Shaw xiao.xj&#064gmail.com patch to MiscPEMGenerator for handling new PKCS10CeriticationRequests.
+Eleriseth Eleriseth&#064WPECGLtYbVi8Rl6Y7Vzl2Lvd2EUVW99v3yNV3IWROG8.fms speed up for SIC/CTR mode. Provider compatibilty generalisations for EC operations.
+Kenny Root kenny&#064the-b.org patch for issuerAltName, subjectAltName support in X509CertificateObject, BaseBlockCipher.getIV() patch for AEAD.
+Maarten Bodewes maarten.bodewes&#064gmail.com initial implementation of HKDF and NIST SP 800-108 MAC based KDF functions.
+Philip Clay pilf_b&#064gyahoo.com Initial implementation of J-PAKE.
+Brian Carlstrom bdc&#064carlstrom.com compliance patches for some JCA/JCE keystore and cipher classes, miscellaneous code quality improvements, intial provider PBKDF2WithHmacSHA1 SecretKeyFactory.
+Samuel Lidn Borell samuel&#064primekey.se patch to add DSTU-4145 to DefaultSignatureAlgorithmFinder
+Sergio Demian Lerner sergiolerner&#064certimix.com pointing out isInfinity issue in ECDSASigner signature verification.
+Tim Whittington Tim.Whittington&#064orionhealth.com patch to remove extra init call in CMac, additional of Memoable interface for Digest classes, initial implementation of GMAC, further correctness tests for IV and reset processing in OCB, CCM, and block cipher reset. Initial implementation of Skein, XSalsa20, ChaCha, reduced round Salsa20, Threefish, and the Poly1305 MAC. Documentation updates. Added OCB support to Noekeon and CAST6 in the provider, exception testing for CTS, optimisations for CCM, provider support for AAD cipher methods, safe CipherInput/OutputStream implementations for use with AAD and subsequent bug fixes, cleanup after IDEA patent expiry, work on JCE SipHash support, optimisations for AESFastEngine, further work on EncodableDigest for SHA-2 digests, PGP API documentation and code quality work.
+Marcus Lundblad marcus.lundblad&#064primekey.se patch for working arnound JDK jarsigner TSP bug, optional setting of IssuerSerial in TimeStampTokenGenerator.
+Andrey Zhozhin zhozhin&#064xrm.ru patch for override of TSP SignerInfo attributes.
+Sergey Tiunov t5555d&#064gmail.com initial cut of DVCS classes.
+Damian Kolasa fatfredyy&#064gmail.com ASN1Sequence patch for class cast issue in X9Curve.
+Ash Hughes ashley.hughes&#064blueyonder.co.uk patches for supporting PGPSecretKeyRing/PGPSecretKeys encodings with empty private keys, initial code for PGPSignatureSubpacketVector.getEmbeddedSignatures().
+Daniel Hirscher dev&#064daniel-hirscher.de patch to support parsing of explicit EC parameters in PEM files.
+Daniele Ricci daniele.athome&#064gmail.com initial implementation of EC keys for OpenpPGP and RFC6637 support.
+Matti Aarnio matti.aarnio&#064methics.fi tweaks to any build to remove dependence on shell scripts. Initial SM3 digest implementation, some EC related code cleanups, JavaDoc improvements for ASN.1 classes.
+Babak Najafi bnajafi&#064akamai.com fixes to OpenPGP NotationData to prevent truncation problems.
+Eric Mller eric.mueller&#064sage.de additional standard algorithm name lookups in JcaPEMKeyConverter.
+Mathias Herberts Mathias.Herberts&#064gmail.com fix to inOff usage in RFC3394WrapEngine.
+Daniil Ivanov daniil.ivanov&#064gmail.com addition of provider support for GOST HMAC SecretKeyFactory.
+Daniele Grasso daniele.grasso86&#064gmail.com contributions to final Key calculation code for SRP6.
+Andrey Utkin cindrhc&#064gmail.com patch to reconstruction of ECGOST keys from PrivateKeyInfo objects in provider classes.
+Arnis Tartu arnis&#064ut.ee checker for generated key vs OID in JceCMSContentEncryptorBuilder.
+AxelVDB axel-vdb&#064riseup.net initial implementation of Shacal2.
+Roberto Tyley  further work on completing gradle build.
+Waldemar Dick wdick&#064devmue.de code improvement in x500 ASN.1 package.
+Sid Steward sid.steward&#064pdflabs.com code improvements to ASN1Boolean.
+Alex Klyubin klyubin&#064google.com AlgorithmParameters check for EC key agreement.
+Jonathan Gillett gsoc.student&#064gmail.com Initial support for block cipher IVs in IESEngine, IES MAC length check bug fix.
+Andreas Reiter andreas.reiter&#064iaik.tugraz.at Reported incomplete status of CertificateVerify processing in (D)TLS server, and provided fix.
+Kieran Miller kieran.t.miller&#064leidos.com initial implementation for RFC 5649 key wrap with padding.
+Oliver Ehliehli&#064arago.de Additional support for BSI plain ECDSA in the provider.
+Daniel HeldtDaniel.Heldt&#064cryptovision.com Initial support for encodable state message digests
+Robert Bushman bouncycastle&#064traxel.com Clean up of DirectKeySignature example.
+Maurice Aartsaarts&#064riscure.com updated to KDF generator to follow NIST SP 800-108.
+Franziskus Kieferhttps://github.com/franziskuskiefer initial implementation of Cramer-Shoup.
+KB Srirammail_kb@yahoo.com testing for odd encodings for PGP User Attribute Subpackets.
