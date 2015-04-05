@@ -1,5 +1,4 @@
-
-  OnionMail
+ OnionMail
 	Copyright (C) 2013-2015 OnionMail Project ( http://onionmail.info )
 	Copyright (C) 2013-2015 by Tramaci.org ( http://tramaci.org )
 	Copyright (C) 2013-2015 EPTO (A) ( epto [at] tramaci [dot] org )
@@ -15,8 +14,8 @@ extended functions. This server also allows you to use the email in the tor
 network without losing the ability to communicate with the Internet.
 
 
-        «In the future, maybe we will implement the anonymous coffee!
-        Today, only OnionMail ;) »
+        Â«In the future, maybe we will implement the anonymous coffee!
+        Today, only OnionMail ;) Â»
 
 	See http://onionmail.info/manual.html to get more informations.
 
@@ -24,4 +23,3 @@ The root directory of project is:
 	/mnt/sdcard/ONM/
 	Change it in etc/onionmail/config.conf
 	
-          
