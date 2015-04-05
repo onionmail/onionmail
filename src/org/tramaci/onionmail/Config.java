@@ -48,6 +48,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public int QueueTimeOut = 120;
 		public int QueueThreads = 4;
 		
+		// dup??? public long MaxPOP3InitTTL = 120000;
 		public long MaxPOP3InitTTL = 120000;
 		public long MAXPOP3SessionTTL = 600000;
 		
@@ -216,12 +217,24 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 		public boolean SSLEDisabled = false;
 		public int TORCheckPolling = 0; //min
 		private static HashMap <String, String> confVars = new HashMap <String, String>(); 
-		public boolean AddCertSAltNames = true;
+		public boolean AddCertSAltNames = false;
 		public HashMap <String,String> DefaultUserConfig=null;
 		public RSALog RLOG = null;
+		
+		public int GreyMaxEntry= 10;
+		public int GreyListTTL=2;
+		public int GreyListTime=1;
+		
+		public String BlackListFile = null;
+		public String BlackListMask = "IP ${NICK} T(${SRVIP}) I(${IP})";
+		public short BlackListLevel = 10;
+		
+		public short removeFriendAfterErrors = 10;
+		
 		private HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 		
-		private static final String VARS_TO_AVOID=" SCR SERVER NICK SOFTWARE DATE ENC ";
+		
+		private static final String VARS_TO_AVOID=" SCR SERVER NICK SOFTWARE DATE ENC SRVIP IP ";
 			
 		public static void echo(String st) { System.out.print(st); }
 		
@@ -501,6 +514,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 						
 						if (cmd.compareTo("newusrenabled")==0) { 
 										C.SMPTServer[ne].NewUsrEnabled  = Config.parseY(tok[1]);
+										continue;
+										}
+						
+						if (cmd.compareTo("usegreylist")==0) {
+										C.SMPTServer[ne].useGreyList = Config.parseY(tok[1]);
 										continue;
 										}
 						
@@ -1146,6 +1164,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				return line;
 		}
 				
+		@SuppressWarnings("resource")
 		public static Config LoadFromFile(String filepath) throws Exception {
 			confVars = new HashMap <String, String>();
 			
@@ -1182,7 +1201,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 			STKLine[0]=0;
 			STKF[0] = F;
 			CFile[0] = filepath;
-			br = new BufferedReader(new InputStreamReader(new DataInputStream(F)));
+			br = new BufferedReader(new InputStreamReader(new DataInputStream(F))); //Closed by array!
 			STKbr[0]=br;
 						
 			String ConfList="\n"+filepath+"\n";
@@ -1290,8 +1309,9 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 																
 								if (cmd.compareTo("ssletrefreshrate")==0) { fc=true; C.SSLETRefreshRate = Config.parseInt(tok[1], "minutes", 5, 1440); }
 								
-								if (cmd.compareTo("maxpop3initttl")==0) { fc=true; C.MaxPOP3InitTTL = Config.parseInt(tok[1], "seconds", 5, 3600)*1000L; }
-								if (cmd.compareTo("maxpop3sessionttl")==0) { fc=true; C.MAXPOP3SessionTTL = Config.parseInt(tok[1], "minutes", 1, 1440)*60000L; }
+								if (cmd.compareTo("removefriendaftererrors")==0) { fc=true; C.removeFriendAfterErrors = (short) Config.parseInt(tok[1], "errors", 1, 255); }
+								if (cmd.compareTo("maxpop3initttl")==0) { fc=true; C.MaxPOP3InitTTL = Config.parseInt(tok[1], "seconds", 60, 3600)*1000L; }
+								if (cmd.compareTo("maxpop3sessionttl")==0) { fc=true; C.MAXPOP3SessionTTL = Config.parseInt(tok[1], "minutes", 15, 1440)*60000L; }
 								
 								if (cmd.compareTo("torcheckpolling")==0) { 
 										fc=true; 
@@ -1360,11 +1380,100 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 									fc=true;
 									}
 								
+								if (cmd.compareTo("furamide")==0) {
+									if (Main.furamidal!=null) throw new Exception("Furamide arleady defined");
+									Object[] o = Config.ParseLines(C,br,line,"Incomplete Furamide section");
+									line=(int) o[0];
+									String[] t0 = (String[]) o[1];
+									int tSize=8;
+									int fMaxBT = 600;
+									int fNint=5;
+									boolean fheav=false;
+									boolean fmt=false;
+									String rFile=null;
+									
+									for (String lix:t0) {
+										lix=lix.trim();
+										String[] tk=lix.split("\\#",2);
+										lix=tk[0].trim();
+										if (lix.length()==0) continue;
+										tk = lix.split("\\s+");
+										
+										tk[0]=tk[0].toLowerCase().trim();
+										if (tk.length<2) throw new Exception("Parameter required for "+tk[0]);
+										
+										if (tk[0].compareTo("size")==0) { tSize = Config.parseInt(tk[1], "slot",0, 256); continue; }
+										if (tk[0].compareTo("ttl")==0) { fMaxBT = Config.parseInt(tk[1], "seconds",1,3600); continue; }
+										if (tk[0].compareTo("interval")==0) { fNint = Config.parseInt(tk[1], "seconds",1,3600); continue; }
+										if (tk[0].compareTo("heavy")==0) { fheav=Config.parseY(tk[1]); continue; }
+										if (tk[0].compareTo("max")==0) { fmt=Config.parseY(tk[1]); continue; } 
+										if (tk[0].compareTo("dumpfile")==0) {
+											rFile=J.MapPath(CPath, tk[1]);
+											if (!new File(rFile).exists()) throw new Exception("Dump file not exists `"+rFile+"`");
+											continue;
+											}
+										throw new Exception("Unknown command: `"+tk[0]+"` for furamide");
+									}
+									Main.furamidal = new Furamide(tSize,fMaxBT,fNint,fheav,fmt,rFile);
+									Main.echo("Furamide module started\n");
+									fc=true;
+								}
+								
+								if (cmd.compareTo("optflag")==0 && tok.length==2) {
+									tok[1]=tok[1].toLowerCase().trim();
+									if (tok[1].contains("noderk")) 	Main.cmdFlags|=	Main.CF_D_NODERK;
+									if (tok[1].contains("hideboot")) Main.cmdFlags|=Main.CF_B_NOBOOTPWL;
+									if (tok[1].contains("hidesysop")) 	Main.cmdFlags|=Main.CF_U_NOSYSOPPWL;
+									if (tok[1].contains("longpass")) 	Main.cmdFlags|=Main.CF_BIGPWL;
+									if (tok[1].contains("sysopos")) 	Main.cmdFlags|=Main.CF_R_ROOTPGPPOX;
+									if (tok[1].contains("pedantic")) 	Main.cmdFlags|=Main.CF_F_NOSKIPFRIEND;
+									if (tok[1].contains("fastexit")) 	Main.cmdFlags|=Main.CF_X_FASTEXIT;
+									if (tok[1].contains("non0end")) 	Main.cmdFlags|=Main.CF_Z_NOZEROEND;
+									fc=true;
+								}
+								
 								if (cmd.compareTo("addcertsaltnames")==0) {
 										C.AddCertSAltNames = Config.parseY(tok[1]);
 										fc=true;
 										}
 								
+								if (cmd.compareTo("greymaxentry")==0) { 
+										fc=true; 
+										C.GreyMaxEntry = Config.parseInt(tok[1], "entry", 5, 1024); 
+										}
+								
+								if (cmd.compareTo("greylisttime")==0) { 
+										C.GreyListTime = Config.parseInt(tok[1], "Minutes", 1, 20);
+										if (C.GreyListTTL<C.GreyListTime*2) C.GreyListTTL=C.GreyListTime*2;
+										fc=true; 
+										}
+								
+								if (cmd.compareTo("blacklistlevel")==0) { 
+										C.BlackListLevel =(short) Config.parseInt(tok[1], "Points", 1, 1024);
+										fc=true; 
+										}
+								
+								if (cmd.compareTo("blacklistmask")==0) {
+									fc=true;
+									String[] t = li.split("\\s+",2);
+									C.BlackListMask = t[1].trim();
+									if (!C.BlackListMask.contains("${IP}")) throw new Exception("BlackListMask must contains ${IP} variable expansion.");
+									}
+								
+								if (cmd.compareTo("blacklistfile")==0) {
+										fc=true; 
+										C.BlackListFile = J.MapPath(CPath, tok[1]);
+										File Fi = new File(C.BlackListFile);
+										String st = Fi.getParent();
+										if (!new File(st).exists()) throw new Exception("Path not found `"+st+"`");
+										}
+								
+								if (cmd.compareTo("greylistttl")==0) { 
+										C.GreyListTTL = Config.parseInt(tok[1], "Minutes", 1, 20);
+										if (C.GreyListTTL>C.GreyListTime) throw new Exception("GreyListTTL can't be less then GreyListTime");
+										fc=true; 
+										}
+																
 								if (cmd.compareTo("manifestttl")==0) { 
 										C.manifestTTLS  = Config.parseInt(tok[1], "Minutes", 10, 1440)*60;
 										fc=true; 
@@ -2316,11 +2425,11 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				
 			}
 			
-			if (Main.SetPass!=null && NewServer.CVMF380TMP==null) NewServer.CVMF380TMP=Main.SetPass;
+			if (Main.SetPass!=null && NewServer.logonTempString==null) NewServer.logonTempString=Main.SetPass;
 			
-			if (NewServer.CVMF380TMP!=null) {
-				li = NewServer.CVMF380TMP;
-				NewServer.CVMF380TMP=null;
+			if (NewServer.logonTempString!=null) {
+				li = NewServer.logonTempString;
+				NewServer.logonTempString=null;
 				} else {
 					Main.echo("\nServer "+NewServer.Nick+" Requires password:\n");
 					Main.echo("\nEnter Password: ");
@@ -2516,7 +2625,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 					} else KeyBlockTxt=NewServer.Maildir+"/keyblock.txt";
 				
 				Stdio.file_put_bytes(KeyBlockTxt,p2.getBytes());
-				NewServer.CVMF380TMP = p3;
+				NewServer.logonTempString = p3;
 													
 				p0=J.RandomString(32);
 				p1=J.RandomString(32);
@@ -2848,6 +2957,6 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 				if (to.length()==0) return null;
 				return to.split("\\n+");
 			}
-		
+				
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 	}

@@ -102,6 +102,13 @@ Use:
 			some header lines by STDIN. These haders are termiated
 			by an empty line. The scructure of the headers is like
 			mail headers (it use the same routine).
+	
+	--srv-passwd <mailDir> [-bm] [-bf <file>]
+			Change the server's boot password:
+			Use -bp to to in batch mode.
+			-bf Set the file contains the new boot password.
+			--srv-paswd Ser the server's mailDir to change the
+			boot password.
 
 	-ntx		Do not test the hidden service connections and 
 			terminate.
@@ -197,6 +204,12 @@ Use:
 	OM:[RUNNING]	OnionMail till running.
 	OM:[TEST]GOOD	Java test Ok.
 	OM:[TEST]BAD	Java test Error.
+	Reply: --srv-passwd
+	OM:[OLDBOOT]	Old boot password request.
+	OM:[NEWBOOT]	New boot password request.
+	OM:[ERROR]	Error.
+	OM:[OK]		Ok operation complete.
+
 
 If you use OnionMail java file directly use:
 	java -jar onionmail.jar <parameters>

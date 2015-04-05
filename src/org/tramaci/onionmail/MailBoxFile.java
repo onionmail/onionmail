@@ -229,29 +229,33 @@ public class MailBoxFile {
 	
 	public String ReadLn() throws Exception {
 		if (mode!=2) throw new Exception("@500 Bad file access mode");
-		long Pox = O.getFilePointer();
-		
-		int blo = O.readShort();
-		if (blo==0) return null;
-		blo&=0x7FFF;
-		int cx = O.readUnsignedShort();
-		int dx = blo<<4;
-		byte[] in = new byte[dx];
-		O.read(in);
-		if (cx==0) return "";
-		
-		byte[] Fix = Stdio.md5a(new byte[][] { FIV , Long.toString(Pox,36).getBytes() });
-				
-		byte[] out;
-		
-		if (!isTEMP) {
-				out = Stdio.AESDec2(FKEY, Fix, in);
-				out = Stdio.AESDecMul(KEY,out);
-			} else out = Stdio.AESDec(Stdio.GetAESKey(Stdio.md5a(new byte[][] { FKEY, Fix })), Fix, in);
-		
-		in=new byte[cx];
-		System.arraycopy(out, 0, in, 0, cx);
-		return new String(in,MailBoxFile.InternalEncoding);
+		try {
+			long Pox = O.getFilePointer();
+			
+			int blo = O.readShort();
+			if (blo==0) return null;
+			blo&=0x7FFF;
+			int cx = O.readUnsignedShort();
+			int dx = blo<<4;
+			byte[] in = new byte[dx];
+			O.read(in);
+			if (cx==0) return "";
+			
+			byte[] Fix = Stdio.md5a(new byte[][] { FIV , Long.toString(Pox,36).getBytes() });
+					
+			byte[] out;
+			
+			if (!isTEMP) {
+					out = Stdio.AESDec2(FKEY, Fix, in);
+					out = Stdio.AESDecMul(KEY,out);
+				} else out = Stdio.AESDec(Stdio.GetAESKey(Stdio.md5a(new byte[][] { FKEY, Fix })), Fix, in);
+			
+			in=new byte[cx];
+			System.arraycopy(out, 0, in, 0, cx);
+			return new String(in,MailBoxFile.InternalEncoding);
+			} catch(EOFException xe) {
+				return null;
+			} 
 		}
 		
 	

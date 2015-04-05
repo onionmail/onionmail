@@ -53,6 +53,8 @@ public class ControlSession extends Thread{
 	private boolean logon=false;
 	private boolean serveruser=false;
 	public boolean isPublic=false;
+	public boolean mailMode=false;
+	public boolean disableSU=false;
 	
 	public String AccessInfo() {
 		String flg = logon ? "K" : "N";
@@ -74,7 +76,7 @@ public class ControlSession extends Thread{
 	
 	private void ReplyAccess() throws Exception { Reply(logon,AccessInfo()); }
 	
-	private void BeginSession() throws Exception {
+	public void BeginSession() throws Exception {
 		String Rns = J.GenPassword(48,40);
 		Rns=Rns.replace('<', '_');
 		Rns=Rns.replace('>', '^');
@@ -95,6 +97,13 @@ public class ControlSession extends Thread{
 			String Tk[]  =li.split("\\s+",2);
 			String cmd=Tok[0].trim();
 			cmd=cmd.toLowerCase();
+			
+			if (mailMode) {
+				String t;
+				if (cmd.compareTo("server")==0 || cmd.compareTo("su")==0 || cmd.compareTo("sux")==0 || cmd.compareTo("user")==0) t="<LOGON>\r\n"; else t="> "+li+"\r\n";
+				O.write(t.getBytes());
+				}
+			
 			int pa = Tok.length;
 			
 			///////////////////
@@ -123,7 +132,7 @@ public class ControlSession extends Thread{
 			
 			/////////////////
 			
-			if (pa==3 && cmd.compareTo("md5server")==0) {
+			if (!mailMode && pa==3 && cmd.compareTo("md5server")==0) {
 				CurSrv=-1;
 				Login = Tok[1];
 				pwl = Tok[2];
@@ -171,7 +180,7 @@ public class ControlSession extends Thread{
 			continue;
 			}
 		
-		if (cmd.compareTo("su")==0 && pa==2) {
+		if (!disableSU && cmd.compareTo("su")==0 && pa==2) {
 			if (!J.CheckCryptPass(Config.RootPass, Tok[1])) throw new Exception("@Access denied");
 			roote=true;
 			logon=true;
@@ -182,7 +191,7 @@ public class ControlSession extends Thread{
 			continue;
 			}
 			
-		if (cmd.compareTo("sux")==0 && pa==2) {
+		if (!disableSU && cmd.compareTo("sux")==0 && pa==2) {
 			String ap = Stdio.Dump(Stdio.md5a(new byte[][] { Rns.getBytes(), Config.RootPass.getBytes()}));
 		
 			if (ap.compareTo(Tok[1])!=0) throw new Exception("@Access denied");
@@ -199,9 +208,7 @@ public class ControlSession extends Thread{
 			
 		if (cmd.compareTo("quit")==0) break;
 		if (cmd.compareTo("access")==0) { ReplyAccess(); continue; }
-		
-		
-		
+				
 		if (cmd.compareTo("captcha")==0) {
 			if ( TextCaptcha.isEnabled()) {
 				CaptchaCode C= TextCaptcha.generateCaptcha(Config.TextCaptchaSize, Config.TextCaptchaMode);
@@ -303,9 +310,9 @@ public class ControlSession extends Thread{
 					continue;
 				}
 			
-				if (cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
+				if (!mailMode && cmd.compareTo("info")==0) { SA_SSLInfo(); continue; }
 				
-				if (cmd.compareTo("dofriends")==0) {
+				if (!mailMode && cmd.compareTo("dofriends")==0) {
 					if (0!=( SRVS[CurSrv].Status & SrvIdentity.ST_FriendRun)) {
 						Reply(false,"DoFriends arleady in progress.");
 						continue;
@@ -319,6 +326,20 @@ public class ControlSession extends Thread{
 					Log("DoFriends CLI Request end.");
 					Reply(true);
 					continue;
+				}
+				
+				if (cmd.compareTo("rmmanifest")==0 && Tok.length>1) {
+					String oni=Tok[1].trim().toLowerCase();
+					String mf = SRVS[CurSrv].GetFNName(oni)+".mf";
+					if (new File(mf).exists()) {
+						Log("DeleteManifest for `"+oni+"`");
+						J.Wipe(mf, Config.MailWipeFast);
+						Reply(true);
+						continue;
+					} else {
+						Reply(false,"No manifest for "+oni);
+						continue;
+					}
 				}
 				
 				if (cmd.compareTo("sslcheck")==0 && Tok.length>1) {
@@ -423,7 +444,7 @@ public class ControlSession extends Thread{
 				continue;
 				}
 			
-			if (curmail!=null) {
+			if (curmail!=null) { //TODO Sistemare:
 		/*		if (cmd.compareTo("par")==0) {
 					if (J.getDomain(curmail).compareTo(SRVS[CurSrv].Onion)==0) {
 						try {
@@ -453,6 +474,24 @@ public class ControlSession extends Thread{
 			if (cmd.compareTo("mklist")==0  && serveruser) { SA_MKLIST(Tok); continue; }
 			if (cmd.compareTo("addusr")==0  && serveruser) { SA_ADDUSR(Tok,false); continue; }
 			if (cmd.compareTo("ovrusr")==0  && serveruser) { SA_ADDUSR(Tok,true); continue; }
+			
+			if (cmd.compareTo("frienderr")==0  && serveruser) {
+				String re = SRVS[CurSrv].SA_FriendErrList();
+				if (re==null) { 
+					Reply(false);
+					continue;
+					}
+				
+				ReplyA(true,"Friends historically down",re.split("\\n+"));
+				continue;
+				}
+			
+			if (cmd.compareTo("frienderrdel")==0  && serveruser) {
+				SRVS[CurSrv].SA_FriendErrDel();
+				Reply(true);
+				continue;
+				}
+			
 			if (cmd.compareTo("friends")==0  && serveruser) {
 					String[]fl = SRVS[CurSrv].RequildFriendsList();
 					ReplyA(true,"FRIENDS/1.0",fl);
@@ -492,6 +531,38 @@ public class ControlSession extends Thread{
 			
 			if (cmd.compareTo("status")==0 && serveruser) { Reply(true,SRVS[CurSrv].getStatus()); continue; }
 			
+			if (cmd.compareTo("fsave")==0 && serveruser && Tok.length==2) {
+				Reply(true,"Send data, end width \".\"");
+				String data="";
+				while(true) {
+					String li2 = br.readLine();
+					if (li2==null) throw new Exception("@Disconnected");
+					li2=li2.trim();
+					if (li2.compareTo(".")==0) break;
+					data+=li2+"\n";
+					}
+				SRVS[CurSrv].fileSave(Tok[1], new byte[][] { data.getBytes() }, Const.APP_FILES, "app");
+				Reply(true);
+				continue;
+				}
+			
+			if (cmd.compareTo("fload")==0 && serveruser && Tok.length==2) {
+				byte[][] b = SRVS[CurSrv].fileLoad(Tok[1], Const.APP_FILES, "app");
+				if (b==null) {
+					Reply(false);
+					continue;
+					}
+				String data = new String(b[0]);
+				ReplyA(true,"DATA",data.split("\\n"));
+				continue;
+				}
+			
+			if (cmd.compareTo("fdel")==0 && serveruser && Tok.length==2) {
+				SRVS[CurSrv].fileDelete(Tok[1], Const.APP_FILES, "app");
+				Reply(true);
+				continue;
+				}
+			
 			if (cmd.compareTo("addalias")==0  && serveruser && Tok.length==3) {
 					Reply(SRVS[CurSrv].UsrCreateAlias(Tok[1].toLowerCase().trim(), Tok[2].toLowerCase().trim()));
 					continue;
@@ -522,7 +593,7 @@ public class ControlSession extends Thread{
 				continue;
 				}
 			
-			if (cmd.compareTo("ssleid")==0 && serveruser && Tok.length==2 && Tok[1].compareToIgnoreCase("run")==0) {
+			if (!mailMode && cmd.compareTo("ssleid")==0 && serveruser && Tok.length==2 && Tok[1].compareToIgnoreCase("run")==0) {
 				SRVS[CurSrv].CheckSSLOperations();
 				String msg = SRVS[CurSrv].SSLEtoString();
 				ReplyA(true,"SSLEID",msg.split("\\n+"));
@@ -624,20 +695,23 @@ public class ControlSession extends Thread{
 					"NewUsrEnabled: "+(SRVS[CurSrv].NewUsrEnabled ? "YES" : "NO") }) ;
 				continue;
 			}
-				
+			
+		if (cmd.compareTo("iplist")==0 && serveruser) {
+			if (SRVS[CurSrv].BlackList==null) { Reply(false); continue; }
+			ReplyA(true,"BlackList",SRVS[CurSrv].BlackList.toString().split("\\n"));
+			continue;
+			}
+			
 		}//cursrv
 		
 		
-		if (!roote) {
+		if (!roote || disableSU) {
 			Reply(false,"WTF ???");
 			continue;
 			}
 		
 		/////////////////////////// Root Option
 		
-		/*
-		 * HTTP[bx] = new HTTPServer(Config,Config.SMPTServer[ax]);
-		 * */
 			if (cmd.compareTo("http")==0 && Tok.length==3) {
 				String nick = Tok[1].toLowerCase().trim();
 				String scmd = Tok[2].toLowerCase().trim();
@@ -1110,38 +1184,8 @@ public class ControlSession extends Thread{
 	
 	private void StopNow() throws Exception {
 		Reply(true);
-		int cx = Main.POP3S.length;
-		for (int ax=0;ax<cx;ax++) {
-			try {	
-				Log("Terminate POP3 `"+Main.POP3S[ax].Identity.Onion+"`");
-				Main.POP3S[ax].End();
-				} catch(Exception E) { Config.EXC(E, "Term `"+Main.POP3S[ax].Identity.Onion+"`"); }
-			}
-		cx = Main.SMTPS.length;
-		for (int ax=0;ax<cx;ax++) {
-			try {	
-				Log("Terminate SMTP `"+Main.SMTPS[ax].Identity.Onion+"`\n");
-				Main.SMTPS[ax].End();
-				} catch(Exception E) { Config.EXC(E, "Term `"+Main.SMTPS[ax].Identity.Onion+"`"); }
-			}
-		
-		cx = Main.CSP.length;
-		for (int ax=0;ax<cx;ax++) {
-			try {	
-				Log("Terminate Public control port`"+Main.CSP[ax].Identity[0].Onion+"`\n");
-				Main.CSP[ax].End();
-				} catch(Exception E) { Config.EXC(E, "Term `"+Main.CSP[ax].Identity[0].Onion+"`"); }
-			}
-		
-			try {	
-				Log("Terminate control port\n");
-				Main.CS.End();
-			} catch(Exception E) { Config.EXC(E, "Term ControlPort"); }
-			
-		
-		System.exit(0);
-		
-	}
+		Main.endProc(0);
+		}
 	
 	///// functions ////////////
 		
@@ -1625,6 +1669,16 @@ public class ControlSession extends Thread{
 		O=null;
 		EndTime=1;
 		try { ParentServer.Garbage(); } catch(Exception E) { Config.EXC(E, Mid.Nick+".ParentGarbage"); }
+	}
+	
+	ControlSession(SrvIdentity sr,DataInputStream i,OutputStream o) {
+		Config=sr.Config;
+		ParentServer=null;
+		SRVS=new SrvIdentity[] { sr }; 
+		sok=null;
+		in=i;
+		br = new BufferedReader(new InputStreamReader(in));
+		O=o;
 	}
 	
 	ControlSession(ControlService pr,Socket soki) throws Exception {

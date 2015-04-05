@@ -68,7 +68,7 @@ public class J {
 						"x-original-to|references|in-reply-to|x-beenthere|list-id|list-post|"+
 						"list-help|errors-to|return-receipt-to|thread-index|x-vmat-server|"+
 						"disposition-notification-to|x-original-sender|tkim-server-auth|"+
-						"x-mat-from|x-tor-vmat-error|x-vmat-sign|x-tor-vmat-verified|"+
+						"x-mat-from|x-tor-vmat-error|x-vmat-sign|x-tor-vmat-verified|references|in-reply-to|"+
 						"message-id|cc|bcc|reply-to|disposition-notification-to|errors-to|x-vmat-sign|"+
 						"|list-unsubscribe|list-subscribe|envelope-to|x-vmat-address|x-failed-recipients|";
 	
@@ -420,10 +420,7 @@ public class J {
 	public static String IPFilter(String in) {
 		return in.replaceAll("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}","0.0.0.0");
 	}
-	
-	
-	
-	
+		
 	public static HashMap<String,String> AddMsgID(HashMap<String,String> h,String domain) {
 		
 		String s0="";
@@ -447,7 +444,7 @@ public class J {
 				K=K.toLowerCase();
 				String v = h.get(K);
 				if (!NoFilterHost.contains(k1)) v = IPFilter(v);
-				if (K.compareTo("message-id")==0) continue;
+				//if (K.compareTo("message-id")==0) continue;
 				Q.put(K, v);
 			}
 		}
@@ -502,9 +499,9 @@ public class J {
 		in=in.trim();
 		String t0=in+"\n";
 		if (onion) {
-			if (t0.matches("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.onion\\n")) return in;
+			if (t0.matches("[A-Za-z0-9\\.\\_\\%\\+\\-\\=\\:\\;\\,\\'\\~\\$\\#\\&\\!]+@[A-Za-z0-9\\.\\-\\_]+\\.onion\\n")) return in;
 			} else {
-			if (t0.matches("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-_]+\\.[A-Za-z]{2,5}\\n")) return in;	
+			if (t0.matches("[A-Za-z0-9\\.\\_\\%\\+\\-\\=\\:\\;\\,\\'\\~\\$\\#\\&\\!]+@[A-Za-z0-9\\.\\-\\_]+\\.[A-Za-z]{2,5}\\n")) return in;
 			}
 		return null;
 	}
@@ -973,7 +970,7 @@ public class J {
 		return k;
 	}
 	
-	public static byte[][] DerAesKey(byte[] Sale,String Ders) throws Exception { //XXX Cambiare Key a 256bit
+	public static byte[][] DerAesKey(byte[] Sale,String Ders) throws Exception { //YYY Cambiare Key a 256bit
 		byte[] b = Stdio.sha256a(new byte[][] { Sale, Ders.getBytes()});
 		byte[][] k = new byte[2][16];
 		System.arraycopy(b, 0, k[0], 0, 16);
@@ -1683,4 +1680,47 @@ public class J {
 	public static int setBit(int mask,int old,boolean value) { return value ? old|mask : old&(-1^mask) ; }
 		
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
+/*
+	public static byte[] ASCIISequenceRead(String in,String name) throws Exception {
+		name=name.toUpperCase().trim();
+		in=in.trim();
+		String[] lin = in.split("\\n+");
+		int cx = lin.length;
+		String w="";
+		long crcs=-1;
+		int st=0;
+		try {
+			for (int ax=0;ax<cx;ax++) {
+				String li=lin[ax].trim();
+				if (st==0) {
+					if (li.contains("------ BEGIN "+name+" SEQUENCE ------")) st=1;
+					continue;
+					}
+				if (st==1) {
+					if (li.contains("------ END "+name+" SEQUENCE ------")) {
+						st=2;
+						break;
+						}
+					if (li.startsWith("@")) {
+						li=li.substring(1);
+						crcs=Long.parseLong(li,36) & 0xFFFFFFFF;
+						continue;
+						} 
+					
+					if (li.startsWith(";")) continue;
+					w+=li;
+					continue;
+				}
+			}
+		} catch(Exception E) { throw new Exception("Invalid ASCII `"+name+"` Ivalid sequence data"); }
+		if (st!=2) throw new Exception("Invalid ASCII `"+name+"` sequence: Incomplete or not found");
+		if (crcs==-1) throw new Exception("Invalid ASCII `"+name+"` sequence: No @CRC32");
+		byte[] b0;
+		try { b0 = J.Base64Decode(w); } catch(Exception E) { throw new Exception("Invalid ASCII `"+name+"` sequence: Invalid BASE64 Data"); }
+		CRC32 C = new CRC32();
+		C.update(b0);
+		if (C.getValue() !=crcs)  throw new Exception("Invalid ASCII `"+name+"` sequence: Data corrupted");
+		return b0;
+	}
+	*/
 }

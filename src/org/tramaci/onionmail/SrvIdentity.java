@@ -34,6 +34,7 @@ import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URLEncoder;
 
 import java.security.KeyPair;
@@ -67,7 +68,7 @@ public class SrvIdentity {
 	public boolean POP3CanRegister=true;
 	public boolean POP3CanVMAT=true;
 	public boolean NoVersion = true;
-	public static boolean CheckCertValidity = false; 
+	public  static boolean CheckCertValidity = false; // É shared per tutti i server. (retrocompatiblità con vecchie versioni).
 	public int RetryTime=400; 
 	public boolean ShowFriends = true;
 	public boolean Friendly = true;
@@ -144,8 +145,8 @@ public class SrvIdentity {
 	int LastFriend=0;
 	public String DefaultLang="en-en";
 	
-	public String CVMF380TMP = null;
-	public byte[][] CVMF3805TMP = null;
+	public String logonTempString = null;
+	public byte[][] logonTempData = null;
 	
 	public byte[] KBL = new byte[0];
 	
@@ -253,6 +254,9 @@ public class SrvIdentity {
 	public HashMap<String,Integer> VMATErrorPolicy = new  HashMap<String,Integer>();
 	public HashMap<String,String> IAMOnion=null;
 	
+	public GreyListManager greyList = null;
+	public boolean useGreyList=false;
+	
 	public int Status = 0;
 	public boolean AutoPGP=true;
 	public boolean AutoPGPUpdate=false;
@@ -260,6 +264,9 @@ public class SrvIdentity {
 	
 	public String OnUpdateUserNews = null;
 	//public boolean hasServerNotice=false;
+	
+	private HashMap <String,String> badSrvNum = new HashMap <String,String>();
+	private HashMap <String,String> badSrvLast = new HashMap <String,String>();
 	
 	public static final int ST_NotLoaded=0;		//A
 	public static final int ST_Loaded=1;				//B
@@ -272,12 +279,13 @@ public class SrvIdentity {
 	public static final int ST_Ok=128;					//I
 	
 	private static final int Loop_Stats = 0x2e27810; // stats by base36.
-	
+
+
 	public String getStatus() {
 		String st="";
 		for (int ax=0;ax<8;ax++) if ((Status & 1<<ax)!=0) st+=Integer.toString(10+ax,36);
 		return st;
-	} 
+	}
 	
 	public void SaveStat(boolean resetH) throws Exception {
 			StatHcount++;
@@ -408,7 +416,6 @@ public class SrvIdentity {
 			}
 		
 		}
-		
 	
 	SrvIdentity(Config C) { 
 			long a = Stdio.NewRndLong() & 0x7FFFFFFFL;
@@ -423,7 +430,7 @@ public class SrvIdentity {
 	}
 	
 	private void StartProcs() throws Exception {
-	
+			
 		try { 
 			RefreshRulezList();
 			SaveRulezList();
@@ -452,11 +459,12 @@ public class SrvIdentity {
 									}
 							try { SearchExit(); } catch(Exception EX) { Log(Config.GLOG_Bad,"SearchExit: "+EX.getMessage()); EX.printStackTrace(); }
 							
-							if (Main.Oper==0 && Config.UseBootSequence && !new File(Maildir+"/head/boot").exists() && CVMF3805TMP!=null) try {
-									CreateBoot();
+							if (Main.Oper==0 && Config.UseBootSequence && !new File(Maildir+"/head/boot").exists() && logonTempData!=null) try {
+									if ((Main.cmdFlags& Main.CF_D_NODERK)==0) CreateBoot();
+																		
 									} catch(Exception EX) { 
-										if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
-										CVMF3805TMP=null;
+										if (logonTempData!=null) J.WipeRam(logonTempData);
+										logonTempData=null;
 										String ms = EX.getMessage();
 										if (ms.contains("@")) Log(Config.GLOG_Server,ms.substring(1)); else Config.EXC(EX, "SCBF2`"+Onion+"`"); 
 										}
@@ -465,6 +473,8 @@ public class SrvIdentity {
 							} catch(Exception E) { Config.EXC(E, "ServerOp"); }
 					Status |= SrvIdentity.ST_Ok;
 					Log(Config.GLOG_Server,"Server Init Complete. Status `"+getStatus()+"`");
+					if (logonTempData!=null) J.WipeRam(logonTempData);
+					logonTempData=null;
 					}
 				};
 
@@ -698,7 +708,7 @@ public class SrvIdentity {
 			 		}
 			}
 				 		
-		if (Config.UseBootSequence && !new File(Maildir+"/head/boot").exists()) CVMF3805TMP = sk.clone(); else CVMF3805TMP=null; 
+		if (Config.UseBootSequence && !new File(Maildir+"/head/boot").exists()) logonTempData = sk.clone(); else logonTempData=null; 
 		
 		byte[][] Head = new byte[1][];
 		Head[0] = Stdio.file_get_bytes(Maildir+"/head/header");
@@ -728,6 +738,13 @@ public class SrvIdentity {
 				} catch(Exception E) { 
 				Config.EXC(E, "IPList: `"+Nick+"`");
 				BlackList=null;
+				}
+		
+		if (EnterRoute && useGreyList) try { 
+				greyList = new GreyListManager(this);
+				} catch(Exception E) { 
+				Config.EXC(E, "GreyList: `"+Nick+"`");
+				greyList=null;
 				}
 		
 			try {
@@ -1608,10 +1625,11 @@ public class SrvIdentity {
 					Hldr2.put("delivery-date", TimeString());
 					if (Hldr2.containsKey("date")) Hldr2.put("date", TimeString());	
 					Hldr2.put("x-ssl-transaction", this.SupTLS ? "YES" : "NO" );
+					if (!Hldr2.containsKey("message-id")) { //TODO MESSAGE-ID
 					Hldr2.put("message-id", "<"+
 							J.GenPassword(10, 0).toLowerCase()+"-"+
 							J.GenPassword(8, 0).toLowerCase()+"@"+HostName+">")
-							;
+							;}
 					
 					if (this.InternetConnection && putNotice2) { 
 								String sr;
@@ -2060,8 +2078,7 @@ public class SrvIdentity {
 		
 		public boolean VerifyExit(ExitRouterInfo e)   {
 			e.lastCHK=System.currentTimeMillis()/1000;
-			
-			if (Config.Debug) Log("Verify `"+e.domain+"`");
+			if (Config.Debug) Log("Verify `"+e.domain+"`");			
 			if (e.domain.compareTo(ExitRouteDomain)==0 && e.onion.compareTo(Onion)==0) {
 				e.Goods=100;
 				e.Bads=0;
@@ -2235,6 +2252,21 @@ public class SrvIdentity {
 		} 
 		*/
 		
+		private void setDoFriendStatus(boolean ok,String FriendServer) {
+			if (!ok) {
+						if (!badSrvLast.containsKey(FriendServer)) badSrvLast.put(FriendServer, Integer.toString((int) (System.currentTimeMillis()/1000)));
+						String s = badSrvNum.containsKey(FriendServer) ? badSrvNum.get(FriendServer) : "0";
+						int si = J.parseInt(s);
+						si++;
+						badSrvNum.put(FriendServer, Integer.toString(si));
+						} else {
+						if (badSrvLast.containsKey(FriendServer)) {
+							badSrvLast.remove(FriendServer);
+							badSrvNum.remove(FriendServer);
+							}
+						}
+		}
+		
 		public SrvManifest DoFriend(String FriendServer) throws Exception {
 			SrvManifest M=null;
 			if (FriendServer.compareToIgnoreCase(Onion)==0) return null;
@@ -2289,12 +2321,20 @@ public class SrvIdentity {
 					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
 					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
 					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
+					setDoFriendStatus(true,FriendServer);
+					
 				} catch(Exception E) {
 					try { if (RS!=null) RS.close(); } catch(Exception Ii) {}
 					try { if (RO!=null) RO.close(); } catch(Exception Ii) {}
 					try { if (RI!=null) RI.close(); } catch(Exception Ii) {}
-					Log("Friend `"+FriendServer+"` Error: "+E.toString().replace("@", ""));
-					if (Config.Debug) E.printStackTrace();
+					setDoFriendStatus(false,FriendServer);
+					if (E instanceof SocketException) {
+						String s= E.getMessage();
+						if (s!=null && s.contains("Error H5B")) Log("Friend `"+FriendServer+"` Error: Can't connect"); else Log("Friend `"+FriendServer+"` "+s);
+						} else { 
+						Log("Friend `"+FriendServer+"` Error: "+E.toString().replace("@", ""));
+						if (Config.Debug) E.printStackTrace();
+						}
 				}
 				return M;
 		}
@@ -2303,6 +2343,25 @@ public class SrvIdentity {
 		SrvManifest M=null;	
 		Status |= SrvIdentity.ST_FriendRun;
 		Log("Begin DoFriends\n");
+		//badSrvNum = null;
+		//badSrvLast = null;
+		
+		try {
+			byte[][] ef = fileLoad(Const.FIL_BAD_SRV, Const.ONM_CORE, Const.ONM);
+			if (ef==null) {
+					badSrvNum = new HashMap <String,String>();
+					badSrvLast = new HashMap <String,String>();
+					} else {
+					badSrvNum = J.HashMapUnPack(ef[0]);
+					badSrvLast = J.HashMapUnPack(ef[1]);
+					}
+			
+			} catch(Exception E) {
+				Config.EXC(E, "FIL_BAD_SRV");
+				badSrvNum = new HashMap <String,String>();
+				badSrvLast = new HashMap <String,String>();
+			}
+		
 		HashMap <String,String> net = new HashMap <String,String>();
 		String[] FriendServer = RequildFriendsList();
 		if (friendsForceAdd!=null) {
@@ -2318,8 +2377,19 @@ public class SrvIdentity {
 		for (int ax=LastFriend;ax<cx;ax++) {
 				LastFriend++;
 				if (FriendServer[ax].compareToIgnoreCase(Onion)==0) continue;
+				if (badSrvNum.containsKey(FriendServer[ax])) {
+					String s = badSrvNum.get(FriendServer[ax]);
+					int si = J.parseInt(s);
+					if (si>Config.removeFriendAfterErrors) {
+						Log("DoFriendSkip try="+si+" `"+FriendServer[ax]+"` because is historically down.");
+						continue;
+						}
+					}
+				
 				M = DoFriend(FriendServer[ax]);
+				
 				if (M==null) continue;
+										
 				HashMap <String,String> N = M.getHashMap(ExitRouteList.FLT_TRUST);
 				if (N.size()<3) N.putAll(M.getHashMap(ExitRouteList.FLT_VMAT));
 				if (N.size()<6) N.putAll(M.getHashMap(ExitRouteList.FLT_OK));
@@ -2376,7 +2446,19 @@ public class SrvIdentity {
 					} else DoFriend(srv[0]);
 			}
 		}///net
+		try {
 			
+			byte[][] fi = new byte[][] { 
+					J.HashMapPack(badSrvNum)	,
+					J.HashMapPack(badSrvLast)	}
+					;
+			
+			this.fileSave(Const.FIL_BAD_SRV, fi, Const.ONM_CORE,  Const.ONM);
+			
+			} catch(Exception E) {
+				Config.EXC(E, "DoFriend/Bad:Save");
+			}
+		
 		Log("DoFriends Complete\n");
 		LastFriend=0;
 		Status &= -1 ^ SrvIdentity.ST_FriendRun;
@@ -2476,6 +2558,7 @@ public class SrvIdentity {
 			el= ExitRouteList.queryFLTArray(el, ExitRouteList.FLT_ALL);
 			
 			ExitList = new ExitRouteList();
+		
 			ExitList.addRouters(el);
 			
 			byte[][] Ks = J.DerAesKey(Sale, Const.KD_ExitList);
@@ -3065,7 +3148,7 @@ public class SrvIdentity {
 			if (eHash>0) Log("Bad SSL Hosts = "+eHash+" Change identity = "+ ( iWantChangeIdentity ? "yes": "no")+" LastExit was bad = "+(lastExitBad?"Yes":"no"));
 			
 			if (eHash>0) msg="Bad SSL Hosts "+eHash+"\n"+msg;
-			if (iWantChangeIdentity) msg="I Whant to change TOR identity!\n"+msg;
+			if (iWantChangeIdentity) msg="I need to change TOR identity!\n"+msg;
 			if (lastExitBad) msg="Last TOR ExitNode is bad!\n"+msg;
 			if (Config.SSLSysopMessages && msg.length()>0) try {
 				msg+=SSLEtoString();
@@ -3458,7 +3541,7 @@ public class SrvIdentity {
 		///////////////////////////////////// BOOT SECTION ///////////////////////////////////
 		
 		public void CreateBoot() throws Exception {
-			if (CVMF3805TMP==null) throw new Exception("Cant create BOOT without `CVMF3805TMP`");
+			if (logonTempData==null) throw new Exception("Cant create BOOT without `CVMF3805TMP`");
 							
 			Log("Create BOOT");
 			try {
@@ -3478,9 +3561,9 @@ public class SrvIdentity {
 						slist=s0.split("\\n+");
 						if (slist.length==0 || s0.length()==0) throw new Exception("No server available to build  BootSequence file");
 						RemoteKSeedInfo[] info = new RemoteKSeedInfo[slist.length];
-						byte[] rky = Stdio.MXImplode(CVMF3805TMP, 0x7C01F6C7);		//Implode Server KeyBlock 0x7C01F6C7 is the magic number
-						J.WipeRam(CVMF3805TMP);		//Destroy KeyBlock
-						CVMF3805TMP=null;
+						byte[] rky = Stdio.MXImplode(logonTempData, 0x7C01F6C7);		//Implode Server KeyBlock 0x7C01F6C7 is the magic number
+						J.WipeRam(logonTempData);		//Destroy KeyBlock
+						logonTempData=null;
 						System.gc();  //try to garbage
 						
 						byte[] boot = CreateBootSequence(slist, MaxServerDERKPoint, info, rky); // Create boot sequence
@@ -3556,8 +3639,8 @@ public class SrvIdentity {
 				Log("BootSequence created");
 						} catch(Exception EX) {
 									//On error wipe the KeyBlock
-									if (CVMF3805TMP!=null) J.WipeRam(CVMF3805TMP);
-									CVMF3805TMP=null;
+									if (logonTempData!=null) J.WipeRam(logonTempData);
+									logonTempData=null;
 									String ab = EX.getMessage();
 									if (ab!=null && ab.contains("@")) Log(Config.GLOG_Server,ab.replace('@', ' ')); else Config.EXC(EX, "SCBF`"+Onion+"`"); 
 						}		
@@ -5663,6 +5746,75 @@ public void SA_RULEZ(String da,String per,String osection,boolean PGPSession,boo
 				return new HashMap <String,String>();
 			}
 		}
+	
+public void fileSave(String relName,byte[][] data, long magicNumber,String ext) throws Exception { //TODO new
+	byte[] p0 = Stdio.sha256a(new byte[][] { relName.getBytes() , Sale , Long.toString(magicNumber,36).getBytes() } );
+	int x = 15 & Subs[p0[0]&15][p0[1]&15];
+	byte[] p1 = Stdio.sha256a(new byte[][] { relName.getBytes() , Sale, Subs[x], Long.toString(magicNumber,36).getBytes(),p0 } );
+	byte[] iv = Stdio.md5a(new byte[][] { Subs[6] , p1 });
+	
+	byte[] d = Stdio.MxAccuShifter( data ,(int) (magicNumber  & 0xFFFFL) ,true);
+	d = Stdio.AES2Enc(p0, iv, d);
+	d = Stdio.AES2Enc(p1, iv, d);
+	J.WipeRam(p0);
+	J.WipeRam(p1);
+	J.WipeRam(iv);
+	byte[] nm = Stdio.md5a(new byte[][] { Subs[7] , relName.getBytes() , Sale , Long.toString(magicNumber,33).getBytes() } );
+	String nom = Maildir+"/data/d"+Integer.toString(nm[0]&255,36);
+	new File(nom).mkdirs();
+	nom+="/" + J.md2st(nm)+"."+ext;
+	Stdio.file_put_bytes(nom, d);
+	System.gc();
+	}
+	
+public byte[][] fileLoad(String relName, long magicNumber,String ext) throws Exception { //TODO new
+	byte[] nm = Stdio.md5a(new byte[][] { Subs[7] , relName.getBytes() , Sale , Long.toString(magicNumber,33).getBytes() } );
+	String nom = Maildir+"/data/d"+Integer.toString(nm[0]&255,36)+"/" + J.md2st(nm)+"."+ext;
+	if (!new File(nom).exists()) return null;
+	
+	byte[] p0 = Stdio.sha256a(new byte[][] { relName.getBytes() , Sale , Long.toString(magicNumber,36).getBytes() } );
+	int x = 15 & Subs[p0[0]&15][p0[1]&15];
+	byte[] p1 = Stdio.sha256a(new byte[][] { relName.getBytes() , Sale, Subs[x], Long.toString(magicNumber,36).getBytes(),p0 } );
+	byte[] iv = Stdio.md5a(new byte[][] { Subs[6] , p1 });
+	
+	byte[] d = Stdio.file_get_bytes(nom);
+	d = Stdio.AES2Dec(p1, iv, d);
+	d = Stdio.AES2Dec(p0, iv, d);
+	J.WipeRam(p0);
+	J.WipeRam(p1);
+	J.WipeRam(iv);
+	System.gc();
+	return Stdio.MxDaccuShifter(d, (int) (magicNumber  & 0xFFFFL));
+	}
+	
+ public void fileDelete(String relName, long magicNumber,String ext) throws Exception { //TODO new
+	byte[] nm = Stdio.md5a(new byte[][] { Subs[7] , relName.getBytes() , Sale , Long.toString(magicNumber,33).getBytes() } );
+	String nom = Maildir+"/data/d"+Integer.toString(nm[0]&255,36)+"/" + J.md2st(nm)+"."+ext;
+	if (new File(nom).exists()) J.Wipe(nom, Config.MailWipeFast);
+ 	}
+
+ ////////////////
+ public String SA_FriendErrList() throws Exception {
+	 	byte[][] ef =  fileLoad(Const.FIL_BAD_SRV, Const.ONM_CORE, Const.ONM);
+		if (ef==null) return null;
+				
+		String st="";
+				HashMap <String,String> badSrvNum = J.HashMapUnPack(ef[0]);
+				HashMap <String,String> badSrvLast = J.HashMapUnPack(ef[1]);
+				int cur = (int)(System.currentTimeMillis()/1000);
+				for ( String k:badSrvNum.keySet()) {
+					int x = cur - J.parseInt(badSrvLast.get(k));
+					x=x/86400;
+					st+=k+"\t"+J.Spaced(badSrvNum.get(k),4)+"\t";
+					st+=J.Spaced(Integer.toString(x)+"D",5);
+					if (x>Config.removeFriendAfterErrors) st+='H';  else st+='D';
+					st+="\n";
+					}
+				
+				return st;
+ 	}
+ 
+ public void SA_FriendErrDel() throws Exception { fileDelete(Const.FIL_BAD_SRV, Const.ONM_CORE, Const.ONM); }
 
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

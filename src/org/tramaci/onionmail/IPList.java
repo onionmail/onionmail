@@ -29,19 +29,44 @@ public class IPList {
 	private SecretKey K=null;
 	private byte[] IV = null;
 	
-	private volatile int IPS[] = null;
-	private volatile short[] Point = null;
-	private volatile int[] Tcr = null;
+	public volatile int IPS[] = null;
+	public volatile short[] Point = null;
+	public volatile int[] Tcr = null;
 	private boolean needGarb=false;
+	
+	public String getIPbyId(int i) {
+		int a = IPS[i];
+		String rs=Integer.toString(a&255)+".";
+		a>>=8;
+		rs+=Integer.toString(a&255)+".";
+		a>>=8;
+		rs+=Integer.toString(a&255)+".";
+		a>>=8;
+		rs+=Integer.toString(a&255);
+		return rs;
+		}
+	
+	public String toString() {
+		String re="";
+		int j = IPS.length;
+		int tc = (int)(System.currentTimeMillis()/60000);
+		
+		for (int i=0;i<j;i++) {
+			if (IPS[i]==0) continue;
+			String rs=getIPbyId(i);
+			rs = J.Spaced(rs, 16);
+			rs +=J.Spaced(Short.toString(Point[i]), 5);
+			int x =Tcr[i]-tc;
+			if (x>-1) rs +=J.Spaced(Integer.toString(x)+"M", 3); else rs+="Old";
+			re+=rs+"\n";
+			}
+		return re;
+		}
 	
 	private int getipa(InetAddress I) {
 		byte[] a = I.getAddress();
-		int ip = (int)(a[0]&255);
-		ip<<=(int)(a[1]&255);
-		ip<<=(int)(a[2]&255);
-		ip<<=(int)(a[3]&255);
-		ip^=ip>>1;
-		return ip;
+		int[] ip = Stdio.Lodsxi(a, 4);
+		return ip[0];
 		}	
 	
 	public int getIP(InetAddress I) {

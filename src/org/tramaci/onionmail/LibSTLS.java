@@ -459,11 +459,11 @@ public class LibSTLS {
 			
 			if (AltName!=null) {
 				int cx = AltName.length;
-				for (int ax=0;ax<cx;ax++) {
+				for (int ax=0;ax<cx;ax++) try {
 					GeneralName generalName = new GeneralName(GeneralName.dNSName, new DERIA5String(AltName[ax].toLowerCase().trim()));
 					GeneralNames subjectAltNames = new GeneralNames(generalName);
 					certGen.addExtension(X509Extensions.SubjectAlternativeName, false,new DEROctetString(subjectAltNames));
-					}
+					} catch( Exception EI) { Main.echo("CreateCert Error: "+EI.getMessage()+" (altName=`"+AltName[ax]+"`)\n"); }
 				}
 						
 			X509Certificate cert = certGen.generate(keyPair.getPrivate(),"BC");

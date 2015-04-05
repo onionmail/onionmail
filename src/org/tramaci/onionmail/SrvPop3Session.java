@@ -82,6 +82,8 @@ public class SrvPop3Session extends Thread {
 		while(isConnected() && !isOld()) {
 			//J.RunCheck();
 			String[] Tok = 	ReadCommands(10,new String[] {"QUIT","USER ","PASS ","CAPA","APOP","STLS","STARTTLS","RQUS","RQEX"});
+			setTimeout(Config.MAXPOP3SessionTTL);
+			
 			if (Tok[0].compareTo("QUIT")==0)  {
 					Reply(true);
 					close();
@@ -265,6 +267,8 @@ public class SrvPop3Session extends Thread {
 				
 		while(isConnected() && !isOld()) {
 			String[] Tok = 	ReadCommands(5,new String[] {"QUIT","STAT","APOP","NOOP","RETR","RSET","LIST","DELE","UIDL","TOP","CAPA","STLS","STARTTLS"});
+			setTimeout(Config.MAXPOP3SessionTTL);
+			
 			if (Tok[0].compareTo("QUIT")==0)  {
 					break; 
 					}			
@@ -281,7 +285,6 @@ public class SrvPop3Session extends Thread {
 			
 			
 			if (Tok[0].compareTo("STAT")==0) {
-				setTimeout(Config.MAXPOP3SessionTTL);
 				Reply(true,MsgNum+" "+BoxSize);
 				continue;
 				}
@@ -336,6 +339,7 @@ public class SrvPop3Session extends Thread {
 				}
 						
 			if (Tok[0].compareTo("TOP")==0 && Tok.length==3) {
+				setTimeout(Config.MAXPOP3SessionTTL);
 				int maxl =J.parseInt(Tok[2]);
 				int sel = pIntPop(Tok[1]);
 				if (!CheckMessage(sel)) {
@@ -518,9 +522,9 @@ public class SrvPop3Session extends Thread {
 						} catch(Exception I) {}
 					close();
 					
-					if (Config.Debug) Config.EXC(E, "PO3Session"); else Log("POP3 Fatal Error "+st+"\n");
+					if (Config.Debug) Config.EXC(E, "POP3Session"); else Log("POP3 Fatal Error "+st+"\n");
 					} else {
-					Config.EXC(E, "PO3Session");
+					Config.EXC(E, "POP3Session");
 					isDismissed=true;
 					if (Config.Debug) E.printStackTrace();
 					close();

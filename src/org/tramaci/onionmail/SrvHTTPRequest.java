@@ -278,7 +278,7 @@ public class SrvHTTPRequest extends Thread{
 				}
 			}
 		
-		RF = new FileInputStream(ReqFile);
+		RF = new FileInputStream(ReqFile); 
 		RFLength = (int) new File(ReqFile).length();
 		
 		}
@@ -466,29 +466,33 @@ public class SrvHTTPRequest extends Thread{
 					if (isCurKeep) KAReset(); else break;
 		}
 			} catch(Exception E) {
-				Parent.UpdateStats(true,false);
-				String r = E.getMessage();
-				WebLog("Error "+ r!=null ? r:"");
-				stat=SrvHTTPRequest.ST_Reply;
-				Ltcr=System.currentTimeMillis();
-				if (r!=null && r.startsWith("@")) {
-					r=r.substring(1);
-					WebLog("Error "+r);
-					String x = "ERROR "+r+"\r\n";
-					r="HTTP/1.1 "+r+"\r\n";
-					r+="Content-type: text/plain; charset=ISO-8859-1\r\n";
-					r+="Connection: close\r\n";
-					r+="Content-length: "+x.length()+"\r\n\r\n"+x;
-					try {
-						con.setSoTimeout(2000);
-						O.write(r.getBytes());
-						} catch(Exception I) {}
-					dismissed=true;	
-					} else {
-						Mid.Config.EXC(E, Mid.Nick+".HTTP");
-						WebLog("Exception "+E.getMessage());
-						if (Mid.Config.Debug) E.printStackTrace();
-					}
+				try {
+					Parent.UpdateStats(true,false);
+					String r = E.getMessage();
+					WebLog("Error "+ r!=null ? r:"");
+					stat=SrvHTTPRequest.ST_Reply;
+					Ltcr=System.currentTimeMillis();
+					if (r!=null && r.startsWith("@")) {
+						r=r.substring(1);
+						WebLog("Error "+r);
+						String x = "ERROR "+r+"\r\n";
+						r="HTTP/1.1 "+r+"\r\n";
+						r+="Content-type: text/plain; charset=ISO-8859-1\r\n";
+						r+="Connection: close\r\n";
+						r+="Content-length: "+x.length()+"\r\n\r\n"+x;
+						try {
+							con.setSoTimeout(2000);
+							O.write(r.getBytes());
+							} catch(Exception I) {}
+						dismissed=true;	
+						} else {
+							Mid.Config.EXC(E, Mid.Nick+".HTTP");
+							WebLog("Exception "+E.getMessage());
+							if (Mid.Config.Debug) E.printStackTrace();
+						}
+				} catch(Exception AB) {
+					Mid.Config.EXC(AB, "HTTP:AB "+Mid.Nick);
+				}
 			}
 		stat=SrvHTTPRequest.ST_End;
 		Ltcr=System.currentTimeMillis();

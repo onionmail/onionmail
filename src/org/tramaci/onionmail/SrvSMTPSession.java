@@ -20,28 +20,21 @@
 package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.security.PublicKey;
 import java.util.HashMap;
-
-import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
-
 import org.tramaci.onionmail.DBCrypt.DBCryptIterator;
 import org.tramaci.onionmail.MailBox.Message;
 import org.tramaci.onionmail.MailingList.ListThread;
@@ -114,6 +107,8 @@ public class SrvSMTPSession extends Thread {
 	public int serverMode = 0;
 	public int tryLogin=0;
 	public boolean falseLogin=false;
+	
+	public boolean mustVerifyByGrey=false;
 	
 	SrvSMTPSession(Config C,SrvIdentity id,Socket s,SMTPServer Pae) throws Exception {
 		super();
@@ -1000,11 +995,24 @@ public class SrvSMTPSession extends Thread {
 											
 						if (Login==null && mdo.compareTo(Mid.Onion)==0) throw new PException(503,"Logon required!");  //Verificato FIX
 						
+						if (Config.SMTPVerifySender && mdo.compareTo(Mid.Onion)!=0 && !VerifySMTPServer(mdo)) {
+									Send("503 Can't verify sender");
+									if (Config.Debug) Log("Can't verify `"+mdo+"`\n");
+									continue;
+									}
+						
+						/*
 						if (Config.SMTPVerifySender && mdo.compareTo(Mid.Onion)!=0 &&  !VerifySMTPServer(mdo)) {
-								Send("503 Can't verify sender");
-								if (Config.Debug) Log("Can't verify `"+mdo+"`\n");
-								continue;
+								if (Mid.EnterRoute && Mid.useGreyList) mustVerifyByGrey=true; else {
+									Send("503 Can't verify sender");
+									if (Config.Debug) Log("Can't verify `"+mdo+"`\n");
+									}
+								//continue;
+								//TODO Rivedere questo !!!
 								}
+						*/
+						
+						if (Mid.EnterRoute && Mid.useGreyList && !IPisLocal) mustVerifyByGrey=true;
 						
 						if (mdo.compareTo(Mid.Onion)==0) RouteFrom=XRouteLocal; else RouteFrom = XRouteRemote;		
 						
@@ -1225,11 +1233,29 @@ public class SrvSMTPSession extends Thread {
 			}
 		
 	///////// 		-- Transport --
-	
+
 	if (falseLogin) throw new PException("@999 FUCK OFF");
 			
 	if (MailTo==null || MailFrom==null) throw new PException("@503 valid RCPT command must precede DATA");
+
+	if (mustVerifyByGrey) try{
+		if (Mid.greyList==null) {
+				Mid.Log("Cant load GreyList");
+				throw new PException("@503 Can't verify sender");
+				}
 		
+			int x = Mid.greyList.LookupServer(HelloData, RemoteIP.getAddress(), MailFrom, MailTo);
+			if (
+					x==GreyListManager.GLSTATUS_GREYNEW 	||
+					x==GreyListManager.GLSTATUS_EARLY		) throw new PException("@450 Recipient address rejected: Greylisting. Please retry in "+Config.GreyListTime+" minutes.");
+			
+			if (x == GreyListManager.GLSTATUS_FULL)  throw new PException("@503 Recipient address rejected: Greylisting fail.");
+		} catch(Exception GE) {
+			if (GE instanceof PException) throw GE; else { 
+				Config.EXC(GE, "GreyList");
+				throw new PException("@503 Recipient address rejected: Greylisting fail.");
+				} 
+		}
 	
 	if (RouteFrom == XRouteLocal) {
 		if (Login==null || Password == null) throw new PException("@500 AUTH Required");
@@ -1245,7 +1271,7 @@ public class SrvSMTPSession extends Thread {
 			}
 	if (Mid.Spam.isSpam(SrvIdentity.SpamList, MailFrom.toLowerCase())) {
 			Mid.StatSpam++;
-			throw new PException("@503 SPAMMER, YOU ARE BANNED BY THE ENTIRE SERVER!"); 
+			throw new PException("@503 SPAMMER, YOU ARE BANNED BY THE SERVER SPAM LIST!"); 
 			}
 		
 	if (Mid.EnterRoute && Config.EnableDNSBL && !KUKIAuth && Login==null && !IPisLocal) try {
@@ -1256,7 +1282,7 @@ public class SrvSMTPSession extends Thread {
 			if ((ipst&Config.IPS_NoDNSBL)!=0) chk=false;
 			if ((ipst&Config.IPS_SPAM)!=0) {
 					Mid.StatSpam++;
-					throw new Exception("@421 ARE  YOU A SPAMMER?");
+					throw new PException("@421 ARE  YOU A SPAMMER?");
 					}
 			if (Config.LocalNetArea.isInNet(RemoteIP)) chk=false;
 			if (Config.DNSBLNoCheck!=null && Config.DNSBLNoCheck.isInNet(RemoteIP)) chk=false;
@@ -1266,10 +1292,13 @@ public class SrvSMTPSession extends Thread {
 							if (srv!=null) {
 								Log("SPAM Server Blocked `"+ips+"` by `"+srv+"`");
 								Mid.StatSpam++;
-								throw new Exception("@421 Your IP `"+ips+"` is listed in DNSBL: "+srv);
+								throw new PException("@421 Your IP `"+ips+"` is listed in DNSBL: "+srv);
 								}
 							}
-			} catch(Exception E) { Config.EXC(E, Mid.Nick+".DNSBL"); }
+			} catch(Exception E) {
+				if (E instanceof PException) throw E;
+				Config.EXC(E, Mid.Nick+".DNSBL"); 
+				}
 	
 	if (TypeFrom==XTypeInet) Mid.StatMsgInet++; 
 	
@@ -1746,7 +1775,10 @@ public class SrvSMTPSession extends Thread {
 			if (Mid.EnterRoute) {
 				if (Config.Debug) Log("NsLookup `"+Server+"`");
 				MX = Main.DNSCheck.getMX(Server);
-				if (MX==null || MX.length==0) return false;
+				if (MX==null || MX.length==0) {
+						Log("NsLookup NX_DOMAIN");
+						return false;
+						}
 				} else try {
 					if (Config.Debug) Log("RemoteMX `"+Server+"`");
 					return Mid.VerifySMTPInetTest(Server);
@@ -1931,6 +1963,87 @@ public class SrvSMTPSession extends Thread {
 		
 	}
 	
+	private void SA_ShowManifest(String mFrom,String oni) throws Exception {
+		oni=oni.toLowerCase().trim();
+		String mf = Mid.GetFNName(oni)+".mf";
+		if (!new File(mf).exists()) throw new PException("@550 No manifest for `"+oni+"`");
+		SrvManifest M = Mid.LoadManifest(oni,true);
+		String msg="Manifest for `"+oni+"`\n";
+		if (M.my!=null) msg+="Info:\n  "+M.my.toString()+"\n";
+		if (M.Friends!=null) msg+="\nFriends:\n  "+J.Implode("\n ", M.Friends)+"\n";
+		if (M.H!=null) {
+				msg+="\nHeaders:\n";
+				for (String k:M.H.keySet()) msg+="  "+k+": "+M.H.get(k)+"\n";
+				}
+		
+		if (M.I!=null) {
+			msg+="\nInfo:\n";
+			for (String k:M.I.keySet()) msg+="  "+k+": "+M.I.get(k)+"\n";
+			}
+		msg=msg.replace("\r", "");
+		
+		HashMap <String,String> Hldr = ClassicHeaders("server@"+Mid.Onion, mFrom);
+		Hldr.put("subject", "Manifest info");
+		if (PGPSession) msg=Mid.SrvPGPMessage(mFrom,Hldr,msg);	
+		Mid.SendMessage(mFrom, Hldr, msg);	 
+		Send("250 Id=nothing");
+		}
+	
+	private void SA_Control(String msg) throws Exception {
+		Log("Control SysOp operation");
+		try {
+			msg+="\r\nQUIT\r\n";
+		
+			ByteArrayOutputStream ou = new ByteArrayOutputStream();
+			ControlSession c = new ControlSession(Mid, 
+					new DataInputStream(
+							new ByteArrayInputStream(
+									msg.getBytes()
+									)
+							)
+					,ou)
+				;
+			
+			c.disableSU=true;
+			c.mailMode=true;
+			c.BeginSession();
+			msg =ou.toString();
+			c=null;
+			ou=null;
+			System.gc();
+			HashMap <String,String> Hldr = ClassicHeaders("server@"+Mid.Onion, "sysop@"+Mid.Onion);
+			Hldr.put("subject", "RE: SysOp Control operations");
+			if (PGPSession) msg=Mid.SrvPGPMessage("sysop@"+Mid.Onion,Hldr,msg);	
+			Mid.SendMessage("sysop@"+Mid.Onion, Hldr, msg);	 
+			Send("250 Id=nothing");
+		} catch(Exception e) {
+			if (Config.Debug) e.printStackTrace();
+			String st=e.getMessage();
+			if (st==null) st="Error";
+			if (st.startsWith("@") && st.length()>1) st=st.substring(1);
+			if (st.startsWith("-ERR") && st.length()>5) st=st.substring(5);
+			throw new PException("@550 "+st);			
+		}
+	}
+	
+	private void SA_DelManifest(String mFrom,String oni) throws Exception {
+		oni=oni.toLowerCase().trim();
+		String mf = Mid.GetFNName(oni)+".mf";
+		String msg;
+		if (new File(mf).exists()) {
+			Log("DeleteManifest for `"+oni+"`");
+			J.Wipe(mf, Config.MailWipeFast);
+			msg="The manifest file for `"+oni+"` was deleted!\n"; 
+			} else {
+			msg="No manifest file for `"+oni+"`\n";	
+			}
+		HashMap <String,String> Hldr = ClassicHeaders("server@"+Mid.Onion, mFrom);
+		Hldr.put("subject", "Manifest delete");
+		if (PGPSession) msg=Mid.SrvPGPMessage(mFrom,Hldr,msg);	
+		Mid.SendMessage(mFrom, Hldr, msg);	 
+		Send("250 Id=nothing");
+	}
+	
 	private void SA_VMATLookup(String MailFrom,String[] Tok) throws Exception {
 		if (Tok.length<2) throw new PException("@550 Syntax error");
 		String addr = J.getMail(Tok[1], false);
@@ -1960,11 +2073,30 @@ public class SrvSMTPSession extends Thread {
 	private void SA_ForceFriend(String MailFrom,HashMap <String, String> Hldr,String[] Tok) throws Exception {
 		
 		String oni = Tok[1].toLowerCase().trim();
+		
 		String orgoni=oni;
 		if (!oni.matches("[a-z0-9]{16}\\.onion")) {
 			ExitRouteList RL= Mid.GetExitList();
 			ExitRouterInfo EX = RL.selectBestExit();
-			MXRecord[] MX = Mid.remoteSMTPTest(EX.domain,oni);
+			MXRecord[] MX =null;
+			
+			if (EX==null) {
+				Log("No exit to verify, try self test"); 
+				EX = new ExitRouterInfo();
+				EX.canMX=true;
+				EX.canVMAT=true;
+				EX.isLegacy=true;
+				EX.isTrust=true;
+				EX.domain=oni;
+				EX.onion=oni;
+				EX.port=25;
+				} else MX = Mid.remoteSMTPTest(EX.domain,oni);
+			if (MX==null || MX.length==0) {
+				Log("NO MX record for `"+EX.domain+"`");
+				MX = new MXRecord[1];
+				MX[0] = new MXRecord(10,oni);
+			}
+				
 			RL=null;
 			EX=null;
 			
@@ -2087,14 +2219,17 @@ public class SrvSMTPSession extends Thread {
 		if (!MailFrom.startsWith("sysop@") && J.isReserved(MailFrom, 0,true)) throw new PException(500,"SA6001 Operation not permitted");
 		
 		String[] Tok = GetFuckedTokens(Hldr.get("subject").trim(),new String[] {
-				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","SET RULEZ","DELETE RULEZ","RULEZ", "SET IS SPAM","SPAM LIST",
-				"NEWS ADD","NEWS DEL","NEWS","EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT",
-				"VOUCHER LOG", "VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM","SSL","LOGID", "FRIEND"
-				});
+				"CONTROL",	
+				"NETWORK","NEWUSER TO", "NEWUSER", "IDENT","REBOUND HEADER", "LIST","SET RULEZ","DELETE RULEZ","RULEZ", "SET IS SPAM","SPAM LIST", "FRIEND ERROR",
+				"NEWS ADD","NEWS DEL","NEWS","EXIT","SETTINGS","SHOW W","STAT","PUSH", "SPAM","MYKEY","VMAT LOOKUP","VMAT", "SYSOP-VMAT", "SHOW BLACKLIST","FRIEND CLEAR ERROR",
+				"VOUCHER LOG", "VOUCHER LIST","VOUCHER DELETE","VOUCHER","CONFIG","SHOW IAM","SSL","LOGID", "FRIEND", "SHOW MANIFEST", "DELETE MANIFEST"
+				}) ;
+		
 		if (Tok==null) throw new PException(503,"Unknown server action `"+Hldr.get("subject").trim()+"`");
 		
 		//////////////// All User Actions ////////////////////////////////
-	
+		
+		
 		int pa = Tok.length;
 		
 		if (Tok[0].compareTo("REBOUND HEADER")==0) { 
@@ -2251,13 +2386,66 @@ public class SrvSMTPSession extends Thread {
 		if (Tok[0].compareTo("MYKEY")==0) SA_MYKEY(MailFrom,msg);
 
 		if (Tok[0].compareTo("VMAT")==0) {
-				SA_VMAT(MailFrom,msg);
+				SA_VMAT(MailFrom,msg,MailFrom);
 				return;
 				}
 						
 		String loc = J.getLocalPart(MailFrom);
 		if (loc.compareTo("sysop")!=0) throw new PException("@550 Access denied to SysOp command");
 		///////////////////////// SYSOP USER /////////////////////////////
+
+		if (Tok[0].compareTo("CONTROL")==0) {
+			SA_Control(msg);
+			return;
+		}
+		
+		if (Tok[0].compareTo("FRIEND ERROR")==0) {
+				String rs ="Friend error history status:\n"+Mid.SA_FriendErrList()+"\n\n\t"+Mid.Nick+"\n";
+				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+				H.put("subject", "Friend error history status");
+				if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
+				Mid.SendMessage(MailFrom, H, rs);
+				Send("250 Id=nothing");
+				return;
+				}
+		
+		if (Tok[0].compareTo("FRIEND CLEAR ERROR")==0) {
+				Mid.SA_FriendErrDel();
+				String rs ="Friend error history deleted.\n\n\t"+Mid.Nick+"\n";
+				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+				H.put("subject", "Friend error history status");
+				Mid.SendMessage(MailFrom, H, rs);
+				Send("250 Id=nothing");
+				return;
+				}
+		
+		if (Tok[0].compareTo("SHOW BLACKLIST")==0) {
+				if (!Mid.EnterRoute) throw new PException("@550 This is not an exit server.");
+				if (Mid.BlackList == null) throw new PException("@550 Blacklist unavailable.");
+				String rs ="Server blacklist IP:\n"+Mid.BlackList.toString()+"\n\n\t"+Mid.Nick+"\n";
+				
+				HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion, MailFrom);
+				H.put("subject", "Blacklist IP");
+				if (PGPSession) rs=Mid.SrvPGPMessage(MailFrom,H,rs);	
+				Mid.SendMessage(MailFrom, H, rs);
+				Send("250 Id=nothing");
+				return;
+			}	
+		
+		if (Tok[0].compareTo("SYSOP-VMAT")==0 && Tok.length>2) {
+				SA_VMAT(Tok[1],msg,Tok[2]);
+				return;
+				}
+		
+		if (Tok[0].compareTo("DELETE MANIFEST")==0 && Tok.length>1) {
+			SA_DelManifest(MailFrom,Tok[1]);
+			return;
+		}
+		
+		if (Tok[0].compareTo("SHOW MANIFEST")==0 && Tok.length>1) {
+			SA_ShowManifest(MailFrom,Tok[1]);
+			return;
+		}
 		
 		if (Tok[0].compareTo("FRIEND")==0 && Tok.length>1) {
 			SA_ForceFriend(MailFrom,Hldr,Tok);
@@ -3262,6 +3450,11 @@ public class SrvSMTPSession extends Thread {
 		if (le<3) throw new PException(500,"Syntax error, see rulez!");
 		
 		String list = J.getMail(Tok[1], false);
+		if (list==null) {
+			Tok[1]=Tok[1].toLowerCase();
+			if (Tok[1].matches("[a-z0-9\\-]{3,16}")) list=Tok[1]=Tok[1]+".list@"+Mid.Onion;
+			}
+		
 		if (list==null) throw new PException(500,"Invalid list address!");
 		
 		String domain = J.getDomain(Tok[1]);
@@ -3605,7 +3798,7 @@ public class SrvSMTPSession extends Thread {
 		Send("250 Id=nothing");
 		}
 	
-	private void SA_VMAT(String from,String msg) throws Exception {
+	private void SA_VMAT(String from,String msg,String replyTo) throws Exception {
 		HashMap <String,String> H = ClassicHeaders("server@"+Mid.Onion,from);
 		DynaRes Re =null;
 		
@@ -3712,8 +3905,8 @@ public class SrvSMTPSession extends Thread {
 	Re.Par.put("MSG", rmsg);
 	Re.Par.put("nick", Mid.Nick);
 	Re = Re.GetH(H);
-	if (PGPSession) Re.Res=Mid.SrvPGPMessage(from,Re.Head,Re.Res);	
-	Mid.SendMessage(from, Re.Head,Re.Res);
+	if (PGPSession) Re.Res=Mid.SrvPGPMessage(replyTo,Re.Head,Re.Res);	
+	Mid.SendMessage(replyTo, Re.Head,Re.Res);
 	Send("250 Id=nothing");
 	
 	}

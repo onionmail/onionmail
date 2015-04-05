@@ -65,5 +65,10 @@ public class Const {
 		
 		public static final int SFS_VOUCHER = 0x8C011ACD;
 		
+		public static final long APP_FILES = Long.parseLong("appfiles10",36);
+		public static final long ONM_CORE = Long.parseLong("onmcore180",36);
+		public static final String FIL_BAD_SRV="BadServerFriends";
+		public static final String ONM = "onm";
+		
 		protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify	
 }

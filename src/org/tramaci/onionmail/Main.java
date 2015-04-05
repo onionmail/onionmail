@@ -24,6 +24,7 @@ package org.tramaci.onionmail;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.InputStream;
@@ -47,8 +48,8 @@ import javax.crypto.SecretKey;
 public class Main {
 	public static Config Config = new Config();
 	
-	public static long VersionID = 0x0001_0008_0000_056CL;
-	public static String Version="1.8.0.1388";
+	public static long VersionID = 0x0001_0008_0000_05FEL;
+	public static String Version="1.8.0.1534";
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
@@ -56,7 +57,9 @@ public class Main {
 	public static org.tramaci.onionmail.MailingList.ListThread[] ListThreads = null;
 	public static MultiDeliverThread[] MultiTthread = null;
 	public static HTTPServer[] HTTP = null;
-
+	private static int mBlackListIPs=0;
+	private static int preventTooBlackWrite=0;
+	
 	public static ExtraThread[] ETH = new ExtraThread[10];
 	
 	public static ControlService CS = null;
@@ -132,6 +135,17 @@ public class Main {
 	public static final long CF_W_SSLNOWILC=1<<32;		//NO *.ExitRouteDomain in SSL certificate.
 	public static final long CF_C_EXPORTDER=1<<12;			//Export DER SSL certificate.
 	public static final long CF_F_NOSKIPFRIEND=1<<15;
+	public static final long CF_D_NODERK=1<<13;
+	public static final long CF_Z_NOZEROEND=1<<35;
+	public static final long CF_X_FASTEXIT=1<<33;
+	
+	
+	public static volatile Furamide furamidal = null;
+	
+	public static long getUsedMememory() {
+		Runtime runtime = Runtime.getRuntime();
+		return runtime.totalMemory() - runtime.freeMemory();
+	}
 	
 	public int[] SelfTest(boolean term,boolean out) throws Exception {
 		int cx= SMTPS.length;
@@ -178,7 +192,7 @@ public class Main {
 									if (out) Main.echo(E.getMessage());
 									Config.GlobalLog(Config.GLOG_Bad | Config.GLOG_All | Config.GLOG_Server, "MAIN", E.getMessage());
 									Rs[ax]=Main.STEST_SWAP;
-									if (term) System.exit(2);
+									if (term) endProc(0);
 									}  
 								if (out) Main.echo("Exception: "+mx+"\n");
 								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
@@ -221,7 +235,7 @@ public class Main {
 								Config.EXC(E, "TEST `"+ SMTPS[ax].Identity.Nick+"`");
 								if (E instanceof PException) {
 									Rs[ax] = Main.STEST_SWAP;
-									if (term) System.exit(2);
+									if (term) endProc(0);
 									} else Rs[ax]=Main.STEST_SOCK;
 								} 
 					}
@@ -365,12 +379,12 @@ public class Main {
 			
 			if (Oper==Main.Oper_Del_Keys) {
 					DelKeys();
-					System.exit(0);
+					endProc(0);
 				}
 			
 			if(Oper==Main.Oper_Stop) {
 					TermCmd();
-					System.exit(0);
+					endProc(0);
 				}
 			
 			} catch(Exception E) {
@@ -380,25 +394,24 @@ public class Main {
 			} else echo("Config error "+E.getMessage()+"\n");
 			
 			//E.printStackTrace();
-			
-			System.exit(2);
+			Main.endProc(2);
 			}
 		
 		if (Oper==Main.Oper_Gen_ServerS) { 
 				if (Main.ConfVars!=null) out("OM:[COMPLETE] ");
 				echo("\nOperation complete!\n");
-				System.exit(0);
+				Main.endProc(0);
 				}	
 		
 		if (Oper!=Main.Oper_Stop && TermCmd()) {
 			echo("Error: The control port is used, some TCP ports maybe in use!\n");
-			System.exit(2);
+			Main.endProc(2);
 			}
 		
 		if (!J.TCPRest(Config.TorIP, Config.TorPort)) {
 			if (Main.ConfVars!=null) out("OM:[ERROR] ");
 			echo("\nCan't connect to TOR via `"+J.IP2String(Config.TorIP)+":"+Integer.toString(Config.TorPort)+"`\n");
-			System.exit(2);
+			Main.endProc(2);
 			}
 			
 		ListThreads= new org.tramaci.onionmail.MailingList.ListThread[Config.ListThreadsMax];
@@ -452,7 +465,7 @@ public class Main {
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "SMTP."+Config.SMPTServer[ax].Nick);
-					System.exit(2);
+					Main.endProc(2);
 					}
 				
 				if ((Main.cmdFlags & Main.CF_C_EXPORTDER)!=0) {
@@ -474,7 +487,7 @@ public class Main {
 					} catch(Exception E) {
 					echo("!Error\n\t"+E.getMessage()+"\n");
 					if (Config.Debug) Config.EXC(E, "POP3."+Config.SMPTServer[ax].Nick);
-					System.exit(2);
+					Main.endProc(2);
 					}
 				
 				}
@@ -482,7 +495,7 @@ public class Main {
 			//echo("\n"); ???
 			} catch(BindException BE) {
 				echo("\nAddress in use!\n");
-				System.exit(2);
+				Main.endProc(2);
 			}
 		
 		HTTP = new HTTPServer[mht+1];
@@ -521,7 +534,7 @@ public class Main {
 					
 					if (t0.contains("\n"+t1+"\n")) {
 						echo("Error!\n\tIP+Port is in use by another control port!\n");
-						System.exit(2);
+						Main.endProc(2);
 						}
 					
 					Main.CSP[ax] = new ControlService(Config ,Config.SMPTServer[ax],Config.SMPTServer[ax].PublicControlPort,Config.SMPTServer[ax].PublicControlIP);
@@ -530,7 +543,7 @@ public class Main {
 				}
 			} catch(Exception BE) {
 				echo("Error "+BE.getMessage()+"\n");
-				System.exit(2);
+				Main.endProc(2);
 			}
 		
 		echo("Service Started\n");
@@ -563,7 +576,7 @@ public class Main {
 			Main.out("OM:[DELETE]\n");
 			}
 		Main.out("OM:[COMPLETE]\n");
-		if (ac) System.exit(0);
+		if (ac) Main.endProc(0);
 		Main.out("OM:[RUNNING]\n");
 		}
 	
@@ -621,8 +634,7 @@ public static void main(String args[]) {
 		try {
 			LibSTLS.AddBCProv();
 			CompiledBy = J.Compiler();
-					
-			
+		
 			File X = new File(".");
 			ProgPath = X.getAbsolutePath().toString();
 			ProgPath=ProgPath.replace("\\", "/");
@@ -659,7 +671,7 @@ public static void main(String args[]) {
 					
 				}
 						
-			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2015 by Tramaci.org\n\t(C) 2014-2015 by OnionMail Project\n\t(C) 2014-2015 by mes3hacklab\n\tSome rights reserved.\n\n");
+			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\t(C) 2013-2015 by OnionMail Project\n\t(C) 2013-2015 by mes3hacklab\n\tSome rights reserved.\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;
@@ -706,7 +718,7 @@ public static void main(String args[]) {
 						fc = args[ax+1];
 						if (!new File(fc).exists()) {
 							echo("\nCan't open `"+fc+"`\n");
-							System.exit(2);
+							Main.endProc(2);
 							}
 						ax++;
 						}
@@ -730,6 +742,23 @@ public static void main(String args[]) {
 						} catch(Exception I) { Main.echo("-RC: Counter error `"+x+"' "+I.getMessage()+"\n"); }
 				
 					fm=true;
+				}
+				
+				if (cmd.compareTo("--srv-passwd")==0 && ax+1<args.length) {
+				
+					int j = args.length;
+					boolean ba=false;
+					String curp=null;
+					for (int i=0;i<j;i++) {
+						if (args[i].compareTo("-bm")==0) ba=true;
+						if (args[i].compareTo("-bf")==0 && i+1<j) curp=args[i+1];
+					}
+					try {
+						srvPasswd(args[ax+1],curp,ba);
+					} catch(Exception e) {
+						if (ba) echo("OM:[ERR]\n"); else echo("Error: "+e.getMessage()+"\n");
+					}
+					Main.endProc(0);
 				}
 				
 				if (cmd.compareTo("--rnd-passwd")==0 && ax+2<args.length) {
@@ -976,7 +1005,7 @@ public static void main(String args[]) {
 								SetPass=Main.DerKeyfile(fpa, SetPass);
 							} catch(Exception E) {
 								echo("Error: `"+E.getMessage()+"`\n");
-								System.exit(2);
+								Main.endProc(2);
 							}
 						}
 				
@@ -992,7 +1021,7 @@ public static void main(String args[]) {
 						echo("Error: `"+E.getMessage()+"`\n");
 						System.exit(2);
 						}
-					System.exit(0);
+					Main.endProc(0);
 					}
 										
 				if (cmd.compareTo("-?")==0) { 
@@ -1003,7 +1032,7 @@ public static void main(String args[]) {
 				if (cmd.compareTo("--gen-rpass")==0) {
 					try {
 						starterCreation();
-						System.exit(0);
+						Main.endProc(0);
 						} catch(Exception E) { EXCM(E); }
 					fm=true;
 					}
@@ -1015,7 +1044,7 @@ public static void main(String args[]) {
 					G.Debug = verbose;
 					InetAddress Lip = G.ParseIp(args[ax+1]);
 					beginPassphraseServer(Lip,args[ax+2],G);
-					System.exit(0);
+					Main.endProc(0);
 					} catch(Exception E) { EXCM(E); }
 								
 				if (!fm) {
@@ -1234,13 +1263,52 @@ public static void main(String args[]) {
 					
 						if (TextCaptcha.isEnabled()) try  { TextCaptcha.Garbage(false); } catch(Exception E) { Config.EXC(E, "TextCaptcha.Garbage"); }
 					
+						if (Main.Config.BlackListFile!=null) try {
+							String ips="";
+							
+							for (SrvIdentity srv : Config.SMPTServer ) {
+								if (srv==null) continue;
+								if (!srv.EnterRoute) continue;
+								if (srv.BlackList==null) continue;
+								IPList lst = srv.BlackList;
+								int j = lst.IPS.length;
+								for (int i=0;i<j;i++) {
+									if (lst.IPS[i]==0 || lst.Point[i]<Main.Config.BlackListLevel) continue;
+									ips+=lst.getIPbyId(i)+"\t"+srv.Nick+"\t"+ (srv.ExitIP!=null ? J.IP2String(srv.ExitIP) : "!")+"\n";
+									}
+								}
+							
+							int chk = ips.hashCode();
+							if (Main.preventTooBlackWrite!=chk) {
+								String out="";
+								ips=ips.trim();
+								String[] lst = ips.split("\\n+");
+								for (String li : lst) {
+									String[] tk = li.split("\\t");
+									String lo = Main.Config.BlackListMask.replace("${IP}", tk[0]);
+									lo=lo.replace("${NICK}", tk[1]);
+									lo=lo.replace("${SRVIP}", tk[2]);
+									out+=lo+"\n";
+									}
+								
+								if (lst.length!=Main.mBlackListIPs) Config.GlobalLog(Config.GLOG_All, "BlackListFile", "BlackListed "+lst.length+" ip");
+								Main.mBlackListIPs=lst.length;
+								
+								ips=null;
+								lst=null;
+								Main.preventTooBlackWrite=chk;
+								Stdio.file_put_bytes(Main.Config.BlackListFile, out.getBytes());
+								}
+							
+							} catch(Exception E) { Config.EXC(E, "Kernel.BlackListFile"); }
+						
 						int cx = Main.HTTP.length;
-						/*
+						
 						for (int ax=0;ax<cx;ax++) try {
 							if (HTTP[ax]==null) continue;
 							HTTP[ax].Garbage();
 							} catch(Exception KH) { Config.EXC(KH, "Kernel:HTTP"); }
-						*/
+						
 						Main.MaxThread = ctask;
 						Main.PercThread = (int) Math.ceil(100.0*(grbt / maxt));
 						if (Main.MaxThread>Main.statsMaxThread) Main.statsMaxThread=Main.MaxThread;
@@ -1707,6 +1775,53 @@ public static void main(String args[]) {
 		if (E!=null) throw E;
 	}
 	
+	private static void srvPasswd(String path,String pwlf,boolean ba) throws Exception {
+		if (!path.endsWith("/")) path+="/";
+		path+="keyblock.txt";
+		if (!new File(path).exists()) {
+			echo("Can't find `"+path+"`\n");
+			Main.endProc(1);
+			}
+	
+		byte[] b = Stdio.file_get_bytes(path);
+		b = J.ASCIISequenceRead(new String(b),"KEYBLOCK");
+		BufferedReader In = J.getLineReader(System.in);
+		
+		byte[] oldp;
+		if (pwlf==null) {
+			if (ba) echo("OM:[OLDBOOTP]\n"); else echo("Enter old boot password: > ");
+			String op = In.readLine();
+			op=op.trim();
+			oldp=op.getBytes();
+		} else {
+			FileInputStream si = new FileInputStream(pwlf);
+			try {
+				BufferedReader x = J.getLineReader(si);
+				String pw = x.readLine();
+				pw=pw.trim();
+				oldp=pw.getBytes();
+				} catch(Exception e) {
+				try { si.close(); } catch(Exception i) {}
+				throw e;
+				}
+			si.close();
+			}
+			
+		byte[] newp=null;
+		byte[][] ks = SrvIdentity.KSDecode(b, oldp);
+		
+		if (ba) echo("OM:[NEWBOOTP]\n"); else echo("Enter new boot password: > ");
+		String op=In.readLine();
+		op=op.trim();
+		newp=op.getBytes();
+				
+		byte[] t2 =SrvIdentity.KSEncode(ks, newp);
+		String p2 = J.ASCIISequenceCreate(t2, "KEYBLOCK");
+		Stdio.file_put_bytes(path, p2.getBytes());
+		if (ba) echo("OM:[OK]\n"); else echo("Boot password changed\n");
+		
+	}
+	
 	private static void EXCM(Exception E) {
 		String msg = E.getMessage();
 		if (msg==null) msg="Unknown";
@@ -1714,9 +1829,167 @@ public static void main(String args[]) {
 		if (msg.startsWith("_")) msg="Wrong key in MxDaccuShifter: "+msg.substring(1);
 		Main.echo("Error: "+msg+"\n");
 		if (verbose) E.printStackTrace();
-		System.exit(1);
+		Main.endProc(1);
 		}
 	
+	
+	public static void endProc(int s) {
+		try {
+			Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Begin endProc");
+			long orm = Main.getUsedMememory();
+			
+			int cx=0;
+			if (Main.POP3S!=null) {
+				cx = Main.POP3S.length;
+				for (int ax=0;ax<cx;ax++) {
+					try {	
+						Main.POP3S[ax].End();
+						} catch(Exception E) { Config.EXC(E, "Term `"+Main.POP3S[ax].Identity.Onion+"`"); }
+					}
+			}
+			if (Main.SMTPS!=null) {
+				cx = Main.SMTPS.length;
+				for (int ax=0;ax<cx;ax++) {
+					try {	
+						Main.SMTPS[ax].End();
+						} catch(Exception E) { Config.EXC(E, "Term `"+Main.SMTPS[ax].Identity.Onion+"`"); }
+					}
+			}
+			
+			if (Main.CSP!=null) {
+				cx = Main.CSP.length;
+				for (int ax=0;ax<cx;ax++) {
+					try {	
+						Main.CSP[ax].End();
+						} catch(Exception E) { Config.EXC(E, "Term `"+Main.CSP[ax].Identity[0].Onion+"`"); }
+					}
+				}
+			
+			if (Main.CS!=null) try {	
+						Main.CS.End();
+					} catch(Exception E) { Config.EXC(E, "Term ControlPort"); }
+			
+			if (Main.ETH!=null) try {
+				cx =Main.ETH.length;
+				for (int ax=0;ax<cx;ax++) {
+					if (Main.ETH[ax]==null) continue;
+					Main.ETH[ax].end();
+					}
+				} catch(Exception i) {}
+			
+			if (Main.HTTP!=null) {
+				cx=Main.HTTP.length;
+				for (int ax=0;ax<cx;ax++) try {
+					if (Main.HTTP[ax]==null) continue;
+					Main.HTTP[ax].End();
+				} catch(Exception i) {}
+			}
+			
+			if (Main.ListThreads!=null) {
+				cx=Main.ListThreads.length;
+				for (int ax=0;ax<cx;ax++) try {
+					if (Main.ListThreads[ax]==null) continue;
+					Main.ListThreads[ax].End();
+					} catch(Exception I) {}
+			}
+			
+			if (Main.MultiTthread!=null) {
+				cx=Main.MultiTthread.length;
+				for (int ax=0;ax<cx;ax++) try {
+					if (Main.MultiTthread[ax]==null) continue;
+					Main.MultiTthread[ax].End();
+					} catch(Exception I) {}
+			}
+					
+			Main.ETH=null;
+			Main.HTTP=null;
+			Main.CSP=null;
+			Main.CS=null;
+			Main.DNSCheck=null;
+			Main.FSKA=null;
+			Main.FSKIV=null;
+			if (Main.Kernel!=null) Main.Kernel.shutdown();
+			Main.Kernel=null;
+			Main.IDK=null;
+			Main.FSK=null;
+			Main.ListThreads=null;
+			Main.MultiTthread=null;
+			Main.POP3S=null;
+			Main.SMTPS=null;
+			Main.Config.SMPTServer=null;
+			Main.Config.ResevedUserKey=null;
+					
+			long cmem=0;
+			try { Thread.sleep(500); } catch (InterruptedException e) { }
+			
+			if ((Main.cmdFlags & Main.CF_X_FASTEXIT)!=0) {
+				System.gc();
+				if (Main.furamidal!=null) {
+				orm=Main.getUsedMememory();
+				Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Furamide");
+				Main.furamidal.endProc();
+				Main.furamidal.close();
+				cmem=Main.getUsedMememory();
+				Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Furamide for "+Integer.toString((int) (Math.abs(cmem-orm)/1024))+" KB");
+				}
+				System.gc();
+				Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: OnionMail FastExit Code="+s);
+				System.exit(s);
+			}
+			
+			for (int ax=0;ax<5;ax++) {
+				System.gc();
+				try { Thread.sleep(1000); } catch (InterruptedException e) { }
+				System.gc();
+				cmem=Main.getUsedMememory();
+				if (cmem<orm) break;
+			}
+			long diff= orm-cmem;
+			Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Free "+Long.toString(diff/1024)+" KB");		
+			if (cmem<orm && (Main.cmdFlags&Main.CF_Z_NOZEROEND)==0) {
+				Runtime runtime = Runtime.getRuntime();
+				long mxm = (long)(runtime.maxMemory()*0.7);
+				if (diff<mxm) try {
+					Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: ZeroMemory "+Long.toString(diff/1024)+" KB");
+					byte[] a = new byte [(int)diff];
+					orm=a.hashCode();
+					a=null;
+					System.gc();
+					try { Thread.sleep(100); } catch (InterruptedException e) { }
+				} catch(Exception f) {
+					System.gc();
+					Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: ZeroMememory Error: "+f.getMessage());
+				}
+			}		
+			
+			orm=Main.getUsedMememory();
+			for (int ax=0;ax<5;ax++) {
+				System.gc();
+				try { Thread.sleep(200); } catch (InterruptedException e) { }
+				System.gc();
+				cmem=Main.getUsedMememory();
+				if (cmem<orm) break;
+			}
+			
+			if (Main.furamidal!=null) {
+				orm=Main.getUsedMememory();
+				Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Furamide");
+				Main.furamidal.endProc();
+				Main.furamidal.close();
+				cmem=Main.getUsedMememory();
+				Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Furamide for "+Integer.toString((int) (Math.abs(cmem-orm)/1024))+" KB");
+			}
+			System.gc();
+						
+			Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: OnionMail Exit Code="+s);
+		} catch(Exception I) {
+			Main.Config.GlobalLog(Config.GLOG_All, "MAIN", "Endproc: Error: "+I.getMessage());
+			I.printStackTrace();
+			try {} catch(Exception j) {}
+		}
+		System.exit(s);
+	}
+		
 	protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }
 //NTRU ???
