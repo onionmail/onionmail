@@ -1,13 +1,13 @@
 
-HOW TO USE:
+HOW TO USE onionmail:
 
-This program requires:
+This program requires preinstalled:
  * java
  * tor
  * tor hidden service
 
-To run (example):
-su onionmailuser -c "java -jar onionmail.jar -ndk -f etc/config.cong -p PleaseChnageMe!!! > onionmail.log &"
+To run (example command line):
+su onionmailuser -c "java -jar onionmail.jar -ndk -f etc/config.cong -p PleaseChangeMe!!! > onionmail.log &"
 
 1) Modify your torrc to create an hidden service.
 https://www.torproject.org/docs/tor-hidden-service.html.en
@@ -15,20 +15,20 @@ https://www.torproject.org/docs/tor-hidden-service.html.en
 	Example: 
 
 	HiddenServiceDir ./hiddenServiceDir/server1/
-	HiddenServicePort 25 127.0.0.1:20025
+	HiddenServicePort 25  127.0.0.1:20025
 	HiddenServicePort 110 127.0.0.1:20110
 
 2) Restart tor
 	Read the file ./hiddenServiceDir/server1/hostname
-	to view the .onion address.
+	to view the   .onion address.
 
-3) Conifure your OnionMail server:
+3) Configure your OnionMail server:
  * Change the tor's ip and port into the file etc/core.conf
- * Change the password into the file etc/control.conf
- * Configure your server (modify the file etc/servers.conf)
+ * Change the password into the file          etc/control.conf
+ * Configure your server (modify the file     etc/servers.conf)
 
 	SMTPServer <nickname> of the server.
-	Onion (the hidden service name, read it into the file 
+	Onion  (the hidden service name, read it into the file 
 		hiddenServiceDir/hostname).
 	
 	PassWD 	Password of this server (controlPort) 
@@ -40,7 +40,7 @@ https://www.torproject.org/docs/tor-hidden-service.html.en
 	in torrc
 
 	HiddenServiceDir ./hiddenServiceDir/server1/
-	HiddenServicePort 25 127.0.0.1:20025
+	HiddenServicePort 25  127.0.0.1:20025
 	HiddenServicePort 110 127.0.0.1:20110
 
 	in servers.conf
@@ -91,4 +91,4 @@ If you want to open a new enter/exit server:
   ExitIP IP to use as source and listen to.
   Edit the DNS MX record.	 
 
-Remember to remove SSL limitations.
+Remember to remove SSL limitations (see other README for that).
