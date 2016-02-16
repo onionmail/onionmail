@@ -19,14 +19,16 @@ Extract all in this path:
 If you want to change it modify the file:
 /etc/onionmail/config.conf
 
+Compile as eclipse project: https://eclipse.org/
+
 To run onionmail with jar:
 
-java -jar onionmail.jar -f /mns/sdcard/ONM/etc/onionmail/config.conf
+java -jar onionmail.jar -f /mnt/sdcard/ONM/etc/onionmail/config.conf
 
 ----
 To test all package use our repository and use these commands:
 # apt-get source onionmail
-then update the package, jat etc...
+then update the package, jar etc...
 # debuild -us -uc
 # dpkg -i  packagefile.deb
 
