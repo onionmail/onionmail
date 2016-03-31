@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2014 by Tramaci.Org
- * LibSTLS V 1.0 © 2012 by EPTO (A)
+ * LibSTLS V 1.0 Â© 2012 by EPTO (A)
  * This file is part of OnionMail (http://onionmail.info)
  * 
  * OnionMail is free software; you can redistribute it and/or modify
@@ -23,15 +23,20 @@ package org.tramaci.onionmail;
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.net.Socket;
+import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Security;
+import java.security.SignatureException;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -61,7 +66,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 public class LibSTLS {
 
 	public static final String BC = org.bouncycastle.jce.provider.BouncyCastleProvider.PROVIDER_NAME;
-	public static final String Version = "LibSTLS V 1.4"; 
+	public static final String Version = "LibSTLS V 1.4.1"; 
 	private static final String openJBugAlgo=" TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384 TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384 ";
 	public static boolean noEDC = false;
 	public static boolean noDSDSA = false;
@@ -70,12 +75,40 @@ public class LibSTLS {
 																										
 	private static String disabledCiphers=null; 
 	private static String disabledProtocols=null;
+	public static boolean useDefaultSSLCheck = true;
 	
 	public static boolean j7regression=false;
 	public static boolean openJBug = false;
 	public static boolean Debug=false;
 	public static boolean useBC = true;
 	public static boolean CheckValidityDate=false;
+	
+	public static X509TrustManager[] trustManager=null;
+	public static X509TrustManager defaultTrustManager = null;
+	public static X509Certificate[] acceptedIssuer = null;
+	
+	public static CertificateFactory certFactory=null;
+	
+	public static void initLib() throws Exception {
+		certFactory = CertificateFactory.getInstance("X.509");
+		TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+		KeyStore k = null;
+		trustManagerFactory.init(k);
+		TrustManager[] tmList = trustManagerFactory.getTrustManagers();
+		int j = tmList.length;
+		int c = 0;
+		X509TrustManager[] outList=new X509TrustManager[j];
+		for (int i = 0; i<j; i++) {
+			 if (tmList[i] instanceof X509TrustManager) {
+				 outList[c++]=(X509TrustManager) tmList[i];
+			 }
+		}
+		
+		trustManager = new 	X509TrustManager[c];
+		System.arraycopy(outList, 0, trustManager, 0, c);
+		defaultTrustManager=trustManager[0];
+		acceptedIssuer = defaultTrustManager.getAcceptedIssuers();
+	}
 	
 	public static void setDisabledChipers(String[] arr) {
 		String st="\n";
@@ -194,13 +227,19 @@ public class LibSTLS {
 		TrustManager[] trustAllCerts = new TrustManager[] { 
 				    new X509TrustManager() {     
 				        public java.security.cert.X509Certificate[] getAcceptedIssuers() { 
-				            return null;
+				        	return null;
 				        } 
 				        public void checkClientTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) {
+				        		defaultTrustManager.checkClientTrusted(certs, authType);
+				        		}
 				            } 
 				        public void checkServerTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) {
+				        		defaultTrustManager.checkServerTrusted(certs, authType);
+				        	}
 				        }
 				    }
 				};
@@ -231,10 +270,12 @@ public class LibSTLS {
 				            return null;
 				        } 
 				        public void checkClientTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) defaultTrustManager.checkClientTrusted(certs, authType);
 				            } 
 				        public void checkServerTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) defaultTrustManager.checkServerTrusted(certs, authType);
 				        }
 				    }
 				};
@@ -259,10 +300,12 @@ public class LibSTLS {
 				            return null;
 				        } 
 				        public void checkClientTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) defaultTrustManager.checkClientTrusted(certs, authType);
 				            } 
 				        public void checkServerTrusted( 
-				            java.security.cert.X509Certificate[] certs, String authType) {
+				            java.security.cert.X509Certificate[] certs, String authType) throws CertificateException {
+				        	if (certs.length>1) defaultTrustManager.checkServerTrusted(certs, authType);
 				        }
 				    }
 				};
@@ -305,7 +348,6 @@ public class LibSTLS {
 	public static SSLSocket AcceptSSL(Socket con,SSLSocketFactory sf,String Host) throws Exception { //OK
 	        SSLSocket sslSocket = (SSLSocket) (sf.createSocket(con, Host, con.getPort(), true));
             sslSocket.setUseClientMode(false);
-            //sslSocket.setEnabledCipherSuites(sslSocket.getSupportedCipherSuites());
             LibSTLS.setCiphers(sslSocket);
             sslSocket.startHandshake();
             return sslSocket;
@@ -630,6 +672,18 @@ public class LibSTLS {
 		if (verbose) Main.echo("Test complete KeyPairGenerator is " + (rs ? "BAD" : "GOOD") +"\n");
 		return rs;		
 		}
+	
+	public static boolean isSelfSigned(X509Certificate cert) throws CertificateException, NoSuchAlgorithmException, NoSuchProviderException  {
+        try {
+            PublicKey key = cert.getPublicKey();
+            cert.verify(key);
+            return true;
+        } catch (SignatureException sigEx) {
+            return false;
+        } catch (InvalidKeyException keyEx) {
+            return false;
+        }
+    }
 	
 protected static void ZZ_Exceptionale() throws Exception { throw new Exception(); } //Remote version verify
 }

@@ -73,6 +73,7 @@ public class SrvIdentity {
 	public boolean ShowFriends = true;
 	public boolean Friendly = true;
 	public boolean HTTPSServer=false;
+	public boolean  forceVerifySSLHash=false;
 	
 	public String friendsForceAdd=null;
 	
@@ -135,7 +136,7 @@ public class SrvIdentity {
 	public Spam Spam;
 	public static final String SpamList="_SPAM_/_LIST@Server";
 	
-	public int MaxSpamEntryXUser = 128; 
+	public int MaxSpamEntryXUser = 128;  
 	public int MaxMailingListSize = 1024;
 	
 	private ScheduledExecutorService executor=null;
@@ -1911,6 +1912,7 @@ public class SrvIdentity {
 		} catch(Exception E) {
 			if (Config.Debug) Config.EXC(E, "CheckSSL "+cod);
 			//XXX ??? String msg=E.getMessage();
+			
 			if (E instanceof SException) {
 				((SException) E).concat("COD="+cod);
 				throw E;
@@ -2828,11 +2830,35 @@ public class SrvIdentity {
 			for (int ax=0;ax<cx;ax++) if (T[ax].getAlgorithm().compareToIgnoreCase("RSA")==0) return T[ax];
 			return null;
 		}
-		
+			
 		public void SSLVerify(javax.security.cert.X509Certificate[] C, String host) throws Exception {
 			host=host.toLowerCase().trim();
 			String fn = GetFNName(host)+".crt";
 			byte[] hash = LibSTLS.CertHash(C, host);
+		
+			if (C.length>1 && LibSTLS.useDefaultSSLCheck && EnterRoute) {
+				int cx = C.length;
+				if (CheckCertValidity) try {
+					for (int ax=0;ax<cx;ax++) C[ax].checkValidity();
+					} catch(Exception SE) {
+					SSLErrorTrack(host, SrvIdentity.SSLEID_Err);
+					throw new SException(SE,"@500 Validity");
+					}
+				cx--;
+				for (int i=0;i<cx;i++) {
+					C[i].verify(C[i+1].getPublicKey());
+				}
+				
+				int dx = LibSTLS.acceptedIssuer.length;
+				for (int i = 0 ; i <dx; i++) {
+					try {
+						C[cx].verify(LibSTLS.acceptedIssuer[i].getPublicKey());
+						return;
+					} catch(Exception e) {}
+				}
+				SSLErrorTrack(host, SrvIdentity.SSLEID_Flags_BadServer);
+				throw new SException("@500 Invalid issuer`"+C[dx].getIssuerDN().getName()+"` for `"+host+"`");
+			}
 			
 			if (!new File(fn).exists()) {
 				int cx= C.length; 
@@ -2844,35 +2870,52 @@ public class SrvIdentity {
 					}
 				Log("New SSL CRT for `"+host+"`");
 				SSLSaveNew(C,host);
+				//AlphaDebugCrt(C,"N_"+host);
 				///SSLToVerify.put(host, Stdio.Dump(hash).toLowerCase());
 				return;
 				}
 			
 		byte[][] X = J.DerAesKey(Sale, host);
 		String t0 = fn+"h";
+		boolean updateSSL = false;
+		
 		if (new File(t0).exists()) {
 			byte[] h1 = Stdio.file_get_bytes(fn+"h");
 			if (!Arrays.equals(h1,hash)) {
-					SSLErrorTrack(host, SrvIdentity.SSLEID_EHash);
-					throw new SException("@500 SSL Hash not match `"+host+"`");
+					if (forceVerifySSLHash && !host.endsWith(".onion")) { //XXX Non verifica su EXIT
+						//AlphaDebugCrt(C,"H_"+host);
+						SSLErrorTrack(host, SrvIdentity.SSLEID_EHash);
+						throw new SException("@500 SSL Hash not match `"+host+"`");
+						} else updateSSL=true;
 					}
 			}
+		
+		if (updateSSL) Log("Testing the new certificate for `"+host+"`");
+		//if (updateSSL) AlphaDebugCrt(C,"U_"+host);
 		
 		byte[] in = Stdio.file_get_bytes(fn);
 		in = Stdio.AES2Dec(X[0], X[0], in);
 		try {
+			if (updateSSL && !LibSTLS.CheckValidityDate) for (int ax=0;ax<C.length;ax++) C[ax].checkValidity(); //VerifyChani esegue opzionalmente il test.
 			LibSTLS.VerifyChain (in,C,host);
 			} catch(Exception ES) {
 				SSLErrorTrack(host, SrvIdentity.SSLEID_EHash);
 				throw new SException(ES,"@500 VerifyChain");
 				}
 		
-		if (Config.Debug) Log("SSL OK For `"+host+"` CryptHash `"+Stdio.Dump(LibSTLS.CertHash(C, host))+"`");	
+		if (Config.Debug) Log("SSL OK For `"+host+"` CryptHash `"+Stdio.Dump(LibSTLS.CertHash(C, host))+"`");
 		
-		if (ifSSLE(host)) SSLErrorTrack(host, SrvIdentity.SSLEID_Ok);
+		if (updateSSL) {
+			SSLSaveNew(C,host);
+			SSLErrorTrack(host, SrvIdentity.SSLEID_Flags_Changed);
+			 Log("New certificate for `"+host+"` Ok"); 
+			} else 	if (ifSSLE(host)) SSLErrorTrack(host, SrvIdentity.SSLEID_Ok);
 		
 		}
 		
+	
+
+
 		/////////////////////////////// SSLEID SSL //////////////////////////////
 		
 		
@@ -3152,10 +3195,28 @@ public class SrvIdentity {
 			if (lastExitBad) msg="Last TOR ExitNode is bad!\n"+msg;
 			if (Config.SSLSysopMessages && msg.length()>0) try {
 				msg+=SSLEtoString();
-				msg=msg.replace("\n", "\r\n");
-				HashMap <String,String> Hldr= SrvSMTPSession.ClassicHeaders("server@"+Onion, "sysop@"+Onion);
-				Hldr.put("subject", "SSLEID Server's message");
-				SendLocalMessage("sysop", Hldr, msg);
+				
+				int chk = msg.hashCode();
+				String fch = Maildir+"/ssleid.chk";
+				boolean send = true;
+				
+				if (new File(fch).exists()) try {
+					byte[] tmp = Stdio.file_get_bytes(fch);
+					int[] z = Stdio.Lodsxi(tmp, 4);
+					if (z[0]==chk) send=false;
+				} catch(Exception e) { Config.EXC(e, "SSLEID.CHK:Load"); }
+				
+				try {
+					byte[] tmp =Stdio.Stosxi(new int[] { chk} , 4);
+					Stdio.file_put_bytes(fch, tmp);
+				} catch(Exception e)  { Config.EXC(e, "SSLEID.CHK:Save"); }
+				
+				if (send) {
+					msg=msg.replace("\n", "\r\n");
+					HashMap <String,String> Hldr= SrvSMTPSession.ClassicHeaders("server@"+Onion, "sysop@"+Onion);
+					Hldr.put("subject", "SSLEID Server's message");
+					SendLocalMessage("sysop", Hldr, msg);
+				} else Log("SSLEID Equals");
 				msg=null;
 				} catch(Exception I) { Config.EXC(I,Nick+": Can't send sysop SSL message!"); }
 			
@@ -5813,6 +5874,23 @@ public byte[][] fileLoad(String relName, long magicNumber,String ext) throws Exc
 				
 				return st;
  	}
+ /*
+ public void AlphaDebugCrt(javax.security.cert.X509Certificate[] C,String host) {
+	try {
+			long a = System.currentTimeMillis();
+			String bna = Maildir+"/local/";
+			File xa = new File(bna);
+			if (!xa.exists()) {
+					xa.mkdirs();
+					xa.mkdir();
+					}
+			bna+= Long.toString(a,36)+"_"+host+"_";
+			for (int i  = 0 ; i<C.length;i++) {
+				Stdio.file_put_bytes(bna+Integer.toString(i)+".ctxc",C[i].getEncoded());
+			}
+		} catch(Exception ex) { ex.printStackTrace(); }
+	 
+ }*/
  
  public void SA_FriendErrDel() throws Exception { fileDelete(Const.FIL_BAD_SRV, Const.ONM_CORE, Const.ONM); }
 

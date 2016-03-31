@@ -457,6 +457,7 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 							C.SMPTServer[ne].DefaultUserConfig = null;
 							continue;
 						}
+										
 						
 						if (cmd.compareTo("logvoucherto")==0) {
 							C.SMPTServer[ne].LogVoucherTo = J.MapPath(CPath, tok[1]);
@@ -1337,6 +1338,13 @@ import org.bouncycastle.openpgp.PGPEncryptedData;
 								if (cmd.compareTo("sslsysopmessages")==0) { fc=true; C.SSLSysopMessages=Config.parseY(tok[1]); }
 								if (cmd.compareTo("sslcheckvaliditydate")==0) { fc=true; LibSTLS.CheckValidityDate=Config.parseY(tok[1]); }
 								if (cmd.compareTo("disablessle")==0) { fc=true; C.SSLEDisabled=Config.parseY(tok[1]); }
+								
+								if (cmd.compareTo("forceverifysslhash")==0) fc=true; //dummy compatibility
+						
+								if (cmd.compareTo("defaultsslonexit")==0) {
+									LibSTLS.useDefaultSSLCheck = Config.parseY(tok[1]);
+									fc=true;
+								}
 								
 								if (cmd.compareTo("ssltolerance")==0 && tok.length==3) {
 										fc=true;

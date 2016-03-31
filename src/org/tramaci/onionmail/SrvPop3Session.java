@@ -219,7 +219,7 @@ public class SrvPop3Session extends Thread {
 		LoginHash=0;
 		int cx = Login.hashCode();
 			
-		if (ParentServer.isBoxOpen(cx)) {
+		if (ParentServer.isBoxOpen(cx,this)) {
 			
 			Reply(false,"Inbox arleady open");
 			ReadCommands(2,new String[] {"QUIT"});
@@ -508,6 +508,7 @@ public class SrvPop3Session extends Thread {
 		
 		try {
 			BeginPOP3Session();			
+			LoginHash=0;
 		} catch(Exception E) {
 			LoginHash=0;
 			if (isConnected()) {
@@ -565,6 +566,7 @@ public class SrvPop3Session extends Thread {
 			try { br.close(); } catch(Exception i) {}
 			try { O.close(); } catch(Exception i) {}
 			try { if (MB!=null) MB.Close(); } catch(Exception i) {}
+			LoginHash=0;
 		}
 	
 	public boolean isConnected() { 

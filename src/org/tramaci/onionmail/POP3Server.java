@@ -122,10 +122,11 @@ public class POP3Server extends Thread {
 		
 		}
 
-	public boolean isBoxOpen(int hash) {
+	public boolean isBoxOpen(int hash, SrvPop3Session except) {
 		int cx = Connection.length;
 		for (int ax=0;ax<cx;ax++) {
 			if (Connection[ax]==null) continue;
+			if (Connection[ax]==except) continue;
 			if (!Connection[ax].isAlive()) continue;
 			if (Connection[ax].LoginHash==hash) return true;
 			}

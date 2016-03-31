@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2015  by Tramaci.Org & OnionMail Project
+ * Copyright (C) 2013-2016  by Tramaci.Org & OnionMail Project
  * This file is part of OnionMail (http://onionmail.info)
  * 
  * OnionMail is free software; you can redistribute it and/or modify
@@ -47,9 +47,9 @@ import javax.crypto.SecretKey;
 
 public class Main {
 	public static Config Config = new Config();
-	
-	public static long VersionID = 0x0001_0008_0000_05FEL;
-	public static String Version="1.8.0.1534";
+	public static int VersionBuild = 1904;
+	public static long VersionID = 0x0001_0009_0000_0000L | VersionBuild;
+	public static String Version="1.9.0." + Integer.toString(VersionBuild);
 	public static String VersionExtra="";
 	public static boolean noTest=false;
 	public static SMTPServer[] SMTPS = null;
@@ -633,6 +633,7 @@ public static void main(String args[]) {
 					
 		try {
 			LibSTLS.AddBCProv();
+			LibSTLS.initLib();
 			CompiledBy = J.Compiler();
 		
 			File X = new File(".");
@@ -671,7 +672,7 @@ public static void main(String args[]) {
 					
 				}
 						
-			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\t(C) 2013-2015 by OnionMail Project\n\t(C) 2013-2015 by mes3hacklab\n\tSome rights reserved.\n\n");
+			if (fp) echo("\nOnionMail Ver. "+Main.getVersion()+"\n\t(C) 2013-2014 by Tramaci.org\n\t(C) 2013-2016 by OnionMail Project\n\t(C) 2013-2016 by mes3hacklab\n\tSome rights reserved.\n\n");
 			
 			for (int ax=0;ax<cx;ax++) {
 				boolean fm=false;

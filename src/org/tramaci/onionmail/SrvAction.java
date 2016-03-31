@@ -26,6 +26,7 @@ import java.net.Socket;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
+import javax.security.cert.CertificateException;
 
 public class SrvAction {
 	public  SrvIdentity Mid=null;
@@ -191,7 +192,8 @@ public class SrvAction {
 					}
 				
 			} catch(Exception SSL) {
-					if (currentExit!=null) currentExit.isBad=true;
+					if (currentExit!=null && SSL instanceof CertificateException) currentExit.isBad=true;
+					if (currentExit!=null && SSL instanceof SException) currentExit.isBad=true;
 					throw SSL;
 					}
 						

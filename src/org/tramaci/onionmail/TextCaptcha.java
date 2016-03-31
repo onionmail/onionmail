@@ -280,7 +280,7 @@ public class TextCaptcha {
 			code+=c;
 			}
 		return code;
-		}
+		} 
 	
 	public static CaptchaCode generateCaptcha(int nChar,int mode) throws Exception {
 		running=true;

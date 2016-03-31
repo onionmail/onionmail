@@ -716,7 +716,7 @@ public class J {
 			l += Tok[ax].trim();
 			if (ax!=cx) l+=".";
 			}
-		if (l.length()<4) throw new Exception("@503 Invalid Onion Exit Route Mail Address `"+MailFrom+"`");
+		if (l.length()<1) throw new Exception("@503 Invalid Onion Exit Route Mail Address `"+MailFrom+"`");  //XXX OnionMail 2.0 allows short names. Change this.
 		l+="@"+o+".onion";
 		return l.toLowerCase().trim();
 	}
