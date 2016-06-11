@@ -19,18 +19,17 @@ network without losing the ability to communicate with the Internet.
 
 	See http://onionmail.info/manual.html to get more informations.
 
-The root directory of project is:
-	/mnt/sdcard/ONM/
-	Change it in etc/onionmail/config.conf
-	
 We are working on version 2 of the project.
-This repository is updated automatically from the internal repository development of OnionMail. 
-The this repository is updated with weekly cycles. If you want to contribute to the development of the project contact us to have access to trusted internal repository.
+This source code is very old.
+If you want to contribute to the development of the project contact us to have access to trusted internal repository.
 
 partecipa [at] onionmail [dot] info
 or
 tramacio [at] ridotnp5m5lp22gw [dot] onion
 tramacio [dot] ridotnp5m5lp22gw [dot] onion [at] onionmail.info
-	
+
+You can download the source code and the developer space at:
+http://onionmail.info/download.html
+
 Read this before use:
 http://onionmail.info/developer.html
